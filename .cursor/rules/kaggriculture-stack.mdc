@@ -1,0 +1,13 @@
+---
+description: Kaggriculture Kaggle competition stack and deliverable shape
+alwaysApply: true
+---
+# Kaggriculture stack
+
+- **Competition:** Kaggriculture — turn-based farming sim in `kaggle-environments` (720 turns = 30 days × 24 turns). Full rules in [docs/project_overview.md](../../docs/project_overview.md).
+- **Deliverable:** heuristic/rule-based Python submission — **no ML/RL training pipeline**.
+- **Entry point:** `main.py` at repo root with an `agent(obs)` function returning `{"farmer": [...], "market": [...]}` per turn.
+- **Local testing:** `pip install -U kaggle-environments`, then `make("kaggriculture", ...)`, `env.run([agent, "random"])`. Built-in opponents: `"pass"`, `"random"`, `"starter"`.
+- **Code style:** plain `.py` modules only — no Jupyter notebooks (see `workflow-preferences.mdc`).
+- **Dependencies:** stdlib + `kaggle-environments` for local dev; submission bundle should stay minimal and Kaggle-compatible.
+- **Domain & code conventions:** load `.cursor/skills/kaggriculture-domain/SKILL.md` for mechanics; load `.cursor/skills/kaggriculture-agent-conventions/SKILL.md` before writing/refactoring agent code.
