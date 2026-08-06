@@ -1,0 +1,4 @@
+# Local develop / eval / submit — submission agent itself should stay stdlib-only.
+# Requires Python >= 3.11
+kaggle-environments>=1.32.0
+kaggle>=1.7.0
