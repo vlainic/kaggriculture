@@ -24,11 +24,11 @@ When invoked:
    - Parse obs defensively; handle locked tiles, shed adjacency, inventory limits.
    - Keep stdlib-first; no notebooks; files under ~300 lines.
    - Prefer pure helper functions for pricing, tile scoring, and action selection.
+   - **Do not add tests, eval scripts, loaders, or `.venv` unless the user explicitly asks.**
 
-4. **Verify**
-   - Run or describe local eval: `make("kaggriculture")`, `env.run([agent, "starter"])`.
-   - Confirm no validation-episode errors (illegal actions, missing keys).
-   - Hand off results to `eval-runner` for systematic comparison.
+4. **Verify (only if requested)**
+   - Run local eval only when the user asks for testing/backtests.
+   - Otherwise stop after delivering the requested code/data.
 
 Cross-cutting:
 

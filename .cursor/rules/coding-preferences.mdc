@@ -6,6 +6,8 @@ alwaysApply: false
 # Coding pattern preferences
 
 - Always prefer simple solutions
+- **Scope: do exactly what was requested** — no bonus infrastructure (loaders, verifiers, `agent/` package scaffolding, virtualenvs) unless the user asks
+- **No tests unless explicitly requested** — includes unit tests, `eval/` scripts, and running `kaggle-environments` to verify changes
 - Avoid duplication of code whenever possible, which means checking for other areas of the codebase that might already have similar code and functionality
 - Write code that takes into account the different environments: dev, test, and prod
 - You are careful to only make changes that are requested or you are confident are well understood and related to the change being requested

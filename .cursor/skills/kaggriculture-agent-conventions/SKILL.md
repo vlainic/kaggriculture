@@ -8,6 +8,12 @@ description: >-
 
 # Kaggriculture Agent Conventions
 
+## Scope (read first)
+
+- **Do exactly what was requested.** A JSON/data request does not imply Python loaders, `agent/` modules, or verification scripts.
+- **No tests or eval unless the user explicitly asks** — do not run `kaggle-environments`, add `eval/` files, or create verification harnesses proactively.
+- **Do not create `.venv`** unless the user asks for local environment setup.
+
 ## Entry point
 
 `main.py` at submission root:
@@ -26,6 +32,8 @@ def agent(obs):
 
 ## Suggested module layout
 
+Only when building/refactoring the submission agent (not for standalone data files):
+
 ```
 main.py              # thin entry: agent(obs) delegates to controller
 agent/
@@ -34,9 +42,9 @@ agent/
   farm_actions.py    # tile-level: plant, water, harvest, build, dig
   market_actions.py  # sell timing, buy wheat/fertilizer, hire, land
   pricing.py         # price-curve helpers mirroring MARKET_PARAMS logic
-eval/
-  run_local.py       # env.run harness vs random/starter/previous agent
 ```
+
+Optional `eval/run_local.py` **only if the user asks** for local backtesting.
 
 Keep files under ~300 lines; split when a module grows.
 
@@ -62,6 +70,8 @@ Opponent shed is hidden; opponent farm tiles are visible.
 
 ## Local evaluation
 
+**Only when the user explicitly requests testing or eval.**
+
 ```python
 from kaggle_environments import make
 
@@ -72,7 +82,7 @@ for i, s in enumerate(final):
     print(f"P{i}: reward={s.reward}, status={s.status}")
 ```
 
-Compare against `"random"`, `"starter"`, and prior agent versions. Use `eval-runner` agent for systematic backtests.
+Compare against `"random"`, `"starter"`, and prior agent versions. Use `eval-runner` agent for systematic backtests **when the user asks**.
 
 ## Handoff
 
