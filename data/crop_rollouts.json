@@ -4,7 +4,8 @@
     "age_definition": "obs_day - planted_day",
     "actions_are_tile_only": true,
     "plant_day_must_water": true,
-    "fertilize_before_water_one_time": true
+    "fertilize_before_water_one_time": true,
+    "yield_per_harvest": "list aligned with harvest_ages — units per HARVEST at that age"
   },
   "crops": {
     "WHEAT": {
@@ -17,6 +18,7 @@
           { "age": 4, "actions": ["WATER", "HARVEST"] }
         ],
         "harvest_ages": [4],
+        "yield_per_harvest": [4],
         "tile_free_age": 4,
         "expected_yield": 4,
         "fertilize_ages": []
@@ -30,6 +32,7 @@
           { "age": 4, "actions": ["WATER", "HARVEST"] }
         ],
         "harvest_ages": [4],
+        "yield_per_harvest": [6],
         "tile_free_age": 4,
         "expected_yield": 6,
         "fertilize_ages": [2]
@@ -44,6 +47,7 @@
           { "age": 3, "actions": ["WATER", "HARVEST"] }
         ],
         "harvest_ages": [3],
+        "yield_per_harvest": [3],
         "tile_free_age": 3,
         "expected_yield": 3,
         "fertilize_ages": []
@@ -56,6 +60,7 @@
           { "age": 3, "actions": ["WATER", "HARVEST"] }
         ],
         "harvest_ages": [3],
+        "yield_per_harvest": [4],
         "tile_free_age": 3,
         "expected_yield": 4,
         "fertilize_ages": [2]
@@ -77,6 +82,7 @@
           { "age": 10, "actions": ["WATER", "HARVEST"] }
         ],
         "harvest_ages": [10],
+        "yield_per_harvest": [6],
         "tile_free_age": 10,
         "expected_yield": 6,
         "fertilize_ages": []
@@ -96,6 +102,7 @@
           { "age": 10, "actions": ["WATER", "HARVEST"] }
         ],
         "harvest_ages": [10],
+        "yield_per_harvest": [6],
         "tile_free_age": 10,
         "expected_yield": 6,
         "fertilize_ages": [6]
@@ -119,6 +126,7 @@
           { "age": 12, "actions": ["DIG"] }
         ],
         "harvest_ages": [8, 9, 10, 11],
+        "yield_per_harvest": [1, 1, 1, 1],
         "tile_free_age": 12,
         "expected_yield": 4,
         "fertilize_ages": []
@@ -140,6 +148,7 @@
           { "age": 12, "actions": ["DIG"] }
         ],
         "harvest_ages": [8, 9, 10, 11],
+        "yield_per_harvest": [2, 2, 2, 2],
         "tile_free_age": 12,
         "expected_yield": 8,
         "fertilize_ages": [7, 8, 9, 10, 11]
@@ -168,6 +177,7 @@
           { "age": 17, "actions": ["DIG"] }
         ],
         "harvest_ages": [10, 12, 14, 16],
+        "yield_per_harvest": [1, 1, 1, 1],
         "tile_free_age": 17,
         "expected_yield": 4,
         "fertilize_ages": []
@@ -194,6 +204,7 @@
           { "age": 17, "actions": ["DIG"] }
         ],
         "harvest_ages": [10, 12, 14, 16],
+        "yield_per_harvest": [2, 2, 2, 2],
         "tile_free_age": 17,
         "expected_yield": 8,
         "fertilize_ages": [9, 10, 11, 12, 13, 14, 15, 16]
