@@ -142,7 +142,7 @@ This spatial decomposition is what motivated the "segment" concept — each segm
 ## 9. Open Questions / Next Steps (as of this conversation)
 
 1. Confirm whether `SELL` orders draw from **shed** or **carried inventory** (affects whether mid-day `DROP` is a hard prerequisite for selling).
-2. Confirm melon (and any other seemingly "missing" types) are genuinely available from turn 0 via direct observation inspection, not just play-UI absence.
+~~2. Confirm melon (and any other seemingly "missing" types) are genuinely available from turn 0 via direct observation inspection, not just play-UI absence.~~ [CONFIRMED - it was my bad]
 3. Design and finalize the **request/allocate contract** between plant/animal modules and the master, before writing module code.
 4. Build and validate the **3×3, no-hire, plant-only** baseline first — small enough to hand-verify the MILP's daily schedule output.
 5. Then extend to **hires + additional segments** (still plant-only).
