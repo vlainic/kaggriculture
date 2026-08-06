@@ -1,3 +1,5 @@
+# IDEA
+
 Right — three dimensions collapses cleanly once you enumerate candidates instead of decision-per-cell. Here's the mechanism:
 
 **Step 1 — Enumerate candidates (not decision vars yet).**
@@ -13,3 +15,42 @@ Think of it as: elements = `(tile, day)` cells on your calendar grid. Each candi
 `y[k] ∈ {0,1}` is your only decision variable family — one binary per candidate, not per cell. No start-time variables, no intervals — the start time is baked into which candidate you picked.
 
 Why this replaces interval no-overlap: interval vars exist to let the solver *discover* a start time. You don't need that — plant_day is already enumerated as part of the candidate's identity, so "no overlap" reduces to a plain covering inequality over a small binary set. It's an assignment problem in the sense you wanted, just assigning whole placements instead of day-cells.
+
+# CODE
+
+from ortools.sat.python import cp_model
+
+# Universe of elements, and subsets with weights
+elements = ["e0", "e1", "e2", "e3", "e4"]
+
+subsets = [
+    {"id": "S0", "items": {"e0", "e1"},       "weight": 5},
+    {"id": "S1", "items": {"e1", "e2"},       "weight": 3},
+    {"id": "S2", "items": {"e2", "e3", "e4"}, "weight": 8},
+    {"id": "S3", "items": {"e0"},             "weight": 2},
+    {"id": "S4", "items": {"e3"},             "weight": 4},
+]
+
+model = cp_model.CpModel()
+
+# One binary decision var per candidate subset
+y = {s["id"]: model.NewBoolVar(s["id"]) for s in subsets}
+
+# Packing constraint: each element covered by at most one selected subset
+for e in elements:
+    covering = [y[s["id"]] for s in subsets if e in s["items"]]
+    if covering:
+        model.Add(sum(covering) <= 1)
+
+# Objective: maximize total weight of selected subsets
+model.Maximize(sum(s["weight"] * y[s["id"]] for s in subsets))
+
+solver = cp_model.CpSolver()
+status = solver.Solve(model)
+
+if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+    selected = [s["id"] for s in subsets if solver.Value(y[s["id"]]) == 1]
+    print("Selected:", selected)
+    print("Total weight:", solver.ObjectiveValue())
+else:
+    print("No solution found.")
