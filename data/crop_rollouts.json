@@ -5,10 +5,14 @@
     "actions_are_tile_only": true,
     "plant_day_must_water": true,
     "fertilize_before_water_one_time": true,
-    "yield_per_harvest": "list aligned with harvest_ages — units per HARVEST at that age"
+    "yield_per_harvest": "list aligned with harvest_ages — units per HARVEST at that age",
+    "seed_cost": "BUY_SEED unit price (fixed)",
+    "base_price": "sell price at market I0 (start-of-game)"
   },
   "crops": {
     "WHEAT": {
+      "seed_cost": 10,
+      "base_price": 25,
       "no_fert": {
         "days": [
           { "age": 0, "actions": ["PLANT", "WATER"] },
@@ -39,6 +43,8 @@
       }
     },
     "CARROT": {
+      "seed_cost": 20,
+      "base_price": 35,
       "no_fert": {
         "days": [
           { "age": 0, "actions": ["PLANT", "WATER"] },
@@ -67,6 +73,8 @@
       }
     },
     "MELON": {
+      "seed_cost": 80,
+      "base_price": 250,
       "no_fert": {
         "days": [
           { "age": 0, "actions": ["PLANT", "WATER"] },
@@ -109,6 +117,8 @@
       }
     },
     "TOMATO": {
+      "seed_cost": 50,
+      "base_price": 60,
       "no_fert": {
         "days": [
           { "age": 0, "actions": ["PLANT", "WATER"] },
@@ -155,6 +165,8 @@
       }
     },
     "STRAWBERRY": {
+      "seed_cost": 100,
+      "base_price": 120,
       "no_fert": {
         "days": [
           { "age": 0, "actions": ["PLANT", "WATER"] },
