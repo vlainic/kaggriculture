@@ -148,7 +148,7 @@ class Executor:
                 orders.append(["BUY_SEED", crop, affordable])
                 money -= affordable * cost
 
-        return orders[:10]
+        return orders[:10] # limit to 10 orders to avoid overwhelming the market
 
     def _next_work(
         self, obs: dict, me: dict, private: dict, day: int
