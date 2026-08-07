@@ -160,11 +160,16 @@ class Executor:
     def _next_work(
         self, obs: dict, me: dict, private: dict, day: int
     ) -> tuple[int | None, list[str]]:
-        for idx in range(len(TILE_COORDS)):
-            tile = self._tile_at(me, idx)
-            if isinstance(tile, dict) and tile.get("kind") == "WEED":
-                return idx, ["DIG"]
+        fx, fy = me["farmer"]
+        # Sticky: finish current tile (e.g. HARVEST → same-day PLANT) before leaving.
+        for idx, (tx, ty) in enumerate(TILE_COORDS):
+            if (fx, fy) == (tx, ty):
+                pending = self._pending_for_tile(obs, me, private, idx, day)
+                if pending:
+                    return idx, pending
+                break
 
+        # Strict snake order — weeds handled when their index is reached.
         for idx in range(len(TILE_COORDS)):
             pending = self._pending_for_tile(obs, me, private, idx, day)
             if pending:
