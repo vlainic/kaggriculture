@@ -132,12 +132,11 @@
           { "age": 8, "actions": ["WATER", "HARVEST"] },
           { "age": 9, "actions": ["WATER", "HARVEST"] },
           { "age": 10, "actions": ["WATER", "HARVEST"] },
-          { "age": 11, "actions": ["WATER", "HARVEST"] },
-          { "age": 12, "actions": ["DIG"] }
+          { "age": 11, "actions": ["WATER", "HARVEST", "DIG"] }
         ],
         "harvest_ages": [8, 9, 10, 11],
         "yield_per_harvest": [1, 1, 1, 1],
-        "tile_free_age": 12,
+        "tile_free_age": 11,
         "expected_yield": 4,
         "fertilize_ages": []
       },
@@ -154,12 +153,11 @@
           { "age": 8, "actions": ["WATER", "FERTILIZE", "HARVEST"] },
           { "age": 9, "actions": ["WATER", "FERTILIZE", "HARVEST"] },
           { "age": 10, "actions": ["WATER", "FERTILIZE", "HARVEST"] },
-          { "age": 11, "actions": ["WATER", "FERTILIZE", "HARVEST"] },
-          { "age": 12, "actions": ["DIG"] }
+          { "age": 11, "actions": ["WATER", "FERTILIZE", "HARVEST", "DIG"] }
         ],
         "harvest_ages": [8, 9, 10, 11],
         "yield_per_harvest": [2, 2, 2, 2],
-        "tile_free_age": 12,
+        "tile_free_age": 11,
         "expected_yield": 8,
         "fertilize_ages": [7, 8, 9, 10, 11]
       }
@@ -185,12 +183,11 @@
           { "age": 13, "actions": ["WATER"] },
           { "age": 14, "actions": ["WATER", "HARVEST"] },
           { "age": 15, "actions": ["WATER"] },
-          { "age": 16, "actions": ["WATER", "HARVEST"] },
-          { "age": 17, "actions": ["DIG"] }
+          { "age": 16, "actions": ["WATER", "HARVEST", "DIG"] }
         ],
         "harvest_ages": [10, 12, 14, 16],
         "yield_per_harvest": [1, 1, 1, 1],
-        "tile_free_age": 17,
+        "tile_free_age": 16,
         "expected_yield": 4,
         "fertilize_ages": []
       },
@@ -212,12 +209,11 @@
           { "age": 13, "actions": ["WATER", "FERTILIZE"] },
           { "age": 14, "actions": ["WATER", "FERTILIZE", "HARVEST"] },
           { "age": 15, "actions": ["WATER", "FERTILIZE"] },
-          { "age": 16, "actions": ["WATER", "FERTILIZE", "HARVEST"] },
-          { "age": 17, "actions": ["DIG"] }
+          { "age": 16, "actions": ["WATER", "FERTILIZE", "HARVEST", "DIG"] }
         ],
         "harvest_ages": [10, 12, 14, 16],
         "yield_per_harvest": [2, 2, 2, 2],
-        "tile_free_age": 17,
+        "tile_free_age": 16,
         "expected_yield": 8,
         "fertilize_ages": [9, 10, 11, 12, 13, 14, 15, 16]
       }
