@@ -42,8 +42,9 @@ def _build_candidates(
                 covered: set[tuple[int, int]] = set()
                 ops_by_day: dict[int, int] = {}
                 ok = True
-                for age_day in rollouts.profile_days(crop):
-                    cal = plant_day + age_day["age"]
+                free_age = rollouts.tile_free_age(crop)
+                for age in range(free_age):
+                    cal = plant_day + age
                     if cal >= horizon:
                         ok = False
                         break
@@ -52,6 +53,15 @@ def _build_candidates(
                         ok = False
                         break
                     covered.add(cell)
+
+                if not ok or not covered:
+                    continue
+
+                for age_day in rollouts.profile_days(crop):
+                    cal = plant_day + age_day["age"]
+                    if cal >= horizon:
+                        ok = False
+                        break
                     ops_by_day[cal] = len(age_day["actions"])
 
                 if ok and covered:

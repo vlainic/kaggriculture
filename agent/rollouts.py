@@ -52,10 +52,10 @@ def ops_count_at_age(crop: str, age: int) -> int:
 
 
 def covered_days(crop: str, plant_day: int, horizon: int) -> set[int]:
-    """Calendar days this lifecycle occupies on its tile."""
+    """Calendar days this lifecycle occupies on its tile (half-open: excludes free day)."""
     days = set()
-    for day in _load()["crops"][crop][PROFILE]["days"]:
-        cal = plant_day + day["age"]
+    for age in range(tile_free_age(crop)):
+        cal = plant_day + age
         if cal < horizon:
             days.add(cal)
     return days
