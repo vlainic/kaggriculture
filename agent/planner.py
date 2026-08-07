@@ -11,6 +11,8 @@ PLAN_HORIZON = rollouts.PLAN_HORIZON
 OPS_HORIZON = rollouts.SEASON_DAYS
 SOLVER_TIME_LIMIT_S = 8.0
 
+TileState = tuple[int, str, int, str]  # tile, crop, planted_day, profile
+
 
 def _build_elements(current_day: int, horizon: int) -> list[tuple[int, int]]:
     return [
@@ -20,9 +22,30 @@ def _build_elements(current_day: int, horizon: int) -> list[tuple[int, int]]:
     ]
 
 
+def _ops_for_lifecycle(
+    crop: str,
+    profile: str,
+    plant_day: int,
+    ops_horizon: int,
+) -> tuple[dict[int, int], bool]:
+    """Tile ops by calendar day; False if any action falls past ops_horizon."""
+    ops_by_day: dict[int, int] = {}
+    for age_day in rollouts.profile_days(crop, profile):
+        cal = plant_day + age_day["age"]
+        if cal >= ops_horizon:
+            return {}, False
+        ops_by_day[cal] = len(age_day["actions"])
+    for age in rollouts.fertilize_ages(crop, profile):
+        cal = plant_day + age
+        if cal >= ops_horizon:
+            return {}, False
+        ops_by_day[cal] = ops_by_day.get(cal, 0) + 1
+    return ops_by_day, True
+
+
 def _earliest_plant_by_tile(
     plannable_tiles: set[int],
-    tile_states: list[tuple[int, str, int] | None],
+    tile_states: list[TileState | None],
     current_day: int,
 ) -> dict[int, int]:
     """First calendar day a new lifecycle may start on each tile."""
@@ -30,8 +53,8 @@ def _earliest_plant_by_tile(
     for state in tile_states:
         if state is None:
             continue
-        tile, crop, planted_day = state
-        earliest[tile] = planted_day + rollouts.tile_free_age(crop)
+        tile, _crop, planted_day, profile = state
+        earliest[tile] = planted_day + rollouts.tile_free_age(_crop, profile)
     return earliest
 
 
@@ -48,23 +71,25 @@ def _build_candidates(
     element_set = set(elements)
     subsets: list[dict] = []
     demand = shop_demand or {}
+    fert_price = int(prices.get("FERTILIZER", 0) or 0)
 
-    for crop in rollouts.crop_names():
-        cost = rollouts.seed_cost(crop)
-        price = int(prices.get(crop, 0) or 0)
+    for crop, profile in rollouts.plant_options():
+        seed = rollouts.seed_cost(crop)
+        crop_price = int(prices.get(crop, 0) or 0)
         d = demand.get(crop, 0)
-        weight = rollouts.expected_yield(crop) * price * (1 + d) - cost
+        yield_units = rollouts.expected_yield(crop, profile)
+        fert_cost = rollouts.fert_count(crop, profile) * fert_price
+        weight = yield_units * crop_price * (1 + d) - seed - fert_cost
 
         for tile in plannable_tiles:
             start = max(earliest_plant.get(tile, current_day), current_day)
             for plant_day in range(start, plan_horizon):
-                if not rollouts.lifecycle_fits(crop, plant_day, ops_horizon):
+                if not rollouts.lifecycle_fits(crop, plant_day, ops_horizon, profile):
                     continue
 
                 covered: set[tuple[int, int]] = set()
-                ops_by_day: dict[int, int] = {}
                 ok = True
-                free_age = rollouts.tile_free_age(crop)
+                free_age = rollouts.tile_free_age(crop, profile)
                 for age in range(free_age):
                     cal = plant_day + age
                     if cal >= plan_horizon:
@@ -79,31 +104,30 @@ def _build_candidates(
                 if not ok or not covered:
                     continue
 
-                for age_day in rollouts.profile_days(crop):
-                    cal = plant_day + age_day["age"]
-                    if cal >= ops_horizon:
-                        ok = False
-                        break
-                    ops_by_day[cal] = len(age_day["actions"])
+                ops_by_day, ops_ok = _ops_for_lifecycle(
+                    crop, profile, plant_day, ops_horizon
+                )
+                if not ops_ok:
+                    continue
 
-                if ok and covered:
-                    subsets.append(
-                        {
-                            "id": f"S{len(subsets)}",
-                            "crop": crop,
-                            "tile": tile,
-                            "plant_day": plant_day,
-                            "subset": covered,
-                            "ops_by_day": ops_by_day,
-                            "weight": weight,
-                        }
-                    )
+                subsets.append(
+                    {
+                        "id": f"S{len(subsets)}",
+                        "crop": crop,
+                        "profile": profile,
+                        "tile": tile,
+                        "plant_day": plant_day,
+                        "subset": covered,
+                        "ops_by_day": ops_by_day,
+                        "weight": weight,
+                    }
+                )
 
     return subsets
 
 
 def existing_ops_by_day(
-    tile_states: list[tuple[int, str, int] | None],
+    tile_states: list[TileState | None],
     current_day: int,
     horizon: int,
     weed_tiles: set[int] | None = None,
@@ -113,11 +137,15 @@ def existing_ops_by_day(
     for state in tile_states:
         if state is None:
             continue
-        _tile, crop, planted_day = state
-        for age_day in rollouts.profile_days(crop):
+        _tile, crop, planted_day, profile = state
+        for age_day in rollouts.profile_days(crop, profile):
             cal = planted_day + age_day["age"]
             if current_day <= cal < horizon:
                 load[cal] = load.get(cal, 0) + len(age_day["actions"])
+        for age in rollouts.fertilize_ages(crop, profile):
+            cal = planted_day + age
+            if current_day <= cal < horizon:
+                load[cal] = load.get(cal, 0) + 1
     if weed_tiles:
         load[current_day] = load.get(current_day, 0) + len(weed_tiles)
     return load
@@ -125,7 +153,12 @@ def existing_ops_by_day(
 
 def _as_placements(selected: list[dict]) -> list[dict]:
     return [
-        {"tile": s["tile"], "crop": s["crop"], "plant_day": s["plant_day"]}
+        {
+            "tile": s["tile"],
+            "crop": s["crop"],
+            "profile": s["profile"],
+            "plant_day": s["plant_day"],
+        }
         for s in selected
     ]
 
@@ -163,20 +196,18 @@ def _greedy_pack(
     return _as_placements(chosen)
 
 
+def _solver_has_solution(solver: cp_model.CpSolver) -> bool:
+    return bool(solver.ResponseProto().solution)
+
+
 def _extract_solution(solver: cp_model.CpSolver, y: dict, subsets: list[dict]) -> list[dict]:
-    selected = []
-    for s in subsets:
-        try:
-            if solver.Value(y[s["id"]]) == 1:
-                selected.append(s)
-        except Exception:
-            return []
+    selected = [s for s in subsets if solver.Value(y[s["id"]]) == 1]
     return _as_placements(selected)
 
 
 def solve_plan(
     plannable_tiles: set[int],
-    tile_states: list[tuple[int, str, int] | None],
+    tile_states: list[TileState | None],
     current_day: int,
     prices: dict[str, int],
     plan_horizon: int = PLAN_HORIZON,
@@ -184,7 +215,7 @@ def solve_plan(
     weed_tiles: set[int] | None = None,
     shop_demand: dict[str, int] | None = None,
 ) -> list[dict]:
-    """Return selected placements: [{tile, crop, plant_day}, ...]."""
+    """Return selected placements: [{tile, crop, profile, plant_day}, ...]."""
     if not plannable_tiles:
         return []
 
@@ -240,10 +271,7 @@ def solve_plan(
     status_name = solver.StatusName(status)
 
     placements: list[dict] = []
-    if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        placements = _extract_solution(solver, y, subsets)
-    elif status == cp_model.UNKNOWN:
-        # Timed out: try reading an incumbent if one exists.
+    if _solver_has_solution(solver):
         placements = _extract_solution(solver, y, subsets)
 
     source = "cpsat"
@@ -251,12 +279,11 @@ def solve_plan(
         placements = _greedy_pack(subsets, existing_load, current_day, ops_horizon)
         source = "greedy"
 
-    obj = None
-    if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        try:
-            obj = solver.ObjectiveValue()
-        except Exception:
-            obj = None
+    obj = (
+        solver.ObjectiveValue()
+        if status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
+        else None
+    )
 
     print(
         f"[planner] day={current_day} status={status_name} "

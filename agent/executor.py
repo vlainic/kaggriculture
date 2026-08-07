@@ -19,6 +19,12 @@ TILE_COORDS: list[tuple[int, int]] = [
     (2, 2),
 ]
 
+# Shed-adjacent tiles (default boardSize=10).
+SHED_ADJACENT: frozenset[tuple[int, int]] = frozenset(
+    {(4, 4), (5, 4), (4, 5), (5, 5)}
+)
+SHED_ROUTE = (4, 4)
+
 
 class Executor:
     def __init__(self) -> None:
@@ -39,7 +45,18 @@ class Executor:
         if hour == 0 and self._should_replan(obs, me, day):
             self._replan(obs, me, day, prices)
 
-        market = self._market_orders(obs, me, private, day)
+        market = self._market_orders(obs, me, private, day, prices)
+
+        pickup_n = self._fert_pickup_count(me, private, day)
+        if pickup_n > 0:
+            if (fx, fy) not in SHED_ADJACENT:
+                move = _step_toward(fx, fy, *SHED_ROUTE)
+                return {"farmer": [move], "hands": [], "market": market}
+            return {
+                "farmer": ["PICKUP", "FERTILIZER", pickup_n],
+                "hands": [],
+                "market": market,
+            }
 
         target_idx, pending = self._next_work(obs, me, private, day)
         if target_idx is None:
@@ -58,12 +75,27 @@ class Executor:
 
         return {"farmer": ["PASS"], "hands": [], "market": market}
 
+    def _profile_for_plant(self, idx: int, planted_day: int) -> str:
+        for entry in self.plan:
+            if entry["tile"] == idx and entry["plant_day"] == planted_day:
+                return entry.get("profile", "no_fert")
+        return "no_fert"
+
+    def _profile_for_tile(self, idx: int, tile: dict | None, day: int) -> str:
+        if isinstance(tile, dict) and tile.get("kind") == "PLANT":
+            return self._profile_for_plant(idx, tile["planted_day"])
+        entry = self._placement_today(idx, day)
+        if entry:
+            return entry.get("profile", "no_fert")
+        return "no_fert"
+
     def _should_replan(self, obs: dict, me: dict, day: int) -> bool:
         if self.last_replan_day is None:
             return True
         for idx in range(len(TILE_COORDS)):
             tile = self._tile_at(me, idx)
-            if _harvest_today(tile, day):
+            profile = self._profile_for_tile(idx, tile, day)
+            if self._harvest_today(tile, day, profile):
                 return True
             if isinstance(tile, dict) and tile.get("kind") == "WEED":
                 return True
@@ -74,13 +106,14 @@ class Executor:
         )
 
     def _replan(self, obs: dict, me: dict, day: int, prices: dict) -> None:
-        states: list[tuple[int, str, int] | None] = [None] * len(TILE_COORDS)
+        states: list[planner.TileState | None] = [None] * len(TILE_COORDS)
         weed_tiles: set[int] = set()
 
         for idx in range(len(TILE_COORDS)):
             tile = self._tile_at(me, idx)
             if isinstance(tile, dict) and tile.get("kind") == "PLANT":
-                states[idx] = (idx, tile["crop"], tile["planted_day"])
+                profile = self._profile_for_plant(idx, tile["planted_day"])
+                states[idx] = (idx, tile["crop"], tile["planted_day"], profile)
             elif isinstance(tile, dict) and tile.get("kind") == "WEED":
                 weed_tiles.add(idx)
 
@@ -110,20 +143,41 @@ class Executor:
                 return entry
         return None
 
-    def _market_orders(self, obs: dict, me: dict, private: dict, day: int) -> list:
+    def _pending_fert_ops(self, me: dict, private: dict, day: int) -> int:
+        count = 0
+        for idx in range(len(TILE_COORDS)):
+            tile = self._tile_at(me, idx)
+            if not isinstance(tile, dict) or tile.get("kind") != "PLANT":
+                continue
+            profile = self._profile_for_tile(idx, tile, day)
+            crop = tile["crop"]
+            age = day - tile["planted_day"]
+            actions = rollouts.actions_at_age(crop, age, profile)
+            if "FERTILIZE" in actions:
+                count += 1
+        return count
+
+    def _fert_pickup_count(self, me: dict, private: dict, day: int) -> int:
+        pending = self._pending_fert_ops(me, private, day)
+        inv = private["inventories"][0].get("FERTILIZER", 0)
+        need = max(0, pending - inv)
+        shed = private["shed"].get("FERTILIZER", 0)
+        return min(need, shed)
+
+    def _market_orders(
+        self, obs: dict, me: dict, private: dict, day: int, prices: dict
+    ) -> list:
         orders: list = []
         for crop, count in private["shed"].items():
-            if count > 0:
+            if count > 0 and crop != "FERTILIZER":
                 orders.append(["SELL", crop, count])
 
-        # Buy seeds for today's plantings (and tomorrow, so they land in time).
         seeds = private["seeds"]
         needed: Counter[str] = Counter()
         for entry in self.plan:
             if entry["plant_day"] in (day, day + 1):
                 tile = self._tile_at(me, entry["tile"])
                 if tile is None or entry["plant_day"] == day + 1:
-                    # tomorrow: count even if currently occupied (harvest frees it)
                     if (
                         entry["plant_day"] == day
                         and tile is not None
@@ -138,7 +192,11 @@ class Executor:
                         and not (
                             isinstance(tile, dict)
                             and tile.get("kind") == "PLANT"
-                            and _harvest_today(tile, day)
+                            and self._harvest_today(
+                                tile,
+                                day,
+                                self._profile_for_tile(entry["tile"], tile, day),
+                            )
                         )
                     ):
                         continue
@@ -155,13 +213,30 @@ class Executor:
                 orders.append(["BUY_SEED", crop, affordable])
                 money -= affordable * cost
 
-        return orders[:10] # limit to 10 orders to avoid overwhelming the market
+        fert_needed = 0
+        for entry in self.plan:
+            if entry.get("profile") != "with_fert":
+                continue
+            for age in rollouts.fertilize_ages(entry["crop"], "with_fert"):
+                if entry["plant_day"] + age in (day, day + 1):
+                    fert_needed += 1
+
+        fert_available = private["shed"].get("FERTILIZER", 0) + private[
+            "inventories"
+        ][0].get("FERTILIZER", 0)
+        fert_deficit = fert_needed - fert_available
+        if fert_deficit > 0:
+            fert_cost = int(prices.get("FERTILIZER", 0) or 0)
+            affordable = min(fert_deficit, money // fert_cost) if fert_cost else 0
+            if affordable > 0:
+                orders.append(["BUY_PRODUCT", "FERTILIZER", affordable])
+
+        return orders[:10]
 
     def _next_work(
         self, obs: dict, me: dict, private: dict, day: int
     ) -> tuple[int | None, list[str]]:
         fx, fy = me["farmer"]
-        # Sticky: finish current tile (e.g. HARVEST → same-day PLANT) before leaving.
         for idx, (tx, ty) in enumerate(TILE_COORDS):
             if (fx, fy) == (tx, ty):
                 pending = self._pending_for_tile(obs, me, private, idx, day)
@@ -169,7 +244,6 @@ class Executor:
                     return idx, pending
                 break
 
-        # Strict snake order — weeds handled when their index is reached.
         for idx in range(len(TILE_COORDS)):
             pending = self._pending_for_tile(obs, me, private, idx, day)
             if pending:
@@ -187,18 +261,22 @@ class Executor:
         if isinstance(tile, dict) and tile.get("kind") == "PLANT":
             crop = tile["crop"]
             age = day - tile["planted_day"]
+            profile = self._profile_for_tile(idx, tile, day)
             actions = [
-                a for a in rollouts.actions_at_age(crop, age) if a != "PLANT"
+                a
+                for a in rollouts.actions_at_age(crop, age, profile)
+                if a != "PLANT"
             ]
-            return _filter_pending(tile, actions)
+            return _filter_pending(tile, actions, private)
 
         if tile is None:
             entry = self._placement_today(idx, day)
             if entry:
                 crop = entry["crop"]
+                profile = entry.get("profile", "no_fert")
                 if private["seeds"].get(crop, 0) <= 0:
                     return []
-                return list(rollouts.actions_at_age(crop, 0))
+                return list(rollouts.actions_at_age(crop, 0, profile))
 
         return []
 
@@ -222,9 +300,24 @@ class Executor:
             if private["seeds"].get(crop, 0) <= 0:
                 return None
             return ["PLANT", crop]
+        if action == "FERTILIZE":
+            if private["inventories"][0].get("FERTILIZER", 0) <= 0:
+                return None
+            return ["FERTILIZE"]
         if action in ("WATER", "HARVEST", "DIG"):
             return [action]
         return None
+
+    @staticmethod
+    def _harvest_today(tile, day: int, profile: str = "no_fert") -> bool:
+        if not isinstance(tile, dict) or tile.get("kind") != "PLANT":
+            return False
+        crop = tile["crop"]
+        age = day - tile["planted_day"]
+        if age in rollouts.harvest_ages(crop, profile):
+            return True
+        actions = rollouts.actions_at_age(crop, age, profile)
+        return "HARVEST" in actions and tile.get("yield_units", 0) > 0
 
     @staticmethod
     def _tile_at(me: dict, idx: int):
@@ -240,23 +333,20 @@ def _empty_tile_indices(me: dict) -> frozenset[int]:
     return frozenset(empty)
 
 
-def _harvest_today(tile, day: int) -> bool:
-    if not isinstance(tile, dict) or tile.get("kind") != "PLANT":
-        return False
-    crop = tile["crop"]
-    age = day - tile["planted_day"]
-    if age in rollouts.harvest_ages(crop):
-        return True
-    actions = rollouts.actions_at_age(crop, age)
-    return "HARVEST" in actions and tile.get("yield_units", 0) > 0
-
-
-def _filter_pending(tile: dict, actions: list[str]) -> list[str]:
+def _filter_pending(
+    tile: dict, actions: list[str], private: dict | None = None
+) -> list[str]:
     pending = []
     for action in actions:
         if action == "WATER" and tile.get("watered_today"):
             continue
         if action == "HARVEST" and tile.get("yield_units", 0) <= 0:
+            continue
+        if (
+            action == "FERTILIZE"
+            and private is not None
+            and private["inventories"][0].get("FERTILIZER", 0) <= 0
+        ):
             continue
         pending.append(action)
     return pending

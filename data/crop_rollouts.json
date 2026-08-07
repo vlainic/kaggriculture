@@ -95,27 +95,6 @@
         "tile_free_age": 10,
         "expected_yield": 6,
         "fertilize_ages": []
-      },
-      "with_fert": {
-        "note": "Fert reaches cap at age 8, but first_yield_day=10 blocks earlier harvest — same 6 yield / tile time as no_fert; do not spend fertilizer.",
-        "days": [
-          { "age": 0, "actions": ["PLANT", "WATER"] },
-          { "age": 1, "actions": ["WATER"] },
-          { "age": 2, "actions": ["WATER"] },
-          { "age": 3, "actions": ["WATER"] },
-          { "age": 4, "actions": ["WATER"] },
-          { "age": 5, "actions": ["WATER"] },
-          { "age": 6, "actions": ["WATER"] },
-          { "age": 7, "actions": ["WATER"] },
-          { "age": 8, "actions": ["WATER"] },
-          { "age": 9, "actions": ["WATER"] },
-          { "age": 10, "actions": ["WATER", "HARVEST"] }
-        ],
-        "harvest_ages": [10],
-        "yield_per_harvest": [6],
-        "tile_free_age": 10,
-        "expected_yield": 6,
-        "fertilize_ages": []
       }
     },
     "TOMATO": {

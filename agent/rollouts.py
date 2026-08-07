@@ -6,7 +6,6 @@ import json
 from functools import lru_cache
 from pathlib import Path
 
-PROFILE = "no_fert"
 CROP_NAMES = ("WHEAT", "CARROT", "TOMATO", "MELON", "STRAWBERRY")
 SEASON_DAYS = 30  # full season: calendar days 0..29
 PLAN_HORIZON = 28  # packing grid + plant_day cap (half-open −1, sell lag −1)
@@ -48,6 +47,20 @@ def crop_names() -> tuple[str, ...]:
     return CROP_NAMES
 
 
+def profiles_for(crop: str) -> tuple[str, ...]:
+    """Melon has no with_fert profile; others expose both."""
+    keys = tuple(k for k in _load()["crops"][crop] if k in ("no_fert", "with_fert"))
+    return keys if keys else ("no_fert",)
+
+
+def plant_options() -> list[tuple[str, str]]:
+    return [(crop, profile) for crop in CROP_NAMES for profile in profiles_for(crop)]
+
+
+def _profile_data(crop: str, profile: str) -> dict:
+    return _load()["crops"][crop][profile]
+
+
 def shop_demand_by_crop(unlocked_shops: list[str]) -> dict[str, int]:
     """Sum crop demand units from currently unlocked town shops."""
     demand = dict.fromkeys(CROP_NAMES, 0)
@@ -61,54 +74,73 @@ def seed_cost(crop: str) -> int:
     return _load()["crops"][crop]["seed_cost"]
 
 
-def expected_yield(crop: str) -> int:
-    return _load()["crops"][crop][PROFILE]["expected_yield"]
+def expected_yield(crop: str, profile: str = "no_fert") -> int:
+    return _profile_data(crop, profile)["expected_yield"]
 
 
-def harvest_ages(crop: str) -> list[int]:
-    return list(_load()["crops"][crop][PROFILE]["harvest_ages"])
+def harvest_ages(crop: str, profile: str = "no_fert") -> list[int]:
+    return list(_profile_data(crop, profile)["harvest_ages"])
 
 
-def tile_free_age(crop: str) -> int:
-    return _load()["crops"][crop][PROFILE]["tile_free_age"]
+def tile_free_age(crop: str, profile: str = "no_fert") -> int:
+    return _profile_data(crop, profile)["tile_free_age"]
 
 
-def actions_at_age(crop: str, age: int) -> list[str]:
-    for day in _load()["crops"][crop][PROFILE]["days"]:
+def fertilize_ages(crop: str, profile: str = "no_fert") -> list[int]:
+    return list(_profile_data(crop, profile).get("fertilize_ages", []))
+
+
+def fert_count(crop: str, profile: str = "no_fert") -> int:
+    return len(fertilize_ages(crop, profile))
+
+
+def actions_at_age(crop: str, age: int, profile: str = "no_fert") -> list[str]:
+    for day in _profile_data(crop, profile)["days"]:
         if day["age"] == age:
             return list(day["actions"])
     return []
 
 
-def ops_count_at_age(crop: str, age: int) -> int:
-    return len(actions_at_age(crop, age))
+def ops_count_at_age(crop: str, age: int, profile: str = "no_fert") -> int:
+    return len(actions_at_age(crop, age, profile))
 
 
-def covered_days(crop: str, plant_day: int, horizon: int) -> set[int]:
+def covered_days(
+    crop: str, plant_day: int, horizon: int, profile: str = "no_fert"
+) -> set[int]:
     """Calendar days this lifecycle occupies on its tile (half-open: excludes free day)."""
-    days = set()
-    for age in range(tile_free_age(crop)):
+    days: set[int] = set()
+    for age in range(tile_free_age(crop, profile)):
         cal = plant_day + age
         if cal < horizon:
             days.add(cal)
     return days
 
 
-def ops_by_calendar_day(crop: str, plant_day: int, horizon: int) -> dict[int, int]:
+def ops_by_calendar_day(
+    crop: str, plant_day: int, horizon: int, profile: str = "no_fert"
+) -> dict[int, int]:
+    """Tile ops per calendar day, plus +1 PICKUP per fert unit on fertilize days."""
     out: dict[int, int] = {}
-    for day in _load()["crops"][crop][PROFILE]["days"]:
+    for day in _profile_data(crop, profile)["days"]:
         cal = plant_day + day["age"]
         if cal < horizon:
             out[cal] = len(day["actions"])
+    for age in fertilize_ages(crop, profile):
+        cal = plant_day + age
+        if cal < horizon:
+            out[cal] = out.get(cal, 0) + 1
     return out
 
 
-def lifecycle_fits(crop: str, plant_day: int, horizon: int) -> bool:
-    for day in _load()["crops"][crop][PROFILE]["days"]:
+def lifecycle_fits(
+    crop: str, plant_day: int, horizon: int, profile: str = "no_fert"
+) -> bool:
+    for day in _profile_data(crop, profile)["days"]:
         if plant_day + day["age"] >= horizon:
             return False
     return True
 
 
-def profile_days(crop: str) -> list[dict]:
-    return list(_load()["crops"][crop][PROFILE]["days"])
+def profile_days(crop: str, profile: str = "no_fert") -> list[dict]:
+    return list(_profile_data(crop, profile)["days"])
