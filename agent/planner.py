@@ -1,4 +1,4 @@
-"""Weighted set-packing planner for empty-tile plant assignments."""
+"""Weighted set-packing planner for forward season assignments."""
 
 from __future__ import annotations
 
@@ -20,8 +20,24 @@ def _build_elements(current_day: int, horizon: int) -> list[tuple[int, int]]:
     ]
 
 
+def _earliest_plant_by_tile(
+    plannable_tiles: set[int],
+    tile_states: list[tuple[int, str, int] | None],
+    current_day: int,
+) -> dict[int, int]:
+    """First calendar day a new lifecycle may start on each tile."""
+    earliest = {tile: current_day for tile in plannable_tiles}
+    for state in tile_states:
+        if state is None:
+            continue
+        tile, crop, planted_day = state
+        earliest[tile] = planted_day + rollouts.tile_free_age(crop)
+    return earliest
+
+
 def _build_candidates(
-    empty_tiles: set[int],
+    plannable_tiles: set[int],
+    earliest_plant: dict[int, int],
     current_day: int,
     plan_horizon: int,
     ops_horizon: int,
@@ -36,8 +52,9 @@ def _build_candidates(
         price = int(prices.get(crop, 0) or 0)
         weight = rollouts.expected_yield(crop) * price - cost
 
-        for tile in empty_tiles:
-            for plant_day in range(current_day, plan_horizon):
+        for tile in plannable_tiles:
+            start = max(earliest_plant.get(tile, current_day), current_day)
+            for plant_day in range(start, plan_horizon):
                 if not rollouts.lifecycle_fits(crop, plant_day, ops_horizon):
                     continue
 
@@ -86,8 +103,9 @@ def existing_ops_by_day(
     tile_states: list[tuple[int, str, int] | None],
     current_day: int,
     horizon: int,
+    weed_tiles: set[int] | None = None,
 ) -> dict[int, int]:
-    """Ops contributed by plants already on tiles: (tile_idx, crop, planted_day)."""
+    """Ops from in-progress plants plus same-day weed DIG."""
     load: dict[int, int] = {}
     for state in tile_states:
         if state is None:
@@ -97,6 +115,8 @@ def existing_ops_by_day(
             cal = planted_day + age_day["age"]
             if current_day <= cal < horizon:
                 load[cal] = load.get(cal, 0) + len(age_day["actions"])
+    if weed_tiles:
+        load[current_day] = load.get(current_day, 0) + len(weed_tiles)
     return load
 
 
@@ -152,26 +172,40 @@ def _extract_solution(solver: cp_model.CpSolver, y: dict, subsets: list[dict]) -
 
 
 def solve_plan(
-    empty_tiles: set[int],
+    plannable_tiles: set[int],
     tile_states: list[tuple[int, str, int] | None],
     current_day: int,
     prices: dict[str, int],
     plan_horizon: int = PLAN_HORIZON,
     ops_horizon: int = OPS_HORIZON,
+    weed_tiles: set[int] | None = None,
 ) -> list[dict]:
     """Return selected placements: [{tile, crop, plant_day}, ...]."""
-    if not empty_tiles:
+    if not plannable_tiles:
         return []
 
+    earliest_plant = _earliest_plant_by_tile(
+        plannable_tiles, tile_states, current_day
+    )
     elements = _build_elements(current_day, plan_horizon)
     subsets = _build_candidates(
-        empty_tiles, current_day, plan_horizon, ops_horizon, prices
+        plannable_tiles,
+        earliest_plant,
+        current_day,
+        plan_horizon,
+        ops_horizon,
+        prices,
     )
     if not subsets:
-        print(f"[planner] day={current_day} no candidates empty={sorted(empty_tiles)}")
+        print(
+            f"[planner] day={current_day} no candidates "
+            f"tiles={sorted(plannable_tiles)}"
+        )
         return []
 
-    existing_load = existing_ops_by_day(tile_states, current_day, ops_horizon)
+    existing_load = existing_ops_by_day(
+        tile_states, current_day, ops_horizon, weed_tiles
+    )
 
     model = cp_model.CpModel()
     y = {s["id"]: model.NewBoolVar(s["id"]) for s in subsets}

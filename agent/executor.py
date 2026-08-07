@@ -73,38 +73,27 @@ class Executor:
             and empty != self._last_empty_tiles
         )
 
-    def _keep_plan_entry(self, me: dict, entry: dict, day: int) -> bool:
-        if entry["plant_day"] <= day:
-            return False
-        tile = self._tile_at(me, entry["tile"])
-        if tile is None:
-            return True
-        if isinstance(tile, dict):
-            kind = tile.get("kind")
-            if kind in ("PLANT", "WEED"):
-                return True
-        return False
-
     def _replan(self, obs: dict, me: dict, day: int, prices: dict) -> None:
-        empty = set(_empty_tile_indices(me))
         states: list[tuple[int, str, int] | None] = [None] * len(TILE_COORDS)
+        weed_tiles: set[int] = set()
 
         for idx in range(len(TILE_COORDS)):
             tile = self._tile_at(me, idx)
             if isinstance(tile, dict) and tile.get("kind") == "PLANT":
                 states[idx] = (idx, tile["crop"], tile["planted_day"])
+            elif isinstance(tile, dict) and tile.get("kind") == "WEED":
+                weed_tiles.add(idx)
 
-        kept = [e for e in self.plan if self._keep_plan_entry(me, e, day)]
-        scheduled = {e["tile"] for e in kept}
-        planner_empty = empty - scheduled
-        selected = planner.solve_plan(planner_empty, states, day, prices)
-        self.plan = sorted(kept + selected, key=lambda e: (e["plant_day"], e["tile"]))
+        plannable = set(range(len(TILE_COORDS)))
+        self.plan = planner.solve_plan(
+            plannable, states, day, prices, weed_tiles=weed_tiles or None
+        )
+        self.plan = sorted(self.plan, key=lambda e: (e["plant_day"], e["tile"]))
         self.last_replan_day = day
-        self._last_empty_tiles = frozenset(empty)
+        self._last_empty_tiles = _empty_tile_indices(me)
         print(
-            f"[executor] replan day={day} empty={sorted(empty)} "
-            f"planner_empty={sorted(planner_empty)} "
-            f"kept={len(kept)} new={len(selected)} plan={len(self.plan)} "
+            f"[executor] replan day={day} weeds={sorted(weed_tiles)} "
+            f"plan={len(self.plan)} "
             f"plant_days={sorted({e['plant_day'] for e in self.plan})[:12]}"
         )
 
