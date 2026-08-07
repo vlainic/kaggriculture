@@ -5,6 +5,7 @@
     "actions_are_tile_only": true,
     "plant_day_must_water": true,
     "fertilize_before_water_one_time": true,
+    "fertilize_duration_days": 3,
     "yield_per_harvest": "list aligned with harvest_ages — units per HARVEST at that age",
     "seed_cost": "BUY_SEED unit price (fixed)",
     "base_price": "sell price at market I0 (start-of-game)"
@@ -96,6 +97,7 @@
         "fertilize_ages": []
       },
       "with_fert": {
+        "note": "Fert reaches cap at age 8, but first_yield_day=10 blocks earlier harvest — same 6 yield / tile time as no_fert; do not spend fertilizer.",
         "days": [
           { "age": 0, "actions": ["PLANT", "WATER"] },
           { "age": 1, "actions": ["WATER"] },
@@ -103,7 +105,7 @@
           { "age": 3, "actions": ["WATER"] },
           { "age": 4, "actions": ["WATER"] },
           { "age": 5, "actions": ["WATER"] },
-          { "age": 6, "actions": ["FERTILIZE", "WATER"] },
+          { "age": 6, "actions": ["WATER"] },
           { "age": 7, "actions": ["WATER"] },
           { "age": 8, "actions": ["WATER"] },
           { "age": 9, "actions": ["WATER"] },
@@ -113,7 +115,7 @@
         "yield_per_harvest": [6],
         "tile_free_age": 10,
         "expected_yield": 6,
-        "fertilize_ages": [6]
+        "fertilize_ages": []
       }
     },
     "TOMATO": {
@@ -132,7 +134,7 @@
           { "age": 8, "actions": ["WATER", "HARVEST"] },
           { "age": 9, "actions": ["WATER", "HARVEST"] },
           { "age": 10, "actions": ["WATER", "HARVEST"] },
-          { "age": 11, "actions": ["WATER", "HARVEST", "DIG"] }
+          { "age": 11, "actions": ["HARVEST", "DIG"] }
         ],
         "harvest_ages": [8, 9, 10, 11],
         "yield_per_harvest": [1, 1, 1, 1],
@@ -150,16 +152,16 @@
           { "age": 5, "actions": ["WATER"] },
           { "age": 6, "actions": ["WATER"] },
           { "age": 7, "actions": ["WATER", "FERTILIZE"] },
-          { "age": 8, "actions": ["WATER", "FERTILIZE", "HARVEST"] },
-          { "age": 9, "actions": ["WATER", "FERTILIZE", "HARVEST"] },
+          { "age": 8, "actions": ["WATER", "HARVEST"] },
+          { "age": 9, "actions": ["WATER", "HARVEST"] },
           { "age": 10, "actions": ["WATER", "FERTILIZE", "HARVEST"] },
-          { "age": 11, "actions": ["WATER", "FERTILIZE", "HARVEST", "DIG"] }
+          { "age": 11, "actions": ["HARVEST", "DIG"] }
         ],
         "harvest_ages": [8, 9, 10, 11],
         "yield_per_harvest": [2, 2, 2, 2],
         "tile_free_age": 11,
         "expected_yield": 8,
-        "fertilize_ages": [7, 8, 9, 10, 11]
+        "fertilize_ages": [7, 10]
       }
     },
     "STRAWBERRY": {
@@ -183,7 +185,7 @@
           { "age": 13, "actions": ["WATER"] },
           { "age": 14, "actions": ["WATER", "HARVEST"] },
           { "age": 15, "actions": ["WATER"] },
-          { "age": 16, "actions": ["WATER", "HARVEST", "DIG"] }
+          { "age": 16, "actions": ["HARVEST", "DIG"] }
         ],
         "harvest_ages": [10, 12, 14, 16],
         "yield_per_harvest": [1, 1, 1, 1],
@@ -203,19 +205,19 @@
           { "age": 7, "actions": ["WATER"] },
           { "age": 8, "actions": ["WATER"] },
           { "age": 9, "actions": ["WATER", "FERTILIZE"] },
-          { "age": 10, "actions": ["WATER", "FERTILIZE", "HARVEST"] },
-          { "age": 11, "actions": ["WATER", "FERTILIZE"] },
-          { "age": 12, "actions": ["WATER", "FERTILIZE", "HARVEST"] },
+          { "age": 10, "actions": ["WATER", "HARVEST"] },
+          { "age": 11, "actions": ["WATER"] },
+          { "age": 12, "actions": ["WATER", "HARVEST"] },
           { "age": 13, "actions": ["WATER", "FERTILIZE"] },
-          { "age": 14, "actions": ["WATER", "FERTILIZE", "HARVEST"] },
-          { "age": 15, "actions": ["WATER", "FERTILIZE"] },
-          { "age": 16, "actions": ["WATER", "FERTILIZE", "HARVEST", "DIG"] }
+          { "age": 14, "actions": ["WATER", "HARVEST"] },
+          { "age": 15, "actions": ["WATER"] },
+          { "age": 16, "actions": ["HARVEST", "DIG"] }
         ],
         "harvest_ages": [10, 12, 14, 16],
         "yield_per_harvest": [2, 2, 2, 2],
         "tile_free_age": 16,
         "expected_yield": 8,
-        "fertilize_ages": [9, 10, 11, 12, 13, 14, 15, 16]
+        "fertilize_ages": [9, 13]
       }
     }
   }
