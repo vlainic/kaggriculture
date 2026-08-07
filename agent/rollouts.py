@@ -8,8 +8,10 @@ from pathlib import Path
 
 PROFILE = "no_fert"
 CROP_NAMES = ("WHEAT", "CARROT", "TOMATO", "MELON", "STRAWBERRY")
-SEASON_DAYS = 30
+SEASON_DAYS = 30  # full season: calendar days 0..29
+PLAN_HORIZON = 28  # packing grid + plant_day cap (half-open −1, sell lag −1)
 DAILY_OP_BUDGET = 16
+FIRST_DAY_OP_RESERVE = 1  # day 0: one turn reserved for BUY_SEED market orders
 
 _DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "crop_rollouts.json"
 
@@ -18,6 +20,13 @@ _DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "crop_rollouts.js
 def _load() -> dict:
     with _DATA_PATH.open(encoding="utf-8") as f:
         return json.load(f)
+
+
+def daily_op_budget(day: int) -> int:
+    """Farmer tile-op capacity for a calendar day (day 0 reserves one turn for buying)."""
+    if day == 0:
+        return DAILY_OP_BUDGET - FIRST_DAY_OP_RESERVE
+    return DAILY_OP_BUDGET
 
 
 def crop_names() -> tuple[str, ...]:

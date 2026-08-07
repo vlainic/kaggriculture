@@ -7,7 +7,8 @@ from ortools.sat.python import cp_model
 from agent import rollouts
 
 NUM_TILES = 9
-HORIZON = rollouts.SEASON_DAYS
+PLAN_HORIZON = rollouts.PLAN_HORIZON
+OPS_HORIZON = rollouts.SEASON_DAYS
 SOLVER_TIME_LIMIT_S = 8.0
 
 
@@ -22,10 +23,11 @@ def _build_elements(current_day: int, horizon: int) -> list[tuple[int, int]]:
 def _build_candidates(
     empty_tiles: set[int],
     current_day: int,
-    horizon: int,
+    plan_horizon: int,
+    ops_horizon: int,
     prices: dict[str, int],
 ) -> list[dict]:
-    elements = _build_elements(current_day, horizon)
+    elements = _build_elements(current_day, plan_horizon)
     element_set = set(elements)
     subsets: list[dict] = []
 
@@ -35,8 +37,8 @@ def _build_candidates(
         weight = rollouts.expected_yield(crop) * price - cost
 
         for tile in empty_tiles:
-            for plant_day in range(current_day, horizon):
-                if not rollouts.lifecycle_fits(crop, plant_day, horizon):
+            for plant_day in range(current_day, plan_horizon):
+                if not rollouts.lifecycle_fits(crop, plant_day, ops_horizon):
                     continue
 
                 covered: set[tuple[int, int]] = set()
@@ -45,7 +47,7 @@ def _build_candidates(
                 free_age = rollouts.tile_free_age(crop)
                 for age in range(free_age):
                     cal = plant_day + age
-                    if cal >= horizon:
+                    if cal >= plan_horizon:
                         ok = False
                         break
                     cell = (tile, cal)
@@ -59,7 +61,7 @@ def _build_candidates(
 
                 for age_day in rollouts.profile_days(crop):
                     cal = plant_day + age_day["age"]
-                    if cal >= horizon:
+                    if cal >= ops_horizon:
                         ok = False
                         break
                     ops_by_day[cal] = len(age_day["actions"])
@@ -109,12 +111,12 @@ def _greedy_pack(
     subsets: list[dict],
     existing_load: dict[int, int],
     current_day: int,
-    horizon: int,
+    ops_horizon: int,
 ) -> list[dict]:
     """Weight-descending greedy packing when CP-SAT yields nothing."""
     occupied: set[tuple[int, int]] = set()
     day_ops = {
-        d: existing_load.get(d, 0) for d in range(current_day, horizon)
+        d: existing_load.get(d, 0) for d in range(current_day, ops_horizon)
     }
     chosen: list[dict] = []
 
@@ -125,7 +127,7 @@ def _greedy_pack(
             continue
         fits = True
         for d, ops in s["ops_by_day"].items():
-            if day_ops.get(d, 0) + ops > rollouts.DAILY_OP_BUDGET:
+            if day_ops.get(d, 0) + ops > rollouts.daily_op_budget(d):
                 fits = False
                 break
         if not fits:
@@ -154,19 +156,22 @@ def solve_plan(
     tile_states: list[tuple[int, str, int] | None],
     current_day: int,
     prices: dict[str, int],
-    horizon: int = HORIZON,
+    plan_horizon: int = PLAN_HORIZON,
+    ops_horizon: int = OPS_HORIZON,
 ) -> list[dict]:
     """Return selected placements: [{tile, crop, plant_day}, ...]."""
     if not empty_tiles:
         return []
 
-    elements = _build_elements(current_day, horizon)
-    subsets = _build_candidates(empty_tiles, current_day, horizon, prices)
+    elements = _build_elements(current_day, plan_horizon)
+    subsets = _build_candidates(
+        empty_tiles, current_day, plan_horizon, ops_horizon, prices
+    )
     if not subsets:
         print(f"[planner] day={current_day} no candidates empty={sorted(empty_tiles)}")
         return []
 
-    existing_load = existing_ops_by_day(tile_states, current_day, horizon)
+    existing_load = existing_ops_by_day(tile_states, current_day, ops_horizon)
 
     model = cp_model.CpModel()
     y = {s["id"]: model.NewBoolVar(s["id"]) for s in subsets}
@@ -176,7 +181,7 @@ def solve_plan(
         if covering:
             model.Add(sum(covering) <= 1)
 
-    for day in range(current_day, horizon):
+    for day in range(current_day, ops_horizon):
         operations = []
         for s in subsets:
             ops = s["ops_by_day"].get(day)
@@ -184,7 +189,7 @@ def solve_plan(
                 continue
             operations.append(y[s["id"]] * ops)
 
-        cap = rollouts.DAILY_OP_BUDGET - existing_load.get(day, 0)
+        cap = rollouts.daily_op_budget(day) - existing_load.get(day, 0)
         if operations and cap >= 0:
             model.Add(sum(operations) <= cap)
 
@@ -204,7 +209,7 @@ def solve_plan(
 
     source = "cpsat"
     if not placements:
-        placements = _greedy_pack(subsets, existing_load, current_day, horizon)
+        placements = _greedy_pack(subsets, existing_load, current_day, ops_horizon)
         source = "greedy"
 
     obj = None
