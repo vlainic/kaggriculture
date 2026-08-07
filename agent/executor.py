@@ -25,6 +25,7 @@ class Executor:
         # Full list of placements — multiple plantings per tile over the season.
         self.plan: list[dict] = []
         self.last_replan_day: int | None = None
+        self._last_empty_tiles: frozenset[int] | None = None
 
     def step(self, obs: dict) -> dict:
         player = obs["player"]
@@ -64,29 +65,45 @@ class Executor:
             tile = self._tile_at(me, idx)
             if _harvest_today(tile, day):
                 return True
+            if isinstance(tile, dict) and tile.get("kind") == "WEED":
+                return True
+        empty = _empty_tile_indices(me)
+        return (
+            self._last_empty_tiles is not None
+            and empty != self._last_empty_tiles
+        )
+
+    def _keep_plan_entry(self, me: dict, entry: dict, day: int) -> bool:
+        if entry["plant_day"] <= day:
+            return False
+        tile = self._tile_at(me, entry["tile"])
+        if tile is None:
+            return True
+        if isinstance(tile, dict):
+            kind = tile.get("kind")
+            if kind in ("PLANT", "WEED"):
+                return True
         return False
 
     def _replan(self, obs: dict, me: dict, day: int, prices: dict) -> None:
-        empty: set[int] = set()
+        empty = set(_empty_tile_indices(me))
         states: list[tuple[int, str, int] | None] = [None] * len(TILE_COORDS)
 
         for idx in range(len(TILE_COORDS)):
             tile = self._tile_at(me, idx)
-            if tile is None:
-                empty.add(idx)
-            elif isinstance(tile, dict) and tile.get("kind") == "PLANT":
+            if isinstance(tile, dict) and tile.get("kind") == "PLANT":
                 states[idx] = (idx, tile["crop"], tile["planted_day"])
 
-        selected = planner.solve_plan(empty, states, day, prices)
-        kept = [
-            e
-            for e in self.plan
-            if e["tile"] not in empty and e["plant_day"] > day
-        ]
+        kept = [e for e in self.plan if self._keep_plan_entry(me, e, day)]
+        scheduled = {e["tile"] for e in kept}
+        planner_empty = empty - scheduled
+        selected = planner.solve_plan(planner_empty, states, day, prices)
         self.plan = sorted(kept + selected, key=lambda e: (e["plant_day"], e["tile"]))
         self.last_replan_day = day
+        self._last_empty_tiles = frozenset(empty)
         print(
             f"[executor] replan day={day} empty={sorted(empty)} "
+            f"planner_empty={sorted(planner_empty)} "
             f"kept={len(kept)} new={len(selected)} plan={len(self.plan)} "
             f"plant_days={sorted({e['plant_day'] for e in self.plan})[:12]}"
         )
@@ -111,16 +128,24 @@ class Executor:
                 tile = self._tile_at(me, entry["tile"])
                 if tile is None or entry["plant_day"] == day + 1:
                     # tomorrow: count even if currently occupied (harvest frees it)
-                    if entry["plant_day"] == day and tile is not None:
+                    if (
+                        entry["plant_day"] == day
+                        and tile is not None
+                        and not (
+                            isinstance(tile, dict) and tile.get("kind") == "WEED"
+                        )
+                    ):
                         continue
-                    if entry["plant_day"] == day + 1 and tile is not None:
-                        # only if harvest/dig likely frees tile by tomorrow
-                        if not (
+                    if (
+                        entry["plant_day"] == day + 1
+                        and tile is not None
+                        and not (
                             isinstance(tile, dict)
                             and tile.get("kind") == "PLANT"
                             and _harvest_today(tile, day)
-                        ):
-                            continue
+                        )
+                    ):
+                        continue
                     needed[entry["crop"]] += 1
 
         money = me["money"]
@@ -139,6 +164,11 @@ class Executor:
     def _next_work(
         self, obs: dict, me: dict, private: dict, day: int
     ) -> tuple[int | None, list[str]]:
+        for idx in range(len(TILE_COORDS)):
+            tile = self._tile_at(me, idx)
+            if isinstance(tile, dict) and tile.get("kind") == "WEED":
+                return idx, ["DIG"]
+
         for idx in range(len(TILE_COORDS)):
             pending = self._pending_for_tile(obs, me, private, idx, day)
             if pending:
@@ -199,6 +229,14 @@ class Executor:
     def _tile_at(me: dict, idx: int):
         x, y = TILE_COORDS[idx]
         return me["tiles"][y][x]
+
+
+def _empty_tile_indices(me: dict) -> frozenset[int]:
+    empty: set[int] = set()
+    for idx in range(len(TILE_COORDS)):
+        if Executor._tile_at(me, idx) is None:
+            empty.add(idx)
+    return frozenset(empty)
 
 
 def _harvest_today(tile, day: int) -> bool:
