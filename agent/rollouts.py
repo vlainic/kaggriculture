@@ -15,6 +15,21 @@ FIRST_DAY_OP_RESERVE = 1  # day 0: one turn reserved for BUY_SEED market orders
 
 _DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "crop_rollouts.json"
 
+# Crop demand units per unlocked shop (from docs/README.md town table).
+SHOP_CROP_DEMAND: dict[str, dict[str, int]] = {
+    "BAKERY": {"WHEAT": 1},
+    "PIZZA_SHOP": {"TOMATO": 1, "WHEAT": 1},
+    "BRUNCH_SPOT": {"STRAWBERRY": 1, "WHEAT": 1},
+    "ICE_CREAM_SHOP": {"STRAWBERRY": 1, "WHEAT": 1},
+    "PET_CAFE": {"CARROT": 2},
+    "FARMERS_MARKET": {
+        "WHEAT": 1,
+        "CARROT": 1,
+        "TOMATO": 1,
+        "STRAWBERRY": 1,
+    },
+}
+
 
 @lru_cache(maxsize=1)
 def _load() -> dict:
@@ -31,6 +46,15 @@ def daily_op_budget(day: int) -> int:
 
 def crop_names() -> tuple[str, ...]:
     return CROP_NAMES
+
+
+def shop_demand_by_crop(unlocked_shops: list[str]) -> dict[str, int]:
+    """Sum crop demand units from currently unlocked town shops."""
+    demand = dict.fromkeys(CROP_NAMES, 0)
+    for shop in unlocked_shops:
+        for crop, units in SHOP_CROP_DEMAND.get(shop, {}).items():
+            demand[crop] += units
+    return demand
 
 
 def seed_cost(crop: str) -> int:

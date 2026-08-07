@@ -85,8 +85,15 @@ class Executor:
                 weed_tiles.add(idx)
 
         plannable = set(range(len(TILE_COORDS)))
+        shops = obs.get("town", {}).get("unlocked_shops", [])
+        demand = rollouts.shop_demand_by_crop(shops)
         self.plan = planner.solve_plan(
-            plannable, states, day, prices, weed_tiles=weed_tiles or None
+            plannable,
+            states,
+            day,
+            prices,
+            weed_tiles=weed_tiles or None,
+            shop_demand=demand,
         )
         self.plan = sorted(self.plan, key=lambda e: (e["plant_day"], e["tile"]))
         self.last_replan_day = day

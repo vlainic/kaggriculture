@@ -42,15 +42,18 @@ def _build_candidates(
     plan_horizon: int,
     ops_horizon: int,
     prices: dict[str, int],
+    shop_demand: dict[str, int] | None = None,
 ) -> list[dict]:
     elements = _build_elements(current_day, plan_horizon)
     element_set = set(elements)
     subsets: list[dict] = []
+    demand = shop_demand or {}
 
     for crop in rollouts.crop_names():
         cost = rollouts.seed_cost(crop)
         price = int(prices.get(crop, 0) or 0)
-        weight = rollouts.expected_yield(crop) * price - cost
+        d = demand.get(crop, 0)
+        weight = rollouts.expected_yield(crop) * price * (1 + d) - cost
 
         for tile in plannable_tiles:
             start = max(earliest_plant.get(tile, current_day), current_day)
@@ -179,6 +182,7 @@ def solve_plan(
     plan_horizon: int = PLAN_HORIZON,
     ops_horizon: int = OPS_HORIZON,
     weed_tiles: set[int] | None = None,
+    shop_demand: dict[str, int] | None = None,
 ) -> list[dict]:
     """Return selected placements: [{tile, crop, plant_day}, ...]."""
     if not plannable_tiles:
@@ -195,6 +199,7 @@ def solve_plan(
         plan_horizon,
         ops_horizon,
         prices,
+        shop_demand,
     )
     if not subsets:
         print(
