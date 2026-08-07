@@ -2,47 +2,45 @@
 
 ## Current focus
 
-**Live set-packing plant agent is implemented and submitting.** Scope: `no_fert`, 3×3 NW tiles by shed, CP-SAT packing + snake executor, sell-all, seed buys. OR-Tools vendored for Kaggle sim (not on runtime).
+**Live set-packing plant agent — Aug 7 refinements.** Full forward replan under live prices + shop demand; sticky snake executor. Still `no_fert`, 3×3 NW tiles, sell-all, seed buys, vendored OR-Tools for Kaggle.
 
-## Recent changes (Aug 6, 2026)
+## Recent changes (Aug 7, 2026)
 
-1. **Agent modules:** `agent/rollouts.py`, `agent/planner.py`, `agent/executor.py`; thin `main.py` → `agent(obs)`.
-2. **Data:** `data/crop_rollouts.json` shipped in submission (`no_fert` profiles).
-3. **Submission packaging:** `submission.tar.gz` = `main.py` + `agent/` + `data/` + unpacked **cp311 manylinux** OR-Tools wheels (`scripts/vendor_ortools.sh`, `scripts/smoke_and_submit.sh`).
-4. **Kaggle lessons:**
-   - Single-file `main.py` failed earlier on bundling/`ortools` import; tar.gz + vendor is required.
-   - Validation `90458708`: agent idle — planner returned empty / plan collapsed; fixed.
-5. **Bugfixes that made the agent move and farm:**
-   - Keep **full placement list** (not `dict[tile]` — that dropped early plantings).
-   - Skip `PLANT` in pending once tile already has a plant (was stuck PASS instead of WATER).
-   - CP-SAT: 8s limit, try incumbent on UNKNOWN, **greedy fallback** if empty; log status.
-   - On replan: merge new empty-tile solves with **kept** future plantings on occupied tiles.
-6. Local smoke vs `random`: ~**21k** reward, `DONE` (after fixes; was ~2k when only late melons ran).
+1. **Half-open occupancy:** packing subsets cover ages `[0, tile_free_age)`; last-day HARVEST/DIG still count in `ops_by_day` → same-day harvest→plant handoff allowed.
+2. **Tomato/strawberry DIG:** last harvest day includes DIG; `tile_free_age` 11 / 16 (not day-after).
+3. **Horizons:** `SEASON_DAYS=30`, `PLAN_HORIZON=28` (half-open −1 + sell lag −1); ops through day 29; day 0 op budget 15 (`FIRST_DAY_OP_RESERVE`).
+4. **Full forward replan (not kept-merge):** on replan, replace `self.plan` entirely. Fixed = in-progress plants (`earliest_plant` + remaining ops) + weed DIG (+1 op). All future plantings free under new prices.
+5. **Weed react (executor):** DIG in snake order; no planner tile reserve. Replan on weed / empty-set change.
+6. **Shop demand weights:** `weight = yield × price × (1 + shop_demand) − seed_cost` from currently unlocked shops only (no unlock forecast, no town center).
+7. **Sticky snake executor:** finish current tile before leaving (stops harvest→move away→return waste); strict `TILE_COORDS` scan (no weed-first jump).
+8. **Checks notebook:** `experiments/MainChecks.ipynb` for half-open / handoff gantt.
 
 ## Active decisions
 
-- Profile: **`no_fert` only** (no fert/hire/land/animals this pass).
-- Planner: weighted set packing `(tile, crop, plant_day)`; live `obs["market"]["prices"]`; ≤16 tile ops/day; snake path 8 moves + ops ≤ 24.
-- Replan: `hour == 0` when no plan yet **or** any tile harvests today.
-- Submit as **tar.gz** with vendored OR-Tools (sim is Python **3.11**, no pip install).
-- Prefer thin `main.py` + `agent/` modules (not inlined single file).
+- Profile: **`no_fert` only**.
+- Seeds: **fixed** costs from rollouts; sell prices: **live** `obs["market"]["prices"]`.
+- Replan at `hour == 0` when: first run, harvest today, weed present, or empty-tile set changed.
+- Packing: half-open occupancy; capacity uses full ops + day-0 reserve + weed DIG.
+- Shop boost on **revenue term only**; MELON demand 0; Yarn/Smoothie ignored (animals).
+- Prefer thin `main.py` + `agent/` + `data/` + vendored ortools tar.gz.
 - Do **not** add tests/eval/`.venv` unless user asks.
 
 ## Open questions / follow-ups
 
-1. Confirm ladder replay after latest submit shows early PLANT/WATER (not idle).
-2. Op budget / day-0 stagger still from notebook heuristic — tune weights vs live prices.
-3. Fertilizer / hires / more tiles — later phases.
-4. Whether greedy-only (no OR-Tools) is enough if vendor size/time becomes painful.
+1. Ladder replay after sticky/shop changes — farming + no leave/return after harvest.
+2. Town-center demand in weights? (out of scope for now.)
+3. Fertilizer / hires / more tiles — later.
+4. Greedy-only if vendor size/time hurts.
 
 ## Immediate next steps
 
-1. Re-submit with current planner/executor fixes; check agent log + replay.
-2. Tune crop mix / replan cadence if ladder ELO is weak.
-3. Optionally prune unused OR-Tools deps (pandas weight) to shrink tar.
+1. Smoke vs `random` / submit; watch agent log for sticky plant-after-harvest.
+2. Tune shop demand scale if wheat over-preferred.
+3. Fert / hire / land when plant loop is stable on ladder.
 
 ## Key files
 
 - `main.py`, `agent/{rollouts,planner,executor}.py`, `data/crop_rollouts.json`
+- `experiments/MainChecks.ipynb`
 - `scripts/vendor_ortools.sh`, `scripts/smoke_and_submit.sh`
-- `docs/weighted_set_packing.md`, `experiments/FarmerOnly-PlantOnly-NoFert.ipynb`
+- `docs/weighted_set_packing.md`, `docs/README.md` (town shops)

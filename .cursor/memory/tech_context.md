@@ -53,9 +53,21 @@ Legacy Godot/NSMK rules, skills, and agents were removed (Aug 2026).
 ## Repo contents (current)
 
 ```
+main.py                    # thin agent(obs) → executor
+agent/                     # rollouts, planner, executor
+data/crop_rollouts.json
 docs/project_overview.md   # full competition rules + obs schema
 docs/claude_chat.md        # strategy discussion archive
+docs/weighted_set_packing.md
+experiments/MainChecks.ipynb
+scripts/                   # vendor_ortools, smoke_and_submit
 .cursor/                   # rules, skills, agents, memory
 ```
+
+## Agent tuning knobs (`agent/rollouts.py`)
+
+- `PLAN_HORIZON=28`, `SEASON_DAYS=30`, `DAILY_OP_BUDGET=16`, `FIRST_DAY_OP_RESERVE=1`
+- `SHOP_CROP_DEMAND` — unlocked shops only; weight uses `(1+d)` on yield×price
+- Profile: `PROFILE = "no_fert"`
 
 No agent code yet — greenfield implementation pending.

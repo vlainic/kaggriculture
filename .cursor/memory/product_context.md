@@ -23,8 +23,9 @@ Not a static allocation puzzle:
 
 - Goose/egg has highest yield/tile/day (1.00) but needs wheat feed + coop build.
 - Premium goods (strawberry, melon, milk, wool) crash to $1 on modest overproduction — smooth sells, avoid bullwhip.
-- Town demand grows monotonically; forecasting shop-unlock scenarios (only 8 shop types) can inform sell timing.
+- Town demand grows monotonically; **unlocked shops** boost plant weights via `(1 + demand)` on revenue (no unlock forecast yet; town center not in weights).
 - Exact obs JSON beats human UI — agent reads `private.shed`, `fertilized_until_day`, etc. directly.
+- Seed prices are **fixed**; product sell prices are **dynamic** — planner uses live `obs["market"]["prices"]`.
 
 ## User workflow preferences
 
