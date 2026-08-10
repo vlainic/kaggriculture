@@ -23,13 +23,14 @@ TILE_COORDS: list[tuple[int, int]] = [
 SHED_ADJACENT: frozenset[tuple[int, int]] = frozenset(
     {(4, 4), (5, 4), (4, 5), (5, 5)}
 )
-SHED_ROUTE = (4, 4)
 
 
 class Executor:
     def __init__(self) -> None:
         # Full list of placements — multiple plantings per tile over the season.
         self.plan: list[dict] = []
+        # Persisted profile for live plants: (tile_idx, planted_day) -> profile
+        self.plant_profiles: dict[tuple[int, int], str] = {}
         self.last_replan_day: int | None = None
         self._last_empty_tiles: frozenset[int] | None = None
 
@@ -47,16 +48,15 @@ class Executor:
 
         market = self._market_orders(obs, me, private, day, prices)
 
-        pickup_n = self._fert_pickup_count(me, private, day)
-        if pickup_n > 0:
-            if (fx, fy) not in SHED_ADJACENT:
-                move = _step_toward(fx, fy, *SHED_ROUTE)
-                return {"farmer": [move], "hands": [], "market": market}
-            return {
-                "farmer": ["PICKUP", "FERTILIZER", pickup_n],
-                "hands": [],
-                "market": market,
-            }
+        ops_today = self._fert_ops_today(me, day)
+        if ops_today > 0 and (fx, fy) in SHED_ADJACENT:
+            pickup_n = self._fert_pickup_count(private, ops_today)
+            if pickup_n > 0:
+                return {
+                    "farmer": ["PICKUP", "FERTILIZER", pickup_n],
+                    "hands": [],
+                    "market": market,
+                }
 
         target_idx, pending = self._next_work(obs, me, private, day)
         if target_idx is None:
@@ -69,13 +69,29 @@ class Executor:
 
         if pending:
             for act in pending:
-                action = self._format_action(act, obs, me, private, target_idx, day)
+                action = self._format_action(
+                    act, obs, me, private, target_idx, day
+                )
                 if action:
                     return {"farmer": action, "hands": [], "market": market}
 
         return {"farmer": ["PASS"], "hands": [], "market": market}
 
+    def _sync_plant_profiles(self, me: dict) -> None:
+        live = {
+            (idx, tile["planted_day"])
+            for idx in range(len(TILE_COORDS))
+            if isinstance(tile := self._tile_at(me, idx), dict)
+            and tile.get("kind") == "PLANT"
+        }
+        self.plant_profiles = {
+            k: v for k, v in self.plant_profiles.items() if k in live
+        }
+
     def _profile_for_plant(self, idx: int, planted_day: int) -> str:
+        key = (idx, planted_day)
+        if key in self.plant_profiles:
+            return self.plant_profiles[key]
         for entry in self.plan:
             if entry["tile"] == idx and entry["plant_day"] == planted_day:
                 return entry.get("profile", "no_fert")
@@ -106,6 +122,7 @@ class Executor:
         )
 
     def _replan(self, obs: dict, me: dict, day: int, prices: dict) -> None:
+        self._sync_plant_profiles(me)
         states: list[planner.TileState | None] = [None] * len(TILE_COORDS)
         weed_tiles: set[int] = set()
 
@@ -143,7 +160,7 @@ class Executor:
                 return entry
         return None
 
-    def _pending_fert_ops(self, me: dict, private: dict, day: int) -> int:
+    def _fert_ops_today(self, me: dict, day: int) -> int:
         count = 0
         for idx in range(len(TILE_COORDS)):
             tile = self._tile_at(me, idx)
@@ -157,12 +174,25 @@ class Executor:
                 count += 1
         return count
 
-    def _fert_pickup_count(self, me: dict, private: dict, day: int) -> int:
-        pending = self._pending_fert_ops(me, private, day)
+    @staticmethod
+    def _fert_inv_shortfall(private: dict, ops_today: int) -> int:
         inv = private["inventories"][0].get("FERTILIZER", 0)
-        need = max(0, pending - inv)
+        return max(0, ops_today - inv)
+
+    @staticmethod
+    def _fert_buy_deficit(private: dict, ops_today: int) -> int:
+        if ops_today <= 0:
+            return 0
+        available = private["shed"].get("FERTILIZER", 0) + private[
+            "inventories"
+        ][0].get("FERTILIZER", 0)
+        return max(0, ops_today - available)
+
+    @staticmethod
+    def _fert_pickup_count(private: dict, ops_today: int) -> int:
+        shortfall = Executor._fert_inv_shortfall(private, ops_today)
         shed = private["shed"].get("FERTILIZER", 0)
-        return min(need, shed)
+        return min(shortfall, shed)
 
     def _market_orders(
         self, obs: dict, me: dict, private: dict, day: int, prices: dict
@@ -213,18 +243,8 @@ class Executor:
                 orders.append(["BUY_SEED", crop, affordable])
                 money -= affordable * cost
 
-        fert_needed = 0
-        for entry in self.plan:
-            if entry.get("profile") != "with_fert":
-                continue
-            for age in rollouts.fertilize_ages(entry["crop"], "with_fert"):
-                if entry["plant_day"] + age in (day, day + 1):
-                    fert_needed += 1
-
-        fert_available = private["shed"].get("FERTILIZER", 0) + private[
-            "inventories"
-        ][0].get("FERTILIZER", 0)
-        fert_deficit = fert_needed - fert_available
+        ops_today = self._fert_ops_today(me, day)
+        fert_deficit = self._fert_buy_deficit(private, ops_today)
         if fert_deficit > 0:
             fert_cost = int(prices.get("FERTILIZER", 0) or 0)
             affordable = min(fert_deficit, money // fert_cost) if fert_cost else 0
@@ -299,6 +319,8 @@ class Executor:
                 return None
             if private["seeds"].get(crop, 0) <= 0:
                 return None
+            profile = entry.get("profile", "no_fert") if entry else "no_fert"
+            self.plant_profiles[(idx, day)] = profile
             return ["PLANT", crop]
         if action == "FERTILIZE":
             if private["inventories"][0].get("FERTILIZER", 0) <= 0:
