@@ -375,15 +375,9 @@ class Executor:
             if entry.get("kind") != "crop":
                 continue
             start = self._entry_start(entry)
-            if start not in (day, day + 1):
+            if start != day:
                 continue
             tile = self._tile_at(me, entry["tile"])
-            if start == day + 1:
-                if tile is None or (
-                    isinstance(tile, dict) and tile.get("kind") == "WEED"
-                ):
-                    needed_seeds[entry["crop"]] += 1
-                continue
             if tile is None or (
                 isinstance(tile, dict) and tile.get("kind") == "WEED"
             ):
@@ -518,7 +512,7 @@ class Executor:
 
         if isinstance(tile, dict) and tile.get("kind") in ("COOP", "PASTURE"):
             if tile.get("animal"):
-                return self._animal_pending_for_tile(idx, tile, day)
+                return self._animal_pending_for_tile(idx, tile, day, private)
             entry = self._placement_today(idx, day)
             if entry and entry.get("kind") == "animal":
                 animal = entry["animal"]
@@ -538,17 +532,20 @@ class Executor:
         return []
 
     def _animal_pending_for_tile(
-        self, idx: int, tile: dict, day: int
+        self, idx: int, tile: dict, day: int, private: dict
     ) -> list[str]:
         animal = tile["animal"]
         profile = self._profile_for_animal(idx, tile["placed_day"])
         age = day - tile["placed_day"]
         raw = animal_rollouts.actions_at_age(animal, age, profile)
+        wheat = private["inventories"][0].get("WHEAT", 0)
         pending: list[str] = []
         for action in raw:
             if action == "PLACE":
                 continue
-            if action == "FEED" and tile.get("fed_today"):
+            if action == "FEED" and (
+                tile.get("fed_today") or wheat <= 0
+            ):
                 continue
             if action == "CARE" and tile.get("cared_today"):
                 continue
@@ -559,6 +556,8 @@ class Executor:
             ):
                 continue
             pending.append(action)
+        if tile.get("yield_units", 0) > 0 and "HARVEST" not in pending:
+            pending.insert(0, "HARVEST")
         return pending
 
     def _format_action(
@@ -618,7 +617,12 @@ class Executor:
                 return None
             return ["FERTILIZE"]
 
-        if action in ("WATER", "HARVEST", "DIG", "FEED", "CARE", "COLLECT_FERTILIZER"):
+        if action == "FEED":
+            if private["inventories"][0].get("WHEAT", 0) <= 0:
+                return None
+            return ["FEED"]
+
+        if action in ("WATER", "HARVEST", "DIG", "CARE", "COLLECT_FERTILIZER"):
             return [action]
 
         return None
