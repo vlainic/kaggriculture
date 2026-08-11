@@ -265,7 +265,10 @@ class Executor:
                 n += 1
         return n
 
-    def _feed_ops_today(self, me: dict, day: int) -> int:
+    def _snake_done(self) -> bool:
+        return self._route_idx >= len(TILE_COORDS)
+
+    def _feed_ops_for_day(self, me: dict, calendar_day: int, today: int) -> int:
         count = 0
         for idx in range(len(TILE_COORDS)):
             tile = self._tile_at(me, idx)
@@ -277,26 +280,35 @@ class Executor:
             if not tile.get("animal"):
                 continue
             profile = self._profile_for_animal(idx, tile["placed_day"])
-            age = day - tile["placed_day"]
-            if "FEED" in animal_rollouts.actions_at_age(
+            age = calendar_day - tile["placed_day"]
+            if "FEED" not in animal_rollouts.actions_at_age(
                 tile["animal"], age, profile
-            ) and not tile.get("fed_today"):
-                count += 1
+            ):
+                continue
+            if calendar_day == today and tile.get("fed_today"):
+                continue
+            count += 1
         return count
 
-    def _fert_ops_today(self, me: dict, day: int) -> int:
+    def _feed_ops_today(self, me: dict, day: int) -> int:
+        return self._feed_ops_for_day(me, day, day)
+
+    def _fert_ops_for_day(self, me: dict, calendar_day: int) -> int:
         count = 0
         for idx in range(len(TILE_COORDS)):
             tile = self._tile_at(me, idx)
             if not isinstance(tile, dict) or tile.get("kind") != "PLANT":
                 continue
-            profile = self._profile_for_tile(idx, tile, day)
+            profile = self._profile_for_tile(idx, tile, calendar_day)
             crop = tile["crop"]
-            age = day - tile["planted_day"]
+            age = calendar_day - tile["planted_day"]
             actions = rollouts.actions_at_age(crop, age, profile)
             if "FERTILIZE" in actions:
                 count += 1
         return count
+
+    def _fert_ops_today(self, me: dict, day: int) -> int:
+        return self._fert_ops_for_day(me, day)
 
     @staticmethod
     def _inv_shortfall(private: dict, product: str, need: int) -> int:
@@ -383,6 +395,18 @@ class Executor:
             ):
                 needed_seeds[entry["crop"]] += 1
 
+        if self._snake_done():
+            for entry in self.plan:
+                if entry.get("kind") != "crop":
+                    continue
+                if self._entry_start(entry) != day + 1:
+                    continue
+                tile = self._tile_at(me, entry["tile"])
+                if tile is None or (
+                    isinstance(tile, dict) and tile.get("kind") == "WEED"
+                ):
+                    needed_seeds[entry["crop"]] += 1
+
         money = me["money"]
         for crop in rollouts.crop_names():
             deficit = needed_seeds[crop] - seeds.get(crop, 0)
@@ -423,7 +447,12 @@ class Executor:
                 orders.append(["BUY_ANIMAL", animal, affordable])
                 money -= affordable * cost
 
-        fert_ops = self._fert_ops_today(me, day)
+        fert_ops = self._fert_ops_for_day(me, day)
+        feed_ops = self._feed_ops_for_day(me, day, day)
+        if self._snake_done() and day + 1 < rollouts.SEASON_DAYS:
+            fert_ops += self._fert_ops_for_day(me, day + 1)
+            feed_ops += self._feed_ops_for_day(me, day + 1, day)
+
         fert_deficit = self._buy_deficit(private, "FERTILIZER", fert_ops)
         if fert_deficit > 0:
             fert_cost = int(prices.get("FERTILIZER", 0) or 0)
@@ -432,7 +461,6 @@ class Executor:
                 orders.append(["BUY_PRODUCT", "FERTILIZER", affordable])
                 money -= affordable * fert_cost
 
-        feed_ops = self._feed_ops_today(me, day)
         wheat_deficit = self._buy_deficit(private, "WHEAT", feed_ops)
         if wheat_deficit > 0:
             wheat_cost = int(prices.get("WHEAT", 0) or 0)
