@@ -7,6 +7,8 @@ from functools import lru_cache
 from pathlib import Path
 
 CROP_NAMES = ("WHEAT", "CARROT", "TOMATO", "MELON", "STRAWBERRY")
+ANIMAL_PRODUCTS = ("EGG", "MILK", "WOOL")
+PRODUCT_NAMES = CROP_NAMES + ANIMAL_PRODUCTS
 SEASON_DAYS = 30  # full season: calendar days 0..29
 PLAN_HORIZON = 28  # packing grid + plant_day cap (half-open −1, sell lag −1)
 DAILY_OP_BUDGET = 16
@@ -14,12 +16,14 @@ FIRST_DAY_OP_RESERVE = 1  # day 0: one turn reserved for BUY_SEED market orders
 
 _DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "crop_rollouts.json"
 
-# Crop demand units per unlocked shop (from docs/README.md town table).
-SHOP_CROP_DEMAND: dict[str, dict[str, int]] = {
-    "BAKERY": {"WHEAT": 1},
-    "PIZZA_SHOP": {"TOMATO": 1, "WHEAT": 1},
-    "BRUNCH_SPOT": {"STRAWBERRY": 1, "WHEAT": 1},
-    "ICE_CREAM_SHOP": {"STRAWBERRY": 1, "WHEAT": 1},
+# Product demand units per unlocked shop (docs/project_overview.md town table).
+SHOP_PRODUCT_DEMAND: dict[str, dict[str, int]] = {
+    "BAKERY": {"WHEAT": 1, "EGG": 1},
+    "PIZZA_SHOP": {"TOMATO": 1, "WHEAT": 1, "MILK": 1},
+    "BRUNCH_SPOT": {"STRAWBERRY": 1, "WHEAT": 1, "EGG": 1},
+    "ICE_CREAM_SHOP": {"STRAWBERRY": 1, "WHEAT": 1, "MILK": 1},
+    "YARN_STORE": {"WOOL": 2},
+    "SMOOTHIE_SHOP": {"STRAWBERRY": 1, "MILK": 1},
     "PET_CAFE": {"CARROT": 2},
     "FARMERS_MARKET": {
         "WHEAT": 1,
@@ -61,13 +65,19 @@ def _profile_data(crop: str, profile: str) -> dict:
     return _load()["crops"][crop][profile]
 
 
-def shop_demand_by_crop(unlocked_shops: list[str]) -> dict[str, int]:
-    """Sum crop demand units from currently unlocked town shops."""
-    demand = dict.fromkeys(CROP_NAMES, 0)
+def shop_demand_by_product(unlocked_shops: list[str]) -> dict[str, int]:
+    """Sum product demand units from currently unlocked town shops."""
+    demand = dict.fromkeys(PRODUCT_NAMES, 0)
     for shop in unlocked_shops:
-        for crop, units in SHOP_CROP_DEMAND.get(shop, {}).items():
-            demand[crop] += units
+        for product, units in SHOP_PRODUCT_DEMAND.get(shop, {}).items():
+            demand[product] = demand.get(product, 0) + units
     return demand
+
+
+def shop_demand_by_crop(unlocked_shops: list[str]) -> dict[str, int]:
+    """Backward-compatible crop-only view."""
+    full = shop_demand_by_product(unlocked_shops)
+    return {crop: full.get(crop, 0) for crop in CROP_NAMES}
 
 
 def seed_cost(crop: str) -> int:
@@ -121,6 +131,13 @@ def ops_by_calendar_day(
     crop: str, plant_day: int, horizon: int, profile: str = "no_fert"
 ) -> dict[int, int]:
     """Tile ops per calendar day, plus +1 PICKUP per fert unit on fertilize days."""
+    return executor_ops_by_day(crop, plant_day, horizon, profile)
+
+
+def executor_ops_by_day(
+    crop: str, plant_day: int, horizon: int, profile: str = "no_fert"
+) -> dict[int, int]:
+    """All farmer turns per calendar day (tile actions + fert PICKUP)."""
     out: dict[int, int] = {}
     for day in _profile_data(crop, profile)["days"]:
         cal = plant_day + day["age"]

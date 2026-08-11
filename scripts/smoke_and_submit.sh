@@ -34,7 +34,7 @@ mkdir -p "$BUILD"
 cp main.py "$BUILD/"
 cp -a agent "$BUILD/"
 mkdir -p "$BUILD/data"
-cp data/crop_rollouts.json "$BUILD/data/"
+cp data/crop_rollouts.json data/animal_rollouts.json "$BUILD/data/"
 cp -a vendor/. "$BUILD/"
 # Avoid shipping pycache
 find "$BUILD" -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
