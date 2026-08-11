@@ -22,7 +22,8 @@ Build a **heuristic/rule-based Python agent** (no ML/RL training pipeline) that 
 ## Scope boundaries
 
 - **In scope:** strategy analysis, observation parsing, farm/market heuristics, local eval, Kaggle submission
-- **Out of scope (for now):** full Deep RL training, live LLM inference per turn, Jupyter notebooks
+- **Current implementation:** coupled crop + animal CP-SAT on 3×3 NW tiles, no hires (Aug 2026)
+- **Out of scope (for now):** full Deep RL training, live LLM inference per turn, Jupyter notebooks in submission bundle
 
 ## Key references
 
