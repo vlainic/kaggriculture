@@ -131,7 +131,9 @@ def executor_ops_by_day(
         out[cal] = n_ops
 
     build_day = place_day + BUILD_DAY_OFFSET
-    if build_day >= min_day and build_day >= 0 and build_day < horizon:
+    if build_day < 0:
+        build_day = place_day
+    if build_day >= min_day and build_day < horizon:
         out[build_day] = out.get(build_day, 0) + 1
     return out
 

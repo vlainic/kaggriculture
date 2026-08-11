@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from ortools.sat.python import cp_model
 
-from agent import animal_rollouts, ops_budget, rollouts
+from agent import animal_rollouts, ops_budget, rollouts, workers
 
-NUM_TILES = 9
+NUM_TILES = workers.NUM_TILES
 PLAN_HORIZON = rollouts.PLAN_HORIZON
 OPS_HORIZON = rollouts.SEASON_DAYS
 SOLVER_TIME_LIMIT_S = 8.0
@@ -119,6 +119,7 @@ def _build_crop_candidates(
                         "crop": crop,
                         "profile": profile,
                         "tile": tile,
+                        "worker": workers.worker_for_tile(tile),
                         "start_day": plant_day,
                         "subset": covered,
                         "ops_by_day": ops_by_day,
@@ -184,6 +185,7 @@ def _build_animal_candidates(
                         "animal": animal,
                         "profile": profile,
                         "tile": tile,
+                        "worker": workers.worker_for_tile(tile),
                         "start_day": place_day,
                         "subset": covered,
                         "ops_by_day": ops_by_day,
@@ -199,22 +201,121 @@ def existing_ops_by_day(
     current_day: int,
     horizon: int,
     weed_tiles: set[int] | None = None,
-) -> dict[int, int]:
-    """Ops from in-progress plants/animals and same-day weed DIG."""
-    load: dict[int, int] = {}
+) -> dict[str, dict[int, int]]:
+    """Per-worker ops from in-progress lifecycles and same-day weed DIG."""
+    load: dict[str, dict[int, int]] = {w: {} for w in workers.WORKERS}
     for state in tile_states:
         if state is None:
             continue
-        _tile, label, start_day, profile, kind = state
+        tile, label, start_day, profile, kind = state
+        w = workers.worker_for_tile(tile)
         ops = ops_budget.executor_ops_by_day(
             kind, label, profile, start_day, horizon, min_day=current_day
         )
         for cal, n_ops in ops.items():
             if current_day <= cal < horizon:
-                load[cal] = load.get(cal, 0) + n_ops
+                load[w][cal] = load[w].get(cal, 0) + n_ops
     if weed_tiles:
-        load[current_day] = load.get(current_day, 0) + len(weed_tiles)
+        for tile in weed_tiles:
+            w = workers.worker_for_tile(tile)
+            load[w][current_day] = load[w].get(current_day, 0) + 1
     return load
+
+
+def plan_ops_by_day(
+    plan_entries: list[dict],
+    current_day: int,
+    horizon: int,
+) -> dict[str, dict[int, int]]:
+    """Per-worker ops from committed plan entries (future commitments)."""
+    load: dict[str, dict[int, int]] = {w: {} for w in workers.WORKERS}
+    for entry in plan_entries:
+        start_day = entry["start_day"]
+        if start_day >= horizon:
+            continue
+        kind = entry.get("kind", "crop")
+        profile = entry.get(
+            "profile", "no_fert" if kind == "crop" else "no_care"
+        )
+        label = entry.get("crop") if kind == "crop" else entry.get("animal")
+        if not label:
+            continue
+        w = workers.worker_for_tile(entry["tile"])
+        ops = ops_budget.executor_ops_by_day(
+            kind, label, profile, start_day, horizon, min_day=current_day
+        )
+        for cal, n_ops in ops.items():
+            if current_day <= cal < horizon:
+                load[w][cal] = load[w].get(cal, 0) + n_ops
+    return load
+
+
+def patch_plan(
+    free_tiles: set[int],
+    current_day: int,
+    prices: dict[str, int],
+    plan_entries: list[dict],
+    shop_demand: dict[str, int] | None = None,
+    plan_horizon: int = PLAN_HORIZON,
+    ops_horizon: int = OPS_HORIZON,
+) -> list[dict]:
+    """Greedy-only fill for newly freed tiles; no CP-SAT."""
+    if not free_tiles:
+        return []
+
+    earliest_start = {tile: current_day for tile in free_tiles}
+    crop_subsets = _build_crop_candidates(
+        free_tiles,
+        earliest_start,
+        current_day,
+        plan_horizon,
+        ops_horizon,
+        prices,
+        shop_demand,
+    )
+    animal_subsets = _build_animal_candidates(
+        free_tiles,
+        earliest_start,
+        current_day,
+        plan_horizon,
+        ops_horizon,
+        prices,
+        shop_demand,
+    )
+    for i, s in enumerate(animal_subsets):
+        s["id"] = f"S{len(crop_subsets) + i}"
+    subsets = crop_subsets + animal_subsets
+    if not subsets:
+        print(
+            f"[planner] patch day={current_day} no candidates "
+            f"free_tiles={sorted(free_tiles)}"
+        )
+        return []
+
+    existing_load = plan_ops_by_day(plan_entries, current_day, ops_horizon)
+    placements, selected_subsets = _greedy_pack_with_subsets(
+        subsets, existing_load, current_day, ops_horizon
+    )
+
+    peak_by_worker = ops_budget.peak_load_by_worker(
+        selected_subsets, existing_load, current_day, ops_horizon
+    )
+    peak_parts = " ".join(
+        f"{w}={load}/{workers.net_tile_ops(w)}"
+        for w, (peak_day, load) in peak_by_worker.items()
+        if load > 0 or w == "farmer"
+    )
+
+    print(
+        f"[planner] patch day={current_day} free_tiles={sorted(free_tiles)} "
+        f"candidates={len(subsets)} (crop={len(crop_subsets)} "
+        f"animal={len(animal_subsets)}) added={len(placements)} source=greedy"
+    )
+    if peak_parts:
+        print(f"[planner] patch peak_ops {peak_parts}")
+    for entry in sorted(placements, key=lambda e: (e["start_day"], e["tile"])):
+        print(_format_placement(entry))
+    return placements
 
 
 def _format_placement(entry: dict) -> str:
@@ -253,14 +354,14 @@ def _as_placements(selected: list[dict]) -> list[dict]:
 
 def _greedy_pack_with_subsets(
     subsets: list[dict],
-    existing_load: dict[int, int],
+    existing_load: dict[str, dict[int, int]],
     current_day: int,
     ops_horizon: int,
 ) -> tuple[list[dict], list[dict]]:
     """Weight-descending greedy packing when CP-SAT yields nothing."""
     occupied: set[tuple[int, int]] = set()
-    day_ops = {
-        d: existing_load.get(d, 0) for d in range(current_day, ops_horizon)
+    day_ops: dict[str, dict[int, int]] = {
+        w: dict(existing_load.get(w, {})) for w in workers.WORKERS
     }
     chosen: list[dict] = []
 
@@ -269,16 +370,18 @@ def _greedy_pack_with_subsets(
             continue
         if s["subset"] & occupied:
             continue
+        w = s["worker"]
+        cap = workers.net_tile_ops(w)
         fits = True
         for d, ops in s["ops_by_day"].items():
-            if day_ops.get(d, 0) + ops > rollouts.daily_op_budget(d):
+            if day_ops[w].get(d, 0) + ops > cap:
                 fits = False
                 break
         if not fits:
             continue
         occupied |= s["subset"]
         for d, ops in s["ops_by_day"].items():
-            day_ops[d] = day_ops.get(d, 0) + ops
+            day_ops[w][d] = day_ops[w].get(d, 0) + ops
         chosen.append(s)
 
     return _as_placements(chosen), chosen
@@ -286,7 +389,7 @@ def _greedy_pack_with_subsets(
 
 def _greedy_pack(
     subsets: list[dict],
-    existing_load: dict[int, int],
+    existing_load: dict[str, dict[int, int]],
     current_day: int,
     ops_horizon: int,
 ) -> list[dict]:
@@ -362,22 +465,32 @@ def solve_plan(
     model = cp_model.CpModel()
     y = {s["id"]: model.NewBoolVar(s["id"]) for s in subsets}
 
+    # Precompute (tile, day) -> covering vars and (worker, day) -> ops terms
+    # once, instead of rescanning all subsets per element/worker/day (which
+    # was O(elements*subsets) and O(workers*days*subsets) respectively).
+    element_to_vars: dict[tuple[int, int], list] = {}
+    worker_day_terms: dict[tuple[str, int], list] = {}
+    for s in subsets:
+        var = y[s["id"]]
+        for e in s["subset"]:
+            element_to_vars.setdefault(e, []).append(var)
+        w = s["worker"]
+        for day, ops in s["ops_by_day"].items():
+            worker_day_terms.setdefault((w, day), []).append(var * ops)
+
     for e in elements:
-        covering = [y[s["id"]] for s in subsets if e in s["subset"]]
+        covering = element_to_vars.get(e)
         if covering:
             model.Add(sum(covering) <= 1)
 
-    for day in range(current_day, ops_horizon):
-        operations = []
-        for s in subsets:
-            ops = s["ops_by_day"].get(day)
-            if not ops:
-                continue
-            operations.append(y[s["id"]] * ops)
-
-        cap = rollouts.daily_op_budget(day) - existing_load.get(day, 0)
-        if operations and cap >= 0:
-            model.Add(sum(operations) <= cap)
+    for worker in workers.WORKERS:
+        for day in range(current_day, ops_horizon):
+            operations = worker_day_terms.get((worker, day))
+            cap = workers.net_tile_ops(worker) - existing_load.get(worker, {}).get(
+                day, 0
+            )
+            if operations and cap >= 0:
+                model.Add(sum(operations) <= cap)
 
     model.Maximize(sum(int(s["weight"]) * y[s["id"]] for s in subsets))
 
@@ -405,10 +518,14 @@ def solve_plan(
         else None
     )
 
-    peak_day, peak_ops = ops_budget.peak_load(
+    peak_by_worker = ops_budget.peak_load_by_worker(
         selected_subsets, existing_load, current_day, ops_horizon
     )
-    cap = rollouts.daily_op_budget(peak_day)
+    peak_parts = " ".join(
+        f"{w}={load}/{workers.net_tile_ops(w)}"
+        for w, (peak_day, load) in peak_by_worker.items()
+        if load > 0 or w == "farmer"
+    )
 
     print(
         f"[planner] day={current_day} status={status_name} "
@@ -416,6 +533,6 @@ def solve_plan(
         f"animal={len(animal_subsets)}) selected={len(placements)} "
         f"source={source} obj={obj}"
     )
-    print(f"[planner] peak_ops day={peak_day} load={peak_ops}/{cap}")
+    print(f"[planner] peak_ops {peak_parts}")
     _log_plan(current_day, placements)
     return placements

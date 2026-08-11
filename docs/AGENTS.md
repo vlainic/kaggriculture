@@ -188,6 +188,8 @@ kaggle competitions download kaggriculture -p kaggriculture-data
 
 ## Submit Your Agent
 
+**Cursor / AI agents:** do not run Kaggle submit commands or `scripts/smoke_and_submit.sh` unless the user explicitly asks to submit in that message. For automated checks, use `scripts/smoke_test.sh` (build + local smoke only).
+
 Your submission must have a `main.py` at the root with an `agent` function.
 
 **Single file agent:**
@@ -261,7 +263,10 @@ kaggle competitions leaderboard kaggriculture -s
 ## Typical Workflow
 
 ```bash
-# Test locally
+# Test locally (agents: use this script — no upload)
+bash scripts/smoke_test.sh
+
+# Or inline smoke
 python -c "
 from kaggle_environments import make
 env = make('kaggriculture', debug=True)
@@ -269,7 +274,10 @@ env.run(['main.py', 'random'])
 print([(i, s.reward) for i, s in enumerate(env.steps[-1])])
 "
 
-# Submit
+# Submit (humans only — requires --submit flag)
+bash scripts/smoke_and_submit.sh --submit "v1"
+
+# Or submit main.py directly
 kaggle competitions submit kaggriculture -f main.py -m "v1"
 
 # Check status
