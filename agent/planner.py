@@ -135,17 +135,22 @@ def _build_animal_candidates(
     current_day: int,
     plan_horizon: int,
     ops_horizon: int,
+    prices: dict[str, int],
     shop_demand: dict[str, int] | None = None,
 ) -> list[dict]:
     elements = _build_elements(current_day, plan_horizon)
     element_set = set(elements)
     subsets: list[dict] = []
     demand = shop_demand or {}
+    wheat_price = int(prices.get("WHEAT", 0) or 0) or animal_rollouts.WHEAT_PRICE
 
     for animal, profile in animal_rollouts.animal_options():
         product = animal_rollouts.product_for(animal)
         d = demand.get(product, 0)
         cost = animal_rollouts.animal_cost(animal)
+        product_price = (
+            int(prices.get(product, 0) or 0) or animal_rollouts.base_price(animal)
+        )
 
         for tile in plannable_tiles:
             start = max(earliest_start.get(tile, current_day), current_day)
@@ -164,9 +169,13 @@ def _build_animal_candidates(
                 )
                 feed_days = len(covered)
                 rev = animal_rollouts.revenue_in_window(
-                    animal, place_day, ops_horizon, profile
+                    animal,
+                    place_day,
+                    ops_horizon,
+                    profile,
+                    unit_price=product_price,
                 )
-                weight = rev * (1 + d) - cost - feed_days * animal_rollouts.WHEAT_PRICE
+                weight = rev * (1 + d) - cost - feed_days * wheat_price
 
                 subsets.append(
                     {
@@ -333,6 +342,7 @@ def solve_plan(
         current_day,
         plan_horizon,
         ops_horizon,
+        prices,
         shop_demand,
     )
     for i, s in enumerate(animal_subsets):

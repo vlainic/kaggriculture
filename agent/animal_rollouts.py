@@ -137,9 +137,13 @@ def executor_ops_by_day(
 
 
 def revenue_in_window(
-    animal: str, place_day: int, horizon: int, profile: str = "no_care"
+    animal: str,
+    place_day: int,
+    horizon: int,
+    profile: str = "no_care",
+    unit_price: int | None = None,
 ) -> int:
-    price = base_price(animal)
+    price = unit_price if unit_price is not None else base_price(animal)
     total = 0
     for age, units in zip(
         harvest_ages(animal, profile), yield_per_harvest(animal, profile)
