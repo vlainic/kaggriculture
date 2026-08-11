@@ -9,6 +9,7 @@ alwaysApply: false
 - Do not touch code that is unrelated to the task
 - **Deliver only what was asked** — if the user asks for a JSON file, data artifact, or doc, do not also add loaders, tests, `agent/` modules, `eval/` scripts, or `.venv` unless they explicitly request those
 - **No tests or verification unless explicitly requested** — do not write test files, verification harnesses, or run eval/backtests proactively
+- **Never Kaggle submit unless explicitly requested** — do not run `scripts/smoke_and_submit.sh`, `kaggle competitions submit`, or any upload step without the user saying to submit in that message. Use `scripts/smoke_test.sh` for agent smoke checks only
 - Avoid making major changes to the patterns and architecture of how a feature works, after it has shown to work well, unless explicitly structed
 - Always think about what other methods and areas of code might be affected by code changes
 - Do not create Jupyter Notebooks, just forget about them :P

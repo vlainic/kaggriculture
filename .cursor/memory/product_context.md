@@ -28,12 +28,14 @@ Not a static allocation puzzle:
 - Seed/animal purchase costs are **fixed**; product sell prices and WHEAT feed cost are **dynamic** — replan uses live `obs["market"]["prices"]`.
 - End-of-day idle farmer hours still allow market buys — agent pre-buys tomorrow seeds/fert/wheat after snake completes.
 
-## Current agent scope (Aug 11)
+## Current agent scope (Aug 11, 2026)
 
-- 3×3 tile snake near shed; no hires; no land unlock beyond default quadrant.
-- Crops: `no_fert` profile only.
-- Animals: `no_care` profile; BUILD + PLACE + FEED + HARVEST; tiles locked for season once placed.
+- **5×5 NW quadrant**, farmer + 3 daily hires; per-worker tile zones and snake routes.
+- Day-0 CP-SAT full plan; greedy `patch_plan` for freed tiles (no daily CP-SAT).
+- Crops: `no_fert`; animals: `with_care` (BUILD + PLACE + FEED + CARE + HARVEST).
+- Locked hand spawns must route via **`SHED_DOOR (4,4)`** for shed PICKUP — critical for hire2/hire3 animal ops.
 - Sell-all shed products each turn (WHEAT reserve for live animals).
+- **Submit:** users only — `scripts/smoke_and_submit.sh --submit "msg"`; agents use `smoke_test.sh`.
 
 ## User workflow preferences
 

@@ -25,12 +25,21 @@ Built-in baselines: `"pass"`, `"random"`, `"starter"`.
 ## Kaggle submission
 
 ```bash
-bash scripts/smoke_and_submit.sh [message]
+# Local only (agents + users)
+bash scripts/smoke_test.sh
+
+# Upload (USERS ONLY — requires explicit flag)
+bash scripts/smoke_and_submit.sh --submit "description"
 # builds submission.tar.gz: main.py, agent/, data/*.json, vendor/
+# then: kaggle competitions submit kaggriculture -f submission.tar.gz -m "..."
+
+# Or manual after smoke_test:
 kaggle competitions submit kaggriculture -f submission.tar.gz -m "description"
 ```
 
-Validation episode runs agent vs itself; errors → submission marked Error.
+**Agents must NEVER run submit** without explicit user request (see `.cursor/rules/kaggle-submission.mdc`).
+
+Validation episode runs agent vs itself; errors → submission marked Error. **5 submissions/team/day**; only latest 2 tracked; cap resets ~midnight UTC.
 
 ## Config defaults (env)
 
@@ -42,7 +51,7 @@ Full table in `docs/project_overview.md` and `.cursor/skills/kaggriculture-domai
 
 ## Compute constraints (submission runtime)
 
-Kaggle runtime ~1.6 vCPU, 6.5 GiB RAM — CP-SAT 8s time limit per replan; greedy fallback on timeout.
+Kaggle runtime ~1.6 vCPU, 6.5 GiB RAM — CP-SAT 8s time limit on **day-0 full solve only**; greedy patch thereafter; greedy fallback on timeout.
 
 ## Cursor project config
 
@@ -56,22 +65,24 @@ Kaggle runtime ~1.6 vCPU, 6.5 GiB RAM — CP-SAT 8s time limit per replan; greed
 ```
 main.py                    # thin agent(obs) → executor.step
 agent/
-  rollouts.py              # crop templates, SHOP_PRODUCT_DEMAND, DAILY_OP_BUDGET
+  workers.py               # 5×5 zones, routes, SHED_DOOR, hand mapping
+  rollouts.py              # crop templates, SHOP_PRODUCT_DEMAND
   animal_rollouts.py       # animal templates, revenue_in_window, executor ops
   ops_budget.py            # crop/animal executor_ops_by_day dispatch, peak_load
-  planner.py               # CP-SAT set packing (crops + animals)
-  executor.py              # replan, market, sticky snake, animal pending
+  planner.py               # CP-SAT day-0 + greedy patch_plan
+  executor.py              # multi-worker replan, market, snake, SHED_DOOR escape
 data/
   crop_rollouts.json
   animal_rollouts.json
 docs/project_overview.md
 docs/weighted_set_packing.md
+scripts/smoke_test.sh       # local only (agent-safe)
+scripts/smoke_and_submit.sh # --submit required
 scripts/vendor_ortools.sh
-scripts/smoke_and_submit.sh
-vendor/ortools/            # vendored wheels for Kaggle
-.cursor/memory/            # this memory bank
-submissions/260811_1/      # broken run logs
-submissions/260811_2/      # improved run + debug artifacts
+vendor/ortools/
+.cursor/rules/kaggle-submission.mdc
+.cursor/memory/
+submissions/260811_4/       # recent ladder logs
 ```
 
 ## Agent tuning knobs
@@ -80,10 +91,10 @@ submissions/260811_2/      # improved run + debug artifacts
 | --- | --- | --- |
 | `PLAN_HORIZON` | `rollouts.py` | 28 |
 | `SEASON_DAYS` | `rollouts.py` | 30 |
-| `DAILY_OP_BUDGET` | `rollouts.py` | 16 (snake moves implicit) |
-| `FIRST_DAY_OP_RESERVE` | `rollouts.py` | 1 |
-| `SOLVER_TIME_LIMIT_S` | `planner.py` | 8.0 |
+| Per-worker ops | `workers.py` | `NET_TILE_OPS`: farmer/hire1/hire2=15, hire3=14 |
+| `SOLVER_TIME_LIMIT_S` | `planner.py` | 8.0 (day-0 only) |
+| `SHED_DOOR` | `workers.py` | `(4,4)` — lock-escape target for all hires |
 | Crop profile | planner/rollouts | `no_fert` |
-| Animal profile | planner/animal_rollouts | `no_care` |
+| Animal profile | planner/animal_rollouts | `with_care` |
 | `WHEAT_FEED_RESERVE_DAYS` | `executor.py` | 2 |
 | Shop demand | `SHOP_PRODUCT_DEMAND` | unlocked shops only |

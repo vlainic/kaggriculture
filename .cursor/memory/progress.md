@@ -6,79 +6,66 @@
 | --- | --- |
 | Competition rules documented | Done — `docs/project_overview.md` |
 | Strategy analysis archived | Done — `docs/claude_chat.md` |
-| Cursor rules/skills/agents | Done |
-| Memory bank | Updated Aug 11, 2026 |
-| Rollout templates (crops + animals) | Done — `data/crop_rollouts.json`, `data/animal_rollouts.json` |
-| Half-open packing + split horizons + day-0 op reserve | Done — `agent/rollouts.py`, `planner.py` |
-| Full forward replan (crops + animals, live prices) | Done — `agent/planner.py`, `executor.py` |
-| Coupled CP-SAT set packing (crops + animals) | Done — shared `DAILY_OP_BUDGET=16` |
-| Shop demand on yield×price / revenue weights | Done — crops + animal products |
-| Sticky snake executor + animal BUILD/PLACE/FEED/HARVEST | Done — `agent/executor.py` |
-| Live animal replan pricing (EGG/MILK/WOOL + WHEAT feed) | Done — Aug 11 |
-| End-of-day tomorrow market buys (seeds, fert, wheat) | Done — Aug 11 |
-| Op budget alignment (no double snake count) | Done — Aug 11 |
-| Replan plan-coverage fix (animals not dropped) | Done — Aug 11 |
-| Wool catch-up HARVEST + FEED wheat gate + same-day seeds | Done — Aug 11 |
-| OR-Tools vendoring for Kaggle | Done — `vendor/` via `scripts/vendor_ortools.sh` |
-| Submit script (`submission.tar.gz` + both JSON data files) | Done — `scripts/smoke_and_submit.sh` |
-| Local smoke vs `random` | ~32–35k after Aug 11 fixes (variance) |
-| Ladder / ELO iteration | In progress |
+| Cursor rules/skills/agents | Done — incl. `kaggle-submission.mdc` |
+| Memory bank | Updated Aug 11, 2026 (session 4) |
+| Rollout templates (crops + animals) | Done |
+| **5×5 NW multi-worker layout** | Done — `agent/workers.py` (25 tiles, 4 workers) |
+| Per-worker CP-SAT + op caps | Done — `agent/planner.py` |
+| Multi-worker executor + hand mapping | Done — `agent/executor.py` |
+| Solve-once / greedy-patch replan | Done — day 0 CP-SAT only |
+| CP-SAT constraint indexing (perf) | Done — no ~8s Python overhead |
+| **SHED_DOOR lock-escape fix** | Done — hire2/hire3 PICKUP/PLACE/FEED work |
+| Safe local smoke script | Done — `scripts/smoke_test.sh` |
+| Gated submit script (`--submit`) | Done — `scripts/smoke_and_submit.sh` |
+| OR-Tools vendoring for Kaggle | Done |
+| Local smoke vs `pass` (720 steps) | ~59,654 after SHED_DOOR fix |
+| Ladder / ELO iteration | In progress — user submits manually |
 
 ## What's left to build
 
-### Phase 1 — Coupled 3×3 baseline (current)
-- [x] 3×3 segment, no hires, set-packing schedule
-- [x] Live price weights + forward replan
-- [x] Same-day handoff (half-open + sticky)
-- [x] Unlocked-shop demand boost (no forecast)
-- [x] Kaggle packaging with vendored ortools + animal rollouts
-- [x] Animals in planner + executor (no_care profile)
-- [x] Op budget / replan / market executor fixes (Aug 11)
-- [ ] Stable ladder submission after Aug 11 fixes
-- [ ] Beat `"starter"` consistently
+### Phase 2 — 5×5 polish (current)
+- [x] 5×5 NW, 3 daily hires, per-worker zones/routes
+- [x] Day-0 CP-SAT + greedy patch
+- [x] SHED_DOOR routing for all hires
+- [ ] Stable ladder submission after door fix
+- [ ] Late-season patch slack (op-cap saturation)
+- [ ] Beat `"starter"` consistently on ladder
 
-### Phase 2 — Scale
+### Phase 3 — Optimize
 - [ ] Fertilizer (`with_fert`) profile
-- [ ] Multi-segment / hire timing
-- [ ] Land unlock (5×5 full quadrant)
 - [ ] Plan-aware tomorrow fert/wheat for future placements
 - [ ] Town-center demand in weights (optional)
-
-### Phase 3 — Polish
-- [ ] Animal tile recycling mid-season (hard — needs escape/DIG path)
 - [ ] Sell timing beyond sell-all
-- [ ] Master search if needed
 
 ## Known issues / risks
 
 - **Kaggle has no `ortools`** — vendor cp311 manylinux wheels (~55MB).
-- **CP-SAT timeout** → greedy fallback + 8s + logs.
-- **Plan storage:** full list of placements; replan **replaces** future plan.
-- **Placed animals lock tiles** until season end — no mid-season swap without game escape mechanics.
-- **Orphan seeds:** same-day BUY_SEED then replan drop before snake reaches tile still possible.
-- **Tomorrow fert/wheat:** only counted for live tiles, not plan-only future crop/animal placements.
-- **Age-0 rollout** includes `PLANT`; executor skips `PLANT` when tile already planted.
-- Half-open: occupancy excludes free day; ops include it — capacity couples handoff.
-- Sticky required so harvest→plant does not walk the snake between ops.
+- **Accidental agent submit** — mitigated by `--submit` gate + `kaggle-submission.mdc`; user burned submission slot Aug 11.
+- **Submission cap:** 5 agents/team/day; only latest 2 tracked; resets ~midnight UTC.
+- **Greedy patch `added=0`:** day-0 plan fills worker op caps — freed tiles late season may stay empty.
+- **Hand spawn on LOCKED tiles:** hire2 `(4,5)`, hire3 `(5,5)` — must route via `SHED_DOOR (4,4)` every day for PICKUP.
+- **hire1 was accidentally OK** before fix — X-first walk from `(5,4)` crossed unlocked door; do not revert to `route[0]` lock-escape.
+- CP-SAT timeout → greedy fallback; full solve runs once per episode (8s limit).
+- Placed animals lock tiles until season end.
 - Shed cap 100; sell-all each turn mitigates for now.
-- Smoke reward varies vs `random` (~28k broken → ~32–35k fixed).
 
 ## Baselines to track
 
 | Opponent | Purpose | Notes |
 | --- | --- | --- |
 | `"pass"` | Sanity | Local DONE |
-| `"random"` | Smoke | ~21k Aug 7 plant-only; ~32–35k Aug 11 coupled |
+| `"random"` | Smoke | ~59k Aug 11 post SHED_DOOR fix (self-play in smoke_test) |
 | `"starter"` | Milestone | Not measured yet |
-| Prior own submission | Regression | 260811_1 broken; 260811_2 ~27k win side |
+| Pre-door-fix submission | Regression | 91915834 ~25k — empty pastures, hire3 idle |
 
 ## Submission archaeology
 
 | Submit / issue | Cause / fix |
 | --- | --- |
 | `submission.tar.gz` validation fail (Aug 6) | Missing ortools / packaging |
-| Idle agent (`90458708`) | Empty/collapsed plan + PLANT-before-WATER stuck PASS |
-| Harvest leave/return (Aug 7) | `_next_work` rescanned from tile 0 — fixed by sticky |
-| **260811_1** — semi-empty tiles, no animals, many PASSes | Double snake op budget + daily replan dropping animal plans — fixed Aug 11 |
-| **260811_2** — ~27k, wool on sheep, orphan carrot seed, FEED loops | Catch-up HARVEST, FEED wheat gate, same-day BUY_SEED — fixed Aug 11 |
-| Missing `animal_rollouts.json` in bundle | Added to `smoke_and_submit.sh` |
+| **260811_4 / 91915834** — hire3 empty pastures, hire2 underused, ~25k | Locked spawn never reached `(4,4)` for PICKUP — **SHED_DOOR fix** |
+| **260811_4 / 91910203** — planner timeout ~day 15–17 | Daily CP-SAT + Python overhead — **solve-once + indexing** |
+| **Accidental agent submit** (Aug 11) | Agent ran `smoke_and_submit.sh` without user consent — **`--submit` gate + rules** |
+| Missing `animal_rollouts.json` in bundle | Added to smoke scripts |
+| 260811_1 — semi-empty tiles, no animals | Double snake op budget — fixed earlier |
+| 260811_2 — wool/FEED loops | Catch-up HARVEST, FEED gate — fixed earlier |

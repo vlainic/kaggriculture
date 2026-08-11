@@ -1,103 +1,86 @@
 # System Patterns
 
-## Implemented coupled agent (Phase 1 — Aug 11)
+## Implemented multi-worker agent (Aug 11, 2026)
 
 ```
 obs → Executor.step
-  ├─ hour0: reset route_idx; replan if triggers fire
-  ├─ Planner.solve_plan (CP-SAT → greedy fallback)
-  │    ├─ candidates: crops (all 9 tiles) + animals (BUILD/PLACE/FEED/HARVEST)
-  │    ├─ crop occupancy: half-open [plant, free)
-  │    ├─ animal occupancy: placed tile locked until OPS_HORIZON
-  │    ├─ capacity: remaining ops + weed DIG + daily_op_budget(day)  [16 total, snake implicit]
-  │    ├─ crop weight: yield × live_price × (1+shop_demand) − seed − fert_cost
-  │    ├─ animal weight: revenue_window(live_product_price) × (1+d) − animal_cost − feed_days × live_wheat
-  │    └─ output: full forward placement list (replaces self.plan)
-  ├─ market (≤10 orders, every turn):
-  │    SELL shed → BUY_SEED (today; +day+1 if snake done)
-  │    → BUY_ANIMAL (day, day+1) → BUY fert → BUY wheat
-  └─ farmer: sticky current tile → strict TILE_COORDS snake → move/op
+  ├─ hour0: reset route_idx per worker; assign_hand_workers from spawn pos
+  ├─ replan triggers:
+  │    day 0 only → Planner.solve_plan (CP-SAT, 8s)
+  │    later days → patch_plan (greedy, free tiles only, no CP-SAT)
+  ├─ Planner (day 0):
+  │    ├─ candidates per worker zone (crops + animals)
+  │    ├─ per-worker/day op caps (NET_TILE_OPS)
+  │    ├─ indexed constraints (element_to_vars, worker_day_terms)
+  │    └─ output: full forward placement list
+  ├─ market (≤10 orders): HIRE → (drop SELL if over cap) → BUY seeds/animals/fert/wheat
+  └─ per worker: lock-escape → SHED_DOOR → shed PICKUP → approach route[0] → snake
 ```
 
-### Packing / horizon conventions
+### Worker spatial model (`agent/workers.py`)
 
-| Constant | Value | Role |
-| --- | --- | --- |
-| `SEASON_DAYS` / `OPS_HORIZON` | 30 | Ops + lifecycle_fits through day 29 |
-| `PLAN_HORIZON` | 28 | Occupancy cells + start_day enumeration |
-| `DAILY_OP_BUDGET` | 16 | Total daily tile ops incl. ~8 implicit snake moves |
-| `FIRST_DAY_OP_RESERVE` | 1 | Day 0 tile-op budget 15 |
-| `tile_free_age` (crop) | last harvest/DIG age | Half-open end; same-day replant allowed |
-| animal tile lock | `earliest[tile]=OPS_HORIZON` | No mid-season animal tile recycle |
+| Worker | Tiles | NET_TILE_OPS | Spawn (locked?) |
+| --- | --- | --- | --- |
+| farmer | 9 (SE block) | 15 | `(4,4)` unlocked |
+| hire1 | 6 (SW strip) | 15 | `(5,4)` LOCKED |
+| hire2 | 6 (N strip) | 15 | `(4,5)` LOCKED |
+| hire3 | 4 (NW corner) | 14 | `(5,5)` LOCKED |
 
-### Replan semantics (critical)
+- **`SHED_DOOR = (4,4)`** — only unlocked shed-adjacent tile; all locked hands must route here before zone work (enables PICKUP).
+- **`SPAWN_TO_WORKER`** + **`assign_hand_workers()`** — map hand list index ↔ worker from spawn position.
+- **`WORKER_ROUTE_GLOBAL`** — per-worker snake through owned tiles.
 
-**Triggers (`hour == 0`):**
-- First run (`last_replan_day is None`)
-- Crop or animal harvest today
-- Weed on any tile
-- Animal `consecutive_unfed >= 1`
-- Empty tile with **no** plan entry where `start_day >= day` (NOT empty-set equality)
+### Replan semantics
 
-**Fixed on replan:** in-progress plants + live animals (ops load + earliest start); weed DIG +1 today.
+**Full replan (`_should_full_replan`):** `last_replan_day is None` (day 0 only).
 
-**Free on replan:** all future crop/animal placements — full forward reshuffle under new prices.
+**Patch replan (`_should_patch`):** empty tiles needing new plan entries; calls `patch_plan()` greedy pack.
 
-### Executor routing
+**Not used anymore:** daily full CP-SAT on harvest/weed triggers (removed to avoid cumulative timeout).
 
-1. Sticky: finish pending ops on current tile before leaving (harvest→plant, animal FEED/HARVEST).
-2. Strict snake: scan `TILE_COORDS` in order; weeds DIG when reached.
-3. `_snake_done()` when `_route_idx >= 9` — enables end-of-day tomorrow market buys.
+### Executor routing (per worker)
 
-### Animal execution
+1. If on LOCKED tile → move toward **`SHED_DOOR`**, not `route[0]`.
+2. If on `SHED_ADJACENT` → `_shed_pickup` (fert, wheat, animals for today's placements).
+3. If not at `route[0]` → approach first route tile.
+4. Snake through route; sticky pending ops on current tile.
+5. When route done but zone has pending → reset `route_idx` to 0 (second pass).
 
-- `_animal_pending_for_tile`: template actions + catch-up HARVEST if `yield_units > 0`.
-- FEED gated on WHEAT inventory and `fed_today`.
-- BUILD_COOP/PASTURE on empty tile; PLACE when animal in inventory.
-- Profiles stored in `animal_profiles[(idx, placed_day)]`.
+### Shed / spawn mechanics (engine)
+
+- Daily reset: farmer → `(4,4)`; hands cleared then re-hired to shed corners NWSE.
+- `(5,4)`, `(4,5)`, `(5,5)` are LOCKED (outside NW quadrant) — movement allowed, tile ops no-op.
+- PICKUP requires standing on shed-adjacent tile; shed inventory shared.
+- No tile occupancy collision — multiple units can share a cell.
 
 ### Market buying semantics
 
-- Farmer ops and market orders are **independent** per turn.
-- Seeds: `start_day == day` during snake; `start_day == day+1` when snake done.
-- Fert/wheat deficit from `_fert_ops_for_day` / `_feed_ops_for_day` for today (+ tomorrow if snake done).
+- Order cap 10: drop SELLs first to preserve HIRE/BUY.
 - WHEAT sell reserve: `live_animals × WHEAT_FEED_RESERVE_DAYS`.
+- Livestock excluded from sell loop.
 
-## Target architecture (later phases)
+## Submission workflow
 
-```
-Master (MCTS or shallow lookahead — TBD)
-  └─ segments → daily CP-SAT → routing → hires / land unlock
-```
-
-## Spatial decomposition
-
-Single 5×5 NW quadrant owned; current agent uses 3×3 near shed (`TILE_COORDS` snake from (4,4)).
-
-## Staged rollout
-
-1. Coupled crop+animal, no-hire, 3×3 — **in progress on ladder**
-2. Hires + extra segments + 5×5
-3. Master hire/land
-4. Fert profiles + sell timing polish
-
-## Algorithm fit
-
-| Module | Approach | Status |
+| Script | Who | Action |
 | --- | --- | --- |
-| Plants + animals (season packing) | CP-SAT weighted set packing | Live |
-| Op budget dispatch | `ops_budget.executor_ops_by_day` | Live |
-| Routing | Snake + sticky + BFS step | Live |
-| Shop demand | Static map × unlocked shops | Live (crops + animal products) |
-| Live replan pricing | `obs["market"]["prices"]` | Live |
-| Master / hires | Heuristic / MCTS | Not started |
+| `scripts/smoke_test.sh` | Agents + users | Build tar + local 720-step smoke |
+| `scripts/smoke_and_submit.sh --submit "msg"` | **Users only** | Smoke + Kaggle upload |
+| `kaggle competitions submit ...` | Users | Manual upload |
+
+**Agents must never run submit** unless user explicitly asks in that conversation.
+
+## Target architecture (later)
+
+- Fert profiles, sell timing, town demand in weights
+- Optional master search for hire/land timing
 
 ## Repo layout (current)
 
 ```
 main.py
-agent/{rollouts,planner,executor,ops_budget,animal_rollouts}.py
+agent/{workers,rollouts,planner,executor,ops_budget,animal_rollouts}.py
 data/{crop_rollouts,animal_rollouts}.json
-scripts/{vendor_ortools,smoke_and_submit}.sh
+scripts/{smoke_test,smoke_and_submit,vendor_ortools}.sh
 vendor/ortools/...
+.cursor/rules/kaggle-submission.mdc
 ```

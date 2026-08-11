@@ -2,70 +2,59 @@
 
 ## Current focus
 
-**Coupled crop + animal set-packing agent — Aug 11 stabilization.** Planner packs crops and animals under shared `DAILY_OP_BUDGET=16`; executor runs sticky snake routing with live-price replans, animal care/harvest, and end-of-day tomorrow market buys. Still `no_fert` / `no_care`, 3×3 NW tiles, sell-all shed, vendored OR-Tools.
+**5×5 NW multi-worker agent (Aug 11, 2026).** Four workers (farmer + 3 daily hires) each own a tile zone with per-worker snake routes and net tile-op caps. Day-0 CP-SAT full plan; greedy `patch_plan` for freed tiles thereafter (no daily CP-SAT). Latest fix: **SHED_DOOR routing** so hire2/hire3 can PICKUP from shed (was blocking all animal ops).
 
-## Recent changes (Aug 11, 2026)
+## Recent changes (Aug 11, 2026 — session 4)
 
-### Op budget / planner–executor alignment (260811_1 regression)
+### 5×5 multi-worker expansion
 
-1. **Removed double snake budget:** dropped `SNAKE_MOVE_OPS` and `add_snake_baseline()` from `agent/ops_budget.py` and `agent/planner.py`. `DAILY_OP_BUDGET=16` already assumes ~8 snake moves per day — adding 8 on top left only ~8 tile-ops/day packed and under-filled the farm.
-2. **`ops_budget.py` simplified:** only dispatches `executor_ops_by_day` for crops vs animals + `peak_load` helper.
+1. **`agent/workers.py`:** 25 tiles in NW 5×5; zones for farmer (9), hire1 (6), hire2 (6), hire3 (4); per-worker routes, `NET_TILE_OPS`, `DAILY_TURN_BUDGET`, `SPAWN_TO_WORKER`, `assign_hand_workers()`.
+2. **`agent/planner.py`:** CP-SAT with per-worker/day op caps; `plan_ops_by_day()`, `patch_plan()` (greedy, free tiles only).
+3. **`agent/executor.py`:** Multi-worker routing, dynamic hand→worker mapping, second-pass route reset when zone has pending work, market order priority (HIRE/BUY before SELL when over cap).
 
-### Replan trigger fix (animals dropped mid-season)
+### Planner performance + replan strategy
 
-3. **Plan-coverage replan:** `_should_replan` no longer fires when empty-tile set shrinks (normal planting). Replan when: first run, harvest today (crop/animal), weed, unfed animal, or **empty tile lacks any plan entry with `start_day >= day`**. Removed `_last_empty_tiles` equality check that dropped future animal BUILD plans.
+4. **CP-SAT indexing:** Precomputed `element_to_vars` and `worker_day_terms` — removed ~8s Python overhead per solve.
+5. **Solve once, patch many:** Full CP-SAT only on day 0 (`_should_full_replan`); subsequent days use `_patch_replan` / `patch_plan` for empty tiles only. `SOLVER_TIME_LIMIT_S = 8.0` (single solve per episode).
 
-### Executor animal / market fixes (260811_2 logs)
+### SHED_DOOR fix (critical execution bug)
 
-4. **Wool catch-up HARVEST:** `_animal_pending_for_tile` prepends `HARVEST` when `yield_units > 0` even if template age has no HARVEST (sheep ages 28–29). Snake pass skips HARVEST when `yield_units=0`.
-5. **FEED wheat gate:** skip FEED in pending when no WHEAT or `fed_today`; `_format_action("FEED")` also requires WHEAT — stops day-28 FEED loops.
-6. **BUY_SEED same-day only:** market buys seeds only for `start_day == day` (removed day+1 lookahead during snake). Tomorrow seeds added separately when snake done (below).
+6. **Root cause:** Hands respawn daily at locked shed corners: hire1 `(5,4)`, hire2 `(4,5)`, hire3 `(5,5)`. Only `(4,4)` is unlocked in NW. Old lock-escape walked toward `route[0]` — hire1 accidentally crossed `(4,4)`; hire2/hire3 never did → **zero PICKUP** → empty pastures, no FEED/CARE/HARVEST on those zones.
+7. **Fix:** `SHED_DOOR = (4, 4)` in `workers.py`; lock-escape in `_next_action` targets door first. Zero extra movement cost (door on rectilinear path to all zones). Local 720-step smoke: **59,654** reward (was ~52,523).
 
-### Live animal pricing on replan
+### Submission safety (user-mandated)
 
-7. **`animal_rollouts.revenue_in_window(..., unit_price=None)`** — optional live product price.
-8. **`_build_animal_candidates`** uses live EGG/MILK/WOOL prices + live WHEAT for feed cost; shop `(1+d)` on revenue unchanged. Placed animals still lock tiles (`earliest[tile]=OPS_HORIZON`).
-
-### End-of-day tomorrow market buys
-
-9. **`_snake_done()`:** `_route_idx >= len(TILE_COORDS)` (9 tiles visited).
-10. When snake done: add **day+1** seed demand (empty/weed tiles); add **day+1** fert/wheat ops for **live** tiles only (`_feed_ops_for_day` / `_fert_ops_for_day` generalized; `fed_today` gate only when `calendar_day == today`).
-11. Animals unchanged: BUY_ANIMAL for `start_day in (day, day+1)`.
-
-### Packaging
-
-12. **`scripts/smoke_and_submit.sh`:** bundles `data/animal_rollouts.json` with crop rollouts.
+8. **`scripts/smoke_test.sh`:** Build + local smoke only — safe for agents.
+9. **`scripts/smoke_and_submit.sh`:** Requires explicit `--submit "message"` or refuses upload.
+10. **Rules/skills/docs:** `.cursor/rules/kaggle-submission.mdc`, updated stack/conventions/AGENTS.md — **agents must NEVER submit without explicit user request**.
 
 ## Active decisions
 
-- Profiles: **`no_fert`** (crops), **`no_care`** (animals).
-- Seeds/animal shop costs: **fixed** from rollouts; sell/product weights: **live** `obs["market"]["prices"]`.
-- Replan at `hour == 0` per triggers above; full forward plan replace (crops + animals).
-- Daily capacity: **`DAILY_OP_BUDGET=16`** total tile ops (snake implicit); day 0 = 15 (`FIRST_DAY_OP_RESERVE`).
-- Market order priority: SELL shed → BUY_SEED (today; +tomorrow if snake done) → BUY_ANIMAL → BUY fert → BUY wheat.
-- Farmer and market are **separate per turn**; market orders do not consume farmer ops.
-- Placed animals **cannot** free tiles mid-season (no DIG with animal present; no swap/abandon).
-- Do **not** add tests/eval/`.venv` unless user asks.
+- Profiles: **`no_fert`** (crops), **`with_care`** (animals) in current 5×5 plan.
+- Replan: full CP-SAT day 0 only; greedy patch on empty tiles after.
+- Per-worker op caps from `workers.NET_TILE_OPS` (farmer/hire1/hire2=15, hire3=14).
+- Market: drop SELLs first when over 10-order cap; prioritize HIRE + BUY.
+- **`PICKUP` counted in planner** via `animal_rollouts.executor_ops_by_day` (+1 feed pickup, +1 animal setup).
+- Multiple farmers can occupy same tile (engine has no collision check).
+- **Agents:** local smoke via `scripts/smoke_test.sh` only; users submit via `scripts/smoke_and_submit.sh --submit "msg"`.
 
 ## Open questions / follow-ups
 
-1. Ladder replay after Aug 11 fixes — confirm ~32–35k smoke holds vs ladder opponents.
-2. Plan-aware tomorrow fert/wheat for **future** placements (currently live tiles only).
-3. Orphan seeds if same-day BUY_SEED then replan drops plant before snake reaches tile.
-4. **5×5 grid, hires, land unlock** — next phase; not started.
-5. Fertilizer profile (`with_fert`) — deferred.
-6. Town-center demand in weights — still out of scope.
+1. Greedy `patch_plan` sometimes `added=0` late season — day-0 plan saturates worker op caps; revisit if reward plateaus.
+2. Ladder replay after SHED_DOOR fix — confirm ~60k+ holds vs opponents.
+3. Fertilizer profile (`with_fert`) — deferred.
+4. Town-center demand in weights — still out of scope.
 
 ## Immediate next steps
 
-1. Submit via `scripts/smoke_and_submit.sh` if user wants fresh ladder run.
-2. Monitor logs for orphan seeds, missed harvests, end-day BUY_SEED on `route=done` hours.
-3. Phase 2: hires + extra segments when coupled crop/animal loop is stable on ladder.
+1. User submits manually when ready: `bash scripts/smoke_and_submit.sh --submit "message"`.
+2. Monitor ladder logs for hire utilization parity and empty pastures.
+3. Tune day-0 CP-SAT objective or patch slack if late-season tiles stay idle.
 
 ## Key files
 
-- `main.py`, `agent/{rollouts,planner,executor,ops_budget,animal_rollouts}.py`
+- `main.py`, `agent/{workers,planner,executor,ops_budget,rollouts,animal_rollouts}.py`
 - `data/{crop_rollouts,animal_rollouts}.json`
-- `scripts/smoke_and_submit.sh`, `scripts/vendor_ortools.sh`
-- `submissions/260811_1/` (broken), `submissions/260811_2/` (better; wool/carrot issues led to fixes)
-- `docs/weighted_set_packing.md`, `docs/project_overview.md`
+- `scripts/smoke_test.sh`, `scripts/smoke_and_submit.sh`, `scripts/vendor_ortools.sh`
+- `submissions/260811_4/` (91915834 broken pre-door-fix; earlier timeout runs)
+- `.cursor/rules/kaggle-submission.mdc`

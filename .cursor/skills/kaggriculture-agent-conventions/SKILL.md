@@ -13,6 +13,7 @@ description: >-
 - **Do exactly what was requested.** A JSON/data request does not imply Python loaders, `agent/` modules, or verification scripts.
 - **No tests or eval unless the user explicitly asks** — do not run `kaggle-environments`, add `eval/` files, or create verification harnesses proactively.
 - **Do not create `.venv`** unless the user asks for local environment setup.
+- **Never submit to Kaggle** unless the user explicitly asks in that message. Do not run `scripts/smoke_and_submit.sh` or `kaggle competitions submit` after smoke tests, plan completion, or "verify" steps. Agents use `scripts/smoke_test.sh` for local smoke only. See `.cursor/rules/kaggle-submission.mdc`.
 
 ## Entry point
 

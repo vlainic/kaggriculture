@@ -12,3 +12,4 @@ alwaysApply: true
 - **Dependencies:** stdlib + `kaggle-environments` for local dev; submission bundle should stay minimal and Kaggle-compatible.
 - **Domain & code conventions:** load `.cursor/skills/kaggriculture-domain/SKILL.md` for mechanics; load `.cursor/skills/kaggriculture-agent-conventions/SKILL.md` before writing/refactoring agent code.
 - **Agent scope:** do not add tests, eval harnesses, `agent/` modules, or `.venv` unless the user explicitly asks. A request for data (e.g. a JSON file) means that artifact only.
+- **Kaggle submit:** agents must **never** run `kaggle competitions submit` or `scripts/smoke_and_submit.sh` unless the user explicitly asks to submit in that message. Local smoke only: `scripts/smoke_test.sh` or `kaggle-environments`. See `.cursor/rules/kaggle-submission.mdc`.
