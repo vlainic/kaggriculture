@@ -27,6 +27,39 @@ def _format_market(orders: list) -> str:
     return " ".join(parts)
 
 
+def _board_counts(me: dict) -> tuple[int, int, int, int]:
+    filled = empty = weeds = 0
+    for row in me["tiles"]:
+        for tile in row:
+            if tile == "LOCKED":
+                continue
+            if tile is None:
+                empty += 1
+            elif isinstance(tile, dict):
+                kind = tile.get("kind")
+                if kind == "WEED":
+                    weeds += 1
+                elif kind in ("PLANT", "COOP", "PASTURE"):
+                    filled += 1
+    owned = filled + empty + weeds
+    return filled, empty, weeds, owned
+
+
+def _log_snap(obs: dict, me: dict, day: int, hour: int) -> None:
+    filled, empty, weeds, owned = _board_counts(me)
+    shops = obs.get("town", {}).get("unlocked_shops", [])
+    demand = sum(rollouts.shop_demand_by_product(shops).values())
+    prices = obs["market"]["prices"]
+    price_parts = " ".join(
+        f"{key}={int(prices.get(key, 0) or 0)}" for key in sorted(prices.keys())
+    )
+    _log(
+        f"[snap] d={day} h={hour} money={int(me['money'])} "
+        f"filled={filled} empty={empty} weeds={weeds} owned={owned} "
+        f"shops={len(shops)} demand={demand} {price_parts}"
+    )
+
+
 class Executor:
     def __init__(self) -> None:
         self.plan: list[dict] = []
@@ -54,6 +87,9 @@ class Executor:
                 self._replan(obs, me, day, prices)
             elif self._should_patch(me, day):
                 self._patch_replan(obs, me, day, prices)
+
+        if hour == 0 or hour == 23:
+            _log_snap(obs, me, day, hour)
 
         market = self._market_orders(obs, me, private, day, hour, prices)
 
