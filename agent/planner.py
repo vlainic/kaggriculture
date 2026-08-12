@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 from ortools.sat.python import cp_model
 
 from agent import animal_rollouts, ops_budget, rollouts, workers
@@ -9,7 +11,8 @@ from agent import animal_rollouts, ops_budget, rollouts, workers
 NUM_TILES = workers.NUM_TILES
 PLAN_HORIZON = rollouts.PLAN_HORIZON
 OPS_HORIZON = rollouts.SEASON_DAYS
-SOLVER_TIME_LIMIT_S = 8.0
+SOLVER_TIME_LIMIT_S = 25.0
+SOLVER_OVERAGE_SAFETY_S = 20.0
 
 # tile, label (crop or animal name), start_day, profile, kind
 TileState = tuple[int, str, int, str, str]
@@ -39,6 +42,125 @@ def _ops_for_crop_lifecycle(
     if any(cal >= ops_horizon for cal in ops_by_day):
         return {}, False
     return ops_by_day, True
+
+
+def _cash_by_day(s: dict, prices: dict[str, int], current_day: int) -> dict[int, int]:
+    """Signed coin flow per calendar day for one candidate lifecycle."""
+    out: dict[int, int] = {}
+    start = s["start_day"]
+    purchase_day = max(current_day, start - 1)
+
+    if s["kind"] == "crop":
+        crop = s["crop"]
+        profile = s["profile"]
+        seed = rollouts.seed_cost(crop)
+        fert = rollouts.fert_count(crop, profile) * int(
+            prices.get("FERTILIZER", 0) or 0
+        )
+        out[purchase_day] = out.get(purchase_day, 0) - seed - fert
+        crop_price = int(prices.get(crop, 0) or 0)
+        for age, units in zip(
+            rollouts.harvest_ages(crop, profile),
+            rollouts.yield_per_harvest(crop, profile),
+        ):
+            sale_day = start + age + 1
+            out[sale_day] = out.get(sale_day, 0) + units * crop_price
+    else:
+        animal = s["animal"]
+        profile = s["profile"]
+        cost = animal_rollouts.animal_cost(animal)
+        out[purchase_day] = out.get(purchase_day, 0) - cost
+        wheat_price = int(prices.get("WHEAT", 0) or 0) or animal_rollouts.WHEAT_PRICE
+        for _tile, cal in s["subset"]:
+            out[cal] = out.get(cal, 0) - wheat_price
+        product = animal_rollouts.product_for(animal)
+        product_price = (
+            int(prices.get(product, 0) or 0) or animal_rollouts.base_price(animal)
+        )
+        for age, units in zip(
+            animal_rollouts.harvest_ages(animal, profile),
+            animal_rollouts.yield_per_harvest(animal, profile),
+        ):
+            sale_day = start + age + 1
+            out[sale_day] = out.get(sale_day, 0) + units * product_price
+    return out
+
+
+def _attach_cash_schedules(
+    subsets: list[dict], prices: dict[str, int], current_day: int
+) -> None:
+    for s in subsets:
+        s["cash_by_day"] = _cash_by_day(s, prices, current_day)
+
+
+def _cash_subset_from_entry(
+    entry: dict, plan_horizon: int, current_day: int
+) -> dict:
+    """Minimal subset dict for cash scheduling from a committed plan entry."""
+    kind = entry.get("kind", "crop")
+    start = entry["start_day"]
+    tile = entry["tile"]
+    profile = entry["profile"]
+    if kind == "crop":
+        crop = entry["crop"]
+        covered = {
+            (tile, cal)
+            for cal in rollouts.covered_days(crop, start, plan_horizon, profile)
+        }
+        return {
+            "kind": "crop",
+            "crop": crop,
+            "profile": profile,
+            "start_day": start,
+            "subset": covered,
+        }
+    animal = entry["animal"]
+    covered = {
+        (tile, cal)
+        for cal in animal_rollouts.covered_days(animal, start, plan_horizon, profile)
+    }
+    return {
+        "kind": "animal",
+        "animal": animal,
+        "profile": profile,
+        "start_day": start,
+        "subset": covered,
+    }
+
+
+def _cash_metrics(
+    subsets: list[dict],
+    money: int,
+    current_day: int,
+    ops_horizon: int,
+) -> tuple[int, int]:
+    """Return (peak cumulative spend, minimum balance) over the horizon."""
+    balance = money
+    min_bal = money
+    cum_spend = 0
+    peak_spend = 0
+    for day in range(current_day, ops_horizon):
+        flow = sum(s.get("cash_by_day", {}).get(day, 0) for s in subsets)
+        if flow < 0:
+            cum_spend -= flow
+            peak_spend = max(peak_spend, cum_spend)
+        balance += flow
+        min_bal = min(min_bal, balance)
+    return peak_spend, min_bal
+
+
+def _min_balance(
+    subsets: list[dict],
+    money: int,
+    current_day: int,
+    ops_horizon: int,
+) -> int:
+    balance = money
+    min_bal = money
+    for day in range(current_day, ops_horizon):
+        balance += sum(s.get("cash_by_day", {}).get(day, 0) for s in subsets)
+        min_bal = min(min_bal, balance)
+    return min_bal
 
 
 def _earliest_start_by_tile(
@@ -255,6 +377,7 @@ def patch_plan(
     current_day: int,
     prices: dict[str, int],
     plan_entries: list[dict],
+    money: int,
     shop_demand: dict[str, int] | None = None,
     plan_horizon: int = PLAN_HORIZON,
     ops_horizon: int = OPS_HORIZON,
@@ -293,8 +416,19 @@ def patch_plan(
         return []
 
     existing_load = plan_ops_by_day(plan_entries, current_day, ops_horizon)
+    committed_cash = [
+        _cash_subset_from_entry(entry, plan_horizon, current_day)
+        for entry in plan_entries
+    ]
+    _attach_cash_schedules(committed_cash, prices, current_day)
+    _attach_cash_schedules(subsets, prices, current_day)
     placements, selected_subsets = _greedy_pack_with_subsets(
-        subsets, existing_load, current_day, ops_horizon
+        subsets,
+        existing_load,
+        current_day,
+        ops_horizon,
+        money=money,
+        committed_cash=committed_cash,
     )
 
     peak_by_worker = ops_budget.peak_load_by_worker(
@@ -357,6 +491,8 @@ def _greedy_pack_with_subsets(
     existing_load: dict[str, dict[int, int]],
     current_day: int,
     ops_horizon: int,
+    money: int = 0,
+    committed_cash: list[dict] | None = None,
 ) -> tuple[list[dict], list[dict]]:
     """Weight-descending greedy packing when CP-SAT yields nothing."""
     occupied: set[tuple[int, int]] = set()
@@ -364,6 +500,7 @@ def _greedy_pack_with_subsets(
         w: dict(existing_load.get(w, {})) for w in workers.WORKERS
     }
     chosen: list[dict] = []
+    cash_base = list(committed_cash or [])
 
     for s in sorted(subsets, key=lambda x: x["weight"], reverse=True):
         if s["weight"] <= 0:
@@ -379,6 +516,8 @@ def _greedy_pack_with_subsets(
                 break
         if not fits:
             continue
+        if _min_balance(cash_base + chosen + [s], money, current_day, ops_horizon) < 0:
+            continue
         occupied |= s["subset"]
         for d, ops in s["ops_by_day"].items():
             day_ops[w][d] = day_ops[w].get(d, 0) + ops
@@ -392,9 +531,16 @@ def _greedy_pack(
     existing_load: dict[str, dict[int, int]],
     current_day: int,
     ops_horizon: int,
+    money: int = 0,
+    committed_cash: list[dict] | None = None,
 ) -> list[dict]:
     placements, _ = _greedy_pack_with_subsets(
-        subsets, existing_load, current_day, ops_horizon
+        subsets,
+        existing_load,
+        current_day,
+        ops_horizon,
+        money=money,
+        committed_cash=committed_cash,
     )
     return placements
 
@@ -417,10 +563,12 @@ def solve_plan(
     tile_states: list[TileState | None],
     current_day: int,
     prices: dict[str, int],
+    money: int,
     plan_horizon: int = PLAN_HORIZON,
     ops_horizon: int = OPS_HORIZON,
     weed_tiles: set[int] | None = None,
     shop_demand: dict[str, int] | None = None,
+    time_limit_s: float | None = None,
 ) -> list[dict]:
     """Return selected placements: [{kind, tile, crop|animal, profile, start_day}, ...]."""
     if not plannable_tiles:
@@ -461,6 +609,7 @@ def solve_plan(
     existing_load = existing_ops_by_day(
         tile_states, current_day, ops_horizon, weed_tiles
     )
+    _attach_cash_schedules(subsets, prices, current_day)
 
     model = cp_model.CpModel()
     y = {s["id"]: model.NewBoolVar(s["id"]) for s in subsets}
@@ -492,11 +641,27 @@ def solve_plan(
             if operations and cap >= 0:
                 model.Add(sum(operations) <= cap)
 
+    cum_terms: list = []
+    for day in range(current_day, ops_horizon):
+        for s in subsets:
+            cash = s["cash_by_day"].get(day, 0)
+            if cash:
+                cum_terms.append(y[s["id"]] * cash)
+        if cum_terms:
+            model.Add(money + sum(cum_terms) >= 0)
+
     model.Maximize(sum(int(s["weight"]) * y[s["id"]] for s in subsets))
 
+    limit = SOLVER_TIME_LIMIT_S
+    if time_limit_s is not None:
+        limit = min(SOLVER_TIME_LIMIT_S, max(2.0, time_limit_s))
+
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = SOLVER_TIME_LIMIT_S
+    solver.parameters.max_time_in_seconds = limit
+    solver.parameters.num_workers = 8
+    t0 = time.perf_counter()
     status = solver.Solve(model)
+    solve_s = time.perf_counter() - t0
     status_name = solver.StatusName(status)
 
     placements: list[dict] = []
@@ -508,7 +673,7 @@ def solve_plan(
     source = "cpsat"
     if not placements:
         placements, selected_subsets = _greedy_pack_with_subsets(
-            subsets, existing_load, current_day, ops_horizon
+            subsets, existing_load, current_day, ops_horizon, money=money
         )
         source = "greedy"
 
@@ -516,6 +681,10 @@ def solve_plan(
         solver.ObjectiveValue()
         if status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
         else None
+    )
+
+    peak_spend, cash_floor = _cash_metrics(
+        selected_subsets, money, current_day, ops_horizon
     )
 
     peak_by_worker = ops_budget.peak_load_by_worker(
@@ -531,7 +700,8 @@ def solve_plan(
         f"[planner] day={current_day} status={status_name} "
         f"candidates={len(subsets)} (crop={len(crop_subsets)} "
         f"animal={len(animal_subsets)}) selected={len(placements)} "
-        f"source={source} obj={obj}"
+        f"source={source} obj={obj} capital={peak_spend} "
+        f"cash_floor={cash_floor} limit={limit:.1f} solve={solve_s:.1f}"
     )
     print(f"[planner] peak_ops {peak_parts}")
     _log_plan(current_day, placements)

@@ -92,6 +92,10 @@ def harvest_ages(crop: str, profile: str = "no_fert") -> list[int]:
     return list(_profile_data(crop, profile)["harvest_ages"])
 
 
+def yield_per_harvest(crop: str, profile: str = "no_fert") -> list[int]:
+    return list(_profile_data(crop, profile)["yield_per_harvest"])
+
+
 def tile_free_age(crop: str, profile: str = "no_fert") -> int:
     return _profile_data(crop, profile)["tile_free_age"]
 

@@ -253,13 +253,17 @@ class Executor:
         plannable = set(range(workers.NUM_TILES))
         shops = obs.get("town", {}).get("unlocked_shops", [])
         demand = rollouts.shop_demand_by_product(shops)
+        overage = float(obs.get("remainingOverageTime", 60.0))
+        time_limit = max(2.0, overage - planner.SOLVER_OVERAGE_SAFETY_S)
         self.plan = planner.solve_plan(
             plannable,
             states,
             day,
             prices,
+            int(me["money"]),
             weed_tiles=weed_tiles or None,
             shop_demand=demand,
+            time_limit_s=time_limit,
         )
         self.plan = sorted(
             self.plan, key=lambda e: (self._entry_start(e), e["tile"])
@@ -292,6 +296,7 @@ class Executor:
             day,
             prices,
             self.plan,
+            int(me["money"]),
             shop_demand=demand,
         )
         if not new_entries:
