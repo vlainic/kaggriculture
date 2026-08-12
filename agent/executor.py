@@ -27,36 +27,32 @@ def _format_market(orders: list) -> str:
     return " ".join(parts)
 
 
-def _board_counts(me: dict) -> tuple[int, int, int, int]:
-    filled = empty = weeds = 0
-    for row in me["tiles"]:
-        for tile in row:
-            if tile == "LOCKED":
-                continue
-            if tile is None:
-                empty += 1
-            elif isinstance(tile, dict):
-                kind = tile.get("kind")
-                if kind == "WEED":
-                    weeds += 1
-                elif kind in ("PLANT", "COOP", "PASTURE"):
-                    filled += 1
-    owned = filled + empty + weeds
-    return filled, empty, weeds, owned
+def _zone_empty_counts(me: dict) -> dict[str, int]:
+    counts = {w: 0 for w in workers.WORKERS}
+    for worker, indices in workers.WORKER_TILES.items():
+        for idx in indices:
+            x, y = workers.TILE_COORDS[idx]
+            if me["tiles"][y][x] is None:
+                counts[worker] += 1
+    return counts
 
 
 def _log_snap(obs: dict, me: dict, day: int, hour: int) -> None:
-    filled, empty, weeds, owned = _board_counts(me)
+    zone_empty = _zone_empty_counts(me)
     shops = obs.get("town", {}).get("unlocked_shops", [])
-    demand = sum(rollouts.shop_demand_by_product(shops).values())
+    demand_by_product = rollouts.shop_demand_by_product(shops)
     prices = obs["market"]["prices"]
+    zone_parts = " ".join(f"{w}_empty={zone_empty[w]}" for w in workers.WORKERS)
+    demand_parts = " ".join(
+        f"demand_{product}={demand_by_product.get(product, 0)}"
+        for product in sorted(demand_by_product.keys())
+    )
     price_parts = " ".join(
         f"{key}={int(prices.get(key, 0) or 0)}" for key in sorted(prices.keys())
     )
     _log(
         f"[snap] d={day} h={hour} money={int(me['money'])} "
-        f"filled={filled} empty={empty} weeds={weeds} owned={owned} "
-        f"shops={len(shops)} demand={demand} {price_parts}"
+        f"{zone_parts} shops={len(shops)} {demand_parts} {price_parts}"
     )
 
 
