@@ -1,71 +1,68 @@
 # Progress
 
-## What works
+## Strategic status (Aug 12, 2026)
 
-| Item | Status |
+| Track | Status |
 | --- | --- |
-| Competition rules documented | Done — `docs/project_overview.md` |
-| Strategy analysis archived | Done — `docs/claude_chat.md` |
-| Cursor rules/skills/agents | Done — incl. `kaggle-submission.mdc` |
-| Memory bank | Updated Aug 11, 2026 (session 4) |
-| Rollout templates (crops + animals) | Done |
-| **5×5 NW multi-worker layout** | Done — `agent/workers.py` (25 tiles, 4 workers) |
-| Per-worker CP-SAT + op caps | Done — `agent/planner.py` |
-| Multi-worker executor + hand mapping | Done — `agent/executor.py` |
-| Solve-once / greedy-patch replan | Done — day 0 CP-SAT only |
-| CP-SAT constraint indexing (perf) | Done — no ~8s Python overhead |
-| **SHED_DOOR lock-escape fix** | Done — hire2/hire3 PICKUP/PLACE/FEED work |
-| Safe local smoke script | Done — `scripts/smoke_test.sh` |
-| Gated submit script (`--submit`) | Done — `scripts/smoke_and_submit.sh` |
-| OR-Tools vendoring for Kaggle | Done |
-| Local smoke vs `pass` (720 steps) | ~59,654 after SHED_DOOR fix |
-| Ladder / ELO iteration | In progress — user submits manually |
+| **WSP / CP-SAT season planner** | **Failed / abandoned** — see `docs/weighted_set_packing_failer.md` |
+| **Replacement agent** | Not started — user to choose direction |
+| **Competition submission** | Legacy WSP code in repo; ladder results inconsistent (~25k–51k in logs) |
 
-## What's left to build
+## What worked (keep for future agents)
 
-### Phase 2 — 5×5 polish (current)
-- [x] 5×5 NW, 3 daily hires, per-worker zones/routes
-- [x] Day-0 CP-SAT + greedy patch
-- [x] SHED_DOOR routing for all hires
-- [ ] Stable ladder submission after door fix
-- [ ] Late-season patch slack (op-cap saturation)
-- [ ] Beat `"starter"` consistently on ladder
+| Item | Notes |
+| --- | --- |
+| Competition docs + skills | `docs/project_overview.md`, domain/convention skills |
+| Rollout JSON templates | `data/crop_rollouts.json`, `data/animal_rollouts.json` |
+| **SHED_DOOR routing** | `(4,4)` lock-escape — hire2/hire3 can PICKUP; real engine fix |
+| **`agent/workers.py`** zone map | 25-tile partition, routes, op budgets — reusable |
+| Live analysis notebook | PASS / zone-empty / money / plan Gantt from Kaggle logs |
+| Safe smoke + gated submit | `smoke_test.sh`, `smoke_and_submit.sh --submit`, `kaggle-submission.mdc` |
+| OR-Tools vendoring | Still needed if any future bounded MILP |
 
-### Phase 3 — Optimize
-- [ ] Fertilizer (`with_fert`) profile
-- [ ] Plan-aware tomorrow fert/wheat for future placements
-- [ ] Town-center demand in weights (optional)
-- [ ] Sell timing beyond sell-all
+## WSP experiment — what we built (legacy)
 
-## Known issues / risks
+| Item | Outcome |
+| --- | --- |
+| Day-0 CP-SAT + greedy patch | Works mechanically; **plans often unexecutable or zone-unbalanced** |
+| Empty tiles + one lifecycle/tile/solve | Fixed ~74-placement overpack → 25 placements |
+| Cash constraint | Stops impossible buys; doesn't fix execution |
+| Plan-following executor | Correctness up; PASS count up until market-hour workaround |
+| h=0 market-hour PASS | Plan→buy→snake workaround; **burns 1h/day** (re-hire) |
+| eod DROP + h=23 sell inv | Partial; few `eod-drop` in logs |
+| `MAX_ACTIVE_PER_WORKER_DAY` | Tried → **reverted** |
+| `FARMER_DAY0_BONUS` | Minor nudge; farmer crops still late (days 16–18) |
+| `ZONE_FILL_BONUS` | **Disaster** — all placements day 24–25, ~5k reward |
 
-- **Kaggle has no `ortools`** — vendor cp311 manylinux wheels (~55MB).
-- **Accidental agent submit** — mitigated by `--submit` gate + `kaggle-submission.mdc`; user burned submission slot Aug 11.
-- **Submission cap:** 5 agents/team/day; only latest 2 tracked; resets ~midnight UTC.
-- **Greedy patch `added=0`:** day-0 plan fills worker op caps — freed tiles late season may stay empty.
-- **Hand spawn on LOCKED tiles:** hire2 `(4,5)`, hire3 `(5,5)` — must route via `SHED_DOOR (4,4)` every day for PICKUP.
-- **hire1 was accidentally OK** before fix — X-first walk from `(5,4)` crossed unlocked door; do not revert to `route[0]` lock-escape.
-- CP-SAT timeout → greedy fallback; full solve runs once per episode (8s limit).
-- Placed animals lock tiles until season end.
-- Shed cap 100; sell-all each turn mitigates for now.
+## WSP smoke / log outcomes (not reliable baselines)
 
-## Baselines to track
-
-| Opponent | Purpose | Notes |
+| Run / note | Approx reward | Problem |
 | --- | --- | --- |
-| `"pass"` | Sanity | Local DONE |
-| `"random"` | Smoke | ~59k Aug 11 post SHED_DOOR fix (self-play in smoke_test) |
-| `"starter"` | Milestone | Not measured yet |
-| Pre-door-fix submission | Regression | 91915834 ~25k — empty pastures, hire3 idle |
+| Aug 11 post SHED_DOOR (optimistic) | ~59k | Pre–live-analysis; not reproduced under WSP iteration |
+| Plan-following, no h=0 fix | ~27k / high PASS | Plan-blocked spam |
+| h=0 aware, no market-hour | ~19k | First PLANT h=11 |
+| market-hour + buys first | ~27–36k | Farmer zone idle, 12+ PASS/day |
+| Best late WSP patch | ~51k smoke | Unstable; late farmer MELON starts |
+| Kaggle validation (user) | ~39k | Money chart ~30k (snap timing) |
 
-## Submission archaeology
+## Known issues (WSP-specific — why we stopped)
 
-| Submit / issue | Cause / fix |
+- **Planner ops ≠ executor turns** — `NET_TILE_OPS` ignores shed trips, h=0 defer, idle PASS.
+- **Engine order** — farmer before market same hour; true plan→buy→execute impossible without wasting h=0.
+- **Zone imbalance** — CP-SAT fills hire zones; farmer tiles empty mid-season.
+- **Scale** — ~8.7k candidates @ 1 land; **unusable at 2–3 lands**.
+- **Two-system drift** — every executor fix invalidated planner assumptions.
+- **Static prices in weights** — no sell-impact modeling.
+
+## Submission archaeology (updated)
+
+| Submit / issue | Cause |
 | --- | --- |
-| `submission.tar.gz` validation fail (Aug 6) | Missing ortools / packaging |
-| **260811_4 / 91915834** — hire3 empty pastures, hire2 underused, ~25k | Locked spawn never reached `(4,4)` for PICKUP — **SHED_DOOR fix** |
-| **260811_4 / 91910203** — planner timeout ~day 15–17 | Daily CP-SAT + Python overhead — **solve-once + indexing** |
-| **Accidental agent submit** (Aug 11) | Agent ran `smoke_and_submit.sh` without user consent — **`--submit` gate + rules** |
-| Missing `animal_rollouts.json` in bundle | Added to smoke scripts |
-| 260811_1 — semi-empty tiles, no animals | Double snake op budget — fixed earlier |
-| 260811_2 — wool/FEED loops | Catch-up HARVEST, FEED gate — fixed earlier |
+| 260811_4 / 91915834 ~25k | SHED_DOOR bug (fixed Aug 11) |
+| 260811_4 timeout ~day 15–17 | Daily CP-SAT — later solve-once |
+| 260812_* series | WSP iteration — PASS/zone/money issues documented in failer.md |
+| Accidental agent submit (Aug 11) | `--submit` gate + rules |
+
+## What's left (NOT WSP)
+
+Await user decision. Likely directions (from failer.md): per-zone heuristics, 3–5 day rolling MILP, farmer-first staging, executor-first policy. **Do not auto-continue WSP todos.**

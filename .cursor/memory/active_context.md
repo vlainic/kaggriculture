@@ -1,60 +1,50 @@
 # Active Context
 
-## Current focus
+## Current focus (Aug 12, 2026)
 
-**5×5 NW multi-worker agent (Aug 11, 2026).** Four workers (farmer + 3 daily hires) each own a tile zone with per-worker snake routes and net tile-op caps. Day-0 CP-SAT full plan; greedy `patch_plan` for freed tiles thereafter (no daily CP-SAT). Latest fix: **SHED_DOOR routing** so hire2/hire3 can PICKUP from shed (was blocking all animal ops).
+**Weighted set packing (WSP) + CP-SAT season planner is abandoned.** Do not extend `agent/planner.py` CP-SAT set packing, incremental patch fixes, or planner–executor coupling work unless the user explicitly starts a new approach.
 
-## Recent changes (Aug 11, 2026 — session 4)
+Full post-mortem: [`docs/weighted_set_packing_failer.md`](../../docs/weighted_set_packing_failer.md)
 
-### 5×5 multi-worker expansion
+**Repo state:** `main.py` still delegates to the WSP agent (`agent/planner.py` + `agent/executor.py`). Treat as **legacy / reference implementation**, not the strategic direction. Next agent architecture TBD by user (likely short-horizon heuristics, per-zone rules, or small rolling MILP — not season-long CP-SAT).
 
-1. **`agent/workers.py`:** 25 tiles in NW 5×5; zones for farmer (9), hire1 (6), hire2 (6), hire3 (4); per-worker routes, `NET_TILE_OPS`, `DAILY_TURN_BUDGET`, `SPAWN_TO_WORKER`, `assign_hand_workers()`.
-2. **`agent/planner.py`:** CP-SAT with per-worker/day op caps; `plan_ops_by_day()`, `patch_plan()` (greedy, free tiles only).
-3. **`agent/executor.py`:** Multi-worker routing, dynamic hand→worker mapping, second-pass route reset when zone has pending work, market order priority (HIRE/BUY before SELL when over cap).
+## What happened (Aug 12 session summary)
 
-### Planner performance + replan strategy
+Extended debugging after Aug 11 “~60k SHED_DOOR fix” optimism:
 
-4. **CP-SAT indexing:** Precomputed `element_to_vars` and `worker_day_terms` — removed ~8s Python overhead per solve.
-5. **Solve once, patch many:** Full CP-SAT only on day 0 (`_should_full_replan`); subsequent days use `_patch_replan` / `patch_plan` for empty tiles only. `SOLVER_TIME_LIMIT_S = 8.0` (single solve per episode).
+1. **Live analysis** (`experiments/live_analysis.ipynb`) — PASS counts, per-zone empty tiles, money charts; exposed farmer zone underuse and snap timing bugs.
+2. **Planner fixes** — empty tiles only; one lifecycle per tile per solve; cash constraint; `MAX_ACTIVE_PER_WORKER_DAY` tried then **reverted** (ops/day is the right cap).
+3. **Executor fixes** — plan-following (no skip on blocked tiles); h=0 seed timing (`market-hour` PASS); conditional defer; eod DROP + h=23 sell from inv; `[snap]` zone-empty logging.
+4. **Outcome** — smoke rewards swung **~5k–51k** depending on patch; never stable ~50k+ with low PASSes. Farmer zone often **6–8 empty tiles until late season**. **8–15 PASSes/worker/day** persisted (mostly `route=done` + daily `market-hour` for re-hire).
 
-### SHED_DOOR fix (critical execution bug)
+## Why WSP failed (one paragraph)
 
-6. **Root cause:** Hands respawn daily at locked shed corners: hire1 `(5,4)`, hire2 `(4,5)`, hire3 `(5,5)`. Only `(4,4)` is unlocked in NW. Old lock-escape walked toward `route[0]` — hire1 accidentally crossed `(4,4)`; hire2/hire3 never did → **zero PICKUP** → empty pastures, no FEED/CARE/HARVEST on those zones.
-7. **Fix:** `SHED_DOOR = (4, 4)` in `workers.py`; lock-escape in `_next_action` targets door first. Zero extra movement cost (door on rectilinear path to all zones). Local 720-step smoke: **59,654** reward (was ~52,523).
+CP-SAT optimized a **static season calendar** (~8,775 candidates, 3–6s day-0 solve) with **tile ops ≠ executor turns** (movement, shed trips, h=0 market-before-farmer, inventory). Planner–executor drift required endless patches. **Not scalable** to 2–3 lands (candidate explosion + 60s overage cap).
 
-### Submission safety (user-mandated)
+## Do NOT continue (unless user asks)
 
-8. **`scripts/smoke_test.sh`:** Build + local smoke only — safe for agents.
-9. **`scripts/smoke_and_submit.sh`:** Requires explicit `--submit "message"` or refuses upload.
-10. **Rules/skills/docs:** `.cursor/rules/kaggle-submission.mdc`, updated stack/conventions/AGENTS.md — **agents must NEVER submit without explicit user request**.
+- Season-long CP-SAT set packing on more tiles/lands
+- More `FARMER_DAY0_BONUS` / zone weight hacks in planner
+- Incremental executor patches to “make WSP work”
+- Assuming Aug 11 ~59k smoke is representative of WSP health
 
-## Active decisions
+## Still valid from Aug 11 work
 
-- Profiles: **`no_fert`** (crops), **`with_care`** (animals) in current 5×5 plan.
-- Replan: full CP-SAT day 0 only; greedy patch on empty tiles after.
-- Per-worker op caps from `workers.NET_TILE_OPS` (farmer/hire1/hire2=15, hire3=14).
-- Market: drop SELLs first when over 10-order cap; prioritize HIRE + BUY.
-- **`PICKUP` counted in planner** via `animal_rollouts.executor_ops_by_day` (+1 feed pickup, +1 animal setup).
-- Multiple farmers can occupy same tile (engine has no collision check).
-- **Agents:** local smoke via `scripts/smoke_test.sh` only; users submit via `scripts/smoke_and_submit.sh --submit "msg"`.
-
-## Open questions / follow-ups
-
-1. Greedy `patch_plan` sometimes `added=0` late season — day-0 plan saturates worker op caps; revisit if reward plateaus.
-2. Ladder replay after SHED_DOOR fix — confirm ~60k+ holds vs opponents.
-3. Fertilizer profile (`with_fert`) — deferred.
-4. Town-center demand in weights — still out of scope.
-
-## Immediate next steps
-
-1. User submits manually when ready: `bash scripts/smoke_and_submit.sh --submit "message"`.
-2. Monitor ladder logs for hire utilization parity and empty pastures.
-3. Tune day-0 CP-SAT objective or patch slack if late-season tiles stay idle.
+- **`SHED_DOOR = (4,4)`** lock-escape for hire2/hire3 PICKUP — real bug fix, keep in any future executor.
+- **`scripts/smoke_test.sh`** local only; **`smoke_and_submit.sh --submit`** for humans; agents never submit without explicit request.
+- **`data/crop_rollouts.json`**, **`data/animal_rollouts.json`** — useful offline templates regardless of planner choice.
+- **`experiments/live_analysis.ipynb`** — essential for diagnosing runs from Kaggle logs.
 
 ## Key files
 
-- `main.py`, `agent/{workers,planner,executor,ops_budget,rollouts,animal_rollouts}.py`
-- `data/{crop_rollouts,animal_rollouts}.json`
-- `scripts/smoke_test.sh`, `scripts/smoke_and_submit.sh`, `scripts/vendor_ortools.sh`
-- `submissions/260811_4/` (91915834 broken pre-door-fix; earlier timeout runs)
-- `.cursor/rules/kaggle-submission.mdc`
+| File | Status |
+| --- | --- |
+| `docs/weighted_set_packing_failer.md` | **Source of truth for WSP failure** |
+| `docs/weighted_set_packing.md` | Original 9-tile idea (notebook scale only) |
+| `agent/planner.py`, `agent/executor.py` | Legacy WSP stack — do not invest further by default |
+| `experiments/live_analysis.ipynb` | Diagnostics — still useful |
+| `submissions/260812_*` | WSP iteration logs |
+
+## Immediate next steps
+
+**None for WSP.** Wait for user direction on replacement architecture.

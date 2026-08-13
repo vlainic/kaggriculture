@@ -1,86 +1,85 @@
 # System Patterns
 
-## Implemented multi-worker agent (Aug 11, 2026)
+## ⚠️ Legacy: WSP multi-worker agent (ABANDONED Aug 12, 2026)
+
+The following was built and **judged a failure**. Documented for archeology only. **Do not extend** without explicit user request. See `docs/weighted_set_packing_failer.md`.
 
 ```
 obs → Executor.step
-  ├─ hour0: reset route_idx per worker; assign_hand_workers from spawn pos
-  ├─ replan triggers:
-  │    day 0 only → Planner.solve_plan (CP-SAT, 8s)
-  │    later days → patch_plan (greedy, free tiles only, no CP-SAT)
-  ├─ Planner (day 0):
-  │    ├─ candidates per worker zone (crops + animals)
-  │    ├─ per-worker/day op caps (NET_TILE_OPS)
-  │    ├─ indexed constraints (element_to_vars, worker_day_terms)
-  │    └─ output: full forward placement list
-  ├─ market (≤10 orders): HIRE → (drop SELL if over cap) → BUY seeds/animals/fert/wheat
-  └─ per worker: lock-escape → SHED_DOOR → shed PICKUP → approach route[0] → snake
+  ├─ hour0: reset routes; assign_hand_workers
+  ├─ replan: day 0 → CP-SAT solve_plan (~8.7k candidates, 3–25s)
+  │          later → patch_plan (greedy, empty tiles)
+  ├─ market: HIRE/BUY/SELL (≤10 orders)
+  ├─ h=0: often PASS all workers (market-hour) — engine runs market after farmer
+  └─ h≥1: per-worker snake → tile ops → shed trips → route=done PASS / eod DROP
 ```
+
+**Failure modes:** planner calendar ≠ executor physics; zone-starved farmer; 8–15 PASS/worker/day; not scalable multi-land.
+
+---
+
+## Patterns worth keeping (any future agent)
 
 ### Worker spatial model (`agent/workers.py`)
 
-| Worker | Tiles | NET_TILE_OPS | Spawn (locked?) |
+| Worker | Tiles | NET_TILE_OPS | Spawn |
 | --- | --- | --- | --- |
-| farmer | 9 (SE block) | 15 | `(4,4)` unlocked |
-| hire1 | 6 (SW strip) | 15 | `(5,4)` LOCKED |
-| hire2 | 6 (N strip) | 15 | `(4,5)` LOCKED |
-| hire3 | 4 (NW corner) | 14 | `(5,5)` LOCKED |
+| farmer | 9 | 15 | `(4,4)` unlocked |
+| hire1 | 6 | 15 | `(5,4)` LOCKED |
+| hire2 | 6 | 15 | `(4,5)` LOCKED |
+| hire3 | 4 | 14 | `(5,5)` LOCKED |
 
-- **`SHED_DOOR = (4,4)`** — only unlocked shed-adjacent tile; all locked hands must route here before zone work (enables PICKUP).
-- **`SPAWN_TO_WORKER`** + **`assign_hand_workers()`** — map hand list index ↔ worker from spawn position.
-- **`WORKER_ROUTE_GLOBAL`** — per-worker snake through owned tiles.
+- **`SHED_DOOR = (4,4)`** — locked hands must route here for PICKUP.
+- **`assign_hand_workers()`** — spawn position → worker zone.
 
-### Replan semantics
+### Engine facts (planner must respect)
 
-**Full replan (`_should_full_replan`):** `last_replan_day is None` (day 0 only).
+- **Turn order:** farmer/hands act → then market → then farm update → day rollover.
+- **h=0:** seeds bought by market are **not** in `private["seeds"]` during farmer action same hour.
+- **Harvest** → worker inv; **SELL** from shed (unless explicitly including inv); engine dumps inv→shed at day rollover.
+- **Daily re-hire** — hands cleared each day; HIRE at h=0 required.
 
-**Patch replan (`_should_patch`):** empty tiles needing new plan entries; calls `patch_plan()` greedy pack.
+### Diagnostics
 
-**Not used anymore:** daily full CP-SAT on harvest/weed triggers (removed to avoid cumulative timeout).
+- **`[snap]`** at h=0: money, `{worker}_empty`, prices, shop demand (`executor.py`).
+- **`experiments/live_analysis.ipynb`:** PASS bars, zone empty, plan Gantt, money (end = next-day h=0), Kaggle reward dot.
 
-### Executor routing (per worker)
+### Submission workflow
 
-1. If on LOCKED tile → move toward **`SHED_DOOR`**, not `route[0]`.
-2. If on `SHED_ADJACENT` → `_shed_pickup` (fert, wheat, animals for today's placements).
-3. If not at `route[0]` → approach first route tile.
-4. Snake through route; sticky pending ops on current tile.
-5. When route done but zone has pending → reset `route_idx` to 0 (second pass).
+| Script | Who |
+| --- | --- |
+| `scripts/smoke_test.sh` | Agents + users (local only) |
+| `scripts/smoke_and_submit.sh --submit` | Users only |
+| Agents never `kaggle competitions submit` without explicit user ask |
 
-### Shed / spawn mechanics (engine)
+---
 
-- Daily reset: farmer → `(4,4)`; hands cleared then re-hired to shed corners NWSE.
-- `(5,4)`, `(4,5)`, `(5,5)` are LOCKED (outside NW quadrant) — movement allowed, tile ops no-op.
-- PICKUP requires standing on shed-adjacent tile; shed inventory shared.
-- No tile occupancy collision — multiple units can share a cell.
+## Anti-patterns (learned from WSP)
 
-### Market buying semantics
+1. **Season-long CP-SAT** on 25+ tiles with 4 workers — too slow, too brittle, wrong abstraction.
+2. **Separate planner + executor** without shared movement/shed/market model — endless coupling bugs.
+3. **Weight bonuses** to fix zone balance — games objective (e.g. all placements day 24–25).
+4. **Trusting smoke reward** without live_analysis PASS/zone charts.
+5. **`[snap]` h=23 as end-of-day money** — logs before actions; use next-day h=0 or Kaggle score.
 
-- Order cap 10: drop SELLs first to preserve HIRE/BUY.
-- WHEAT sell reserve: `live_animals × WHEAT_FEED_RESERVE_DAYS`.
-- Livestock excluded from sell loop.
+---
 
-## Submission workflow
+## Recommended future architecture (not implemented)
 
-| Script | Who | Action |
-| --- | --- | --- |
-| `scripts/smoke_test.sh` | Agents + users | Build tar + local 720-step smoke |
-| `scripts/smoke_and_submit.sh --submit "msg"` | **Users only** | Smoke + Kaggle upload |
-| `kaggle competitions submit ...` | Users | Manual upload |
+- **Executor-first** or **short-horizon** (3–7 day) replan with bounded candidates.
+- **Per-zone heuristics** or small MILP per worker, not one global season pack.
+- **Farmer-first staging** before filling hire zones.
+- Master layer (hire/land/shop) separate from tile ops.
 
-**Agents must never run submit** unless user explicitly asks in that conversation.
+---
 
-## Target architecture (later)
-
-- Fert profiles, sell timing, town demand in weights
-- Optional master search for hire/land timing
-
-## Repo layout (current)
+## Repo layout (current — legacy WSP code present)
 
 ```
-main.py
-agent/{workers,rollouts,planner,executor,ops_budget,animal_rollouts}.py
+main.py → agent/executor.py → agent/planner.py (CP-SAT)
+agent/{workers,rollouts,animal_rollouts,ops_budget}.py
 data/{crop_rollouts,animal_rollouts}.json
+docs/weighted_set_packing_failer.md   ← read this before touching planner
+experiments/live_analysis.ipynb
 scripts/{smoke_test,smoke_and_submit,vendor_ortools}.sh
-vendor/ortools/...
-.cursor/rules/kaggle-submission.mdc
 ```

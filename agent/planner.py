@@ -13,6 +13,8 @@ PLAN_HORIZON = rollouts.PLAN_HORIZON
 OPS_HORIZON = rollouts.SEASON_DAYS
 SOLVER_TIME_LIMIT_S = 25.0
 SOLVER_OVERAGE_SAFETY_S = 20.0
+# Nudge day-0 placements into the farmer zone (9 tiles, often skipped by CP-SAT).
+FARMER_DAY0_BONUS = 8000
 
 # tile, label (crop or animal name), start_day, profile, kind
 TileState = tuple[int, str, int, str, str]
@@ -182,6 +184,12 @@ def _earliest_start_by_tile(
     return earliest
 
 
+def _farmer_day0_bonus(tile: int, plant_day: int, current_day: int) -> int:
+    if plant_day != current_day or workers.worker_for_tile(tile) != "farmer":
+        return 0
+    return FARMER_DAY0_BONUS
+
+
 def _build_crop_candidates(
     plannable_tiles: set[int],
     earliest_start: dict[int, int],
@@ -233,6 +241,8 @@ def _build_crop_candidates(
                 )
                 if not ops_ok:
                     continue
+
+                weight += _farmer_day0_bonus(tile, plant_day, current_day)
 
                 subsets.append(
                     {
@@ -299,6 +309,7 @@ def _build_animal_candidates(
                     unit_price=product_price,
                 )
                 weight = rev * (1 + d) - cost - feed_days * wheat_price
+                weight += _farmer_day0_bonus(tile, place_day, current_day)
 
                 subsets.append(
                     {
@@ -496,6 +507,7 @@ def _greedy_pack_with_subsets(
 ) -> tuple[list[dict], list[dict]]:
     """Weight-descending greedy packing when CP-SAT yields nothing."""
     occupied: set[tuple[int, int]] = set()
+    used_tiles: set[int] = set()
     day_ops: dict[str, dict[int, int]] = {
         w: dict(existing_load.get(w, {})) for w in workers.WORKERS
     }
@@ -504,6 +516,8 @@ def _greedy_pack_with_subsets(
 
     for s in sorted(subsets, key=lambda x: x["weight"], reverse=True):
         if s["weight"] <= 0:
+            continue
+        if s["tile"] in used_tiles:
             continue
         if s["subset"] & occupied:
             continue
@@ -519,6 +533,7 @@ def _greedy_pack_with_subsets(
         if _min_balance(cash_base + chosen + [s], money, current_day, ops_horizon) < 0:
             continue
         occupied |= s["subset"]
+        used_tiles.add(s["tile"])
         for d, ops in s["ops_by_day"].items():
             day_ops[w][d] = day_ops[w].get(d, 0) + ops
         chosen.append(s)
@@ -619,8 +634,10 @@ def solve_plan(
     # was O(elements*subsets) and O(workers*days*subsets) respectively).
     element_to_vars: dict[tuple[int, int], list] = {}
     worker_day_terms: dict[tuple[str, int], list] = {}
+    tile_to_vars: dict[int, list] = {}
     for s in subsets:
         var = y[s["id"]]
+        tile_to_vars.setdefault(s["tile"], []).append(var)
         for e in s["subset"]:
             element_to_vars.setdefault(e, []).append(var)
         w = s["worker"]
@@ -631,6 +648,11 @@ def solve_plan(
         covering = element_to_vars.get(e)
         if covering:
             model.Add(sum(covering) <= 1)
+
+    for tile in plannable_tiles:
+        tile_vars = tile_to_vars.get(tile)
+        if tile_vars:
+            model.Add(sum(tile_vars) <= 1)
 
     for worker in workers.WORKERS:
         for day in range(current_day, ops_horizon):

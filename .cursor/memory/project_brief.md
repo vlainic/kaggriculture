@@ -2,31 +2,36 @@
 
 ## What this is
 
-Kaggle Simulations competition **Kaggriculture** — a 720-turn, two-player turn-based farming sim. Each player runs a farm, trades on a dynamic market, and competes for the most bank coins at season end.
+Kaggle Simulations competition **Kaggriculture** — 720-turn, two-player farming sim. Win = most bank coins at season end (ELO ladder).
 
 - **Competition:** https://www.kaggle.com/competitions/kaggriculture
-- **Format:** `agent(obs) -> {"farmer": [...], "market": [...]}` via `kaggle-environments`
-- **Deadline:** Final submission Sept 30, 2026; leaderboard finalizes ~Oct 15, 2026
-- **Prize:** $5,000 × top 10
+- **Entry:** `agent(obs) -> {"farmer", "hands", "market"}` via `kaggle-environments`
+- **Deadline:** Sept 30, 2026 (final submission)
 
 ## Goal
 
-Build a **heuristic/rule-based Python agent** (no ML/RL training pipeline) that consistently wins on the ELO ladder. Win/loss/tie outcome matters for rating; coin margin does not.
+Heuristic/rule-based Python agent (no ML/RL pipeline) that wins on the ladder.
+
+## Current implementation status (Aug 12, 2026)
+
+**Active codebase:** legacy **weighted set packing (WSP)** agent — CP-SAT season planner + snake executor for 1 land, 4 workers.
+
+**Strategic status:** WSP approach **failed and is not being advanced**. See `docs/weighted_set_packing_failer.md`. Replacement architecture not chosen yet.
 
 ## Deliverable
 
-- `main.py` at repo root with `def agent(obs)` entry point
-- Optional helper modules in a minimal, Kaggle-compatible bundle (stdlib-first)
-- Local validation against `"starter"`, `"random"`, and prior versions before submit
+- `main.py` + minimal Kaggle bundle (`agent/`, `data/`, vendored ortools if needed)
+- Local smoke: `scripts/smoke_test.sh`
+- Submit: user-only via `scripts/smoke_and_submit.sh --submit "msg"`
 
 ## Scope boundaries
 
-- **In scope:** strategy analysis, observation parsing, farm/market heuristics, local eval, Kaggle submission
-- **Current implementation:** 5×5 NW multi-worker (farmer + 3 hires), day-0 CP-SAT + greedy patch, coupled crops + animals (Aug 2026)
-- **Out of scope (for now):** full Deep RL training, live LLM inference per turn, Jupyter notebooks in submission bundle
+- **In scope:** new agent strategies, local eval, user-requested submit
+- **Out of scope unless asked:** continuing WSP/CP-SAT season planner, agent-initiated Kaggle submit, RL training, notebooks in submission bundle
 
 ## Key references
 
-- Full rules & observation schema: [docs/project_overview.md](../../docs/project_overview.md)
-- Strategy discussion archive: [docs/claude_chat.md](../../docs/claude_chat.md)
-- Cursor config: `.cursor/rules/kaggriculture-stack.mdc`, skills `kaggriculture-domain`, `kaggriculture-agent-conventions`
+- Rules: `docs/project_overview.md`
+- WSP failure: `docs/weighted_set_packing_failer.md`
+- Original WSP idea (9-tile scale): `docs/weighted_set_packing.md`
+- Strategy archive: `docs/claude_chat.md`
