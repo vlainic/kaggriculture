@@ -1,0 +1,251 @@
+"""Market orders for scripted one-land agent."""
+
+from __future__ import annotations
+
+from collections import Counter
+
+from agent import animal_rollouts, rollouts, script, workers
+from agent.script import QueueItem, TILE_QUEUES
+
+MAX_ORDERS = 10
+SELLABLE = frozenset(
+    rollouts.CROP_NAMES + animal_rollouts.ANIMAL_PRODUCTS + ("FERTILIZER",)
+)
+LIVESTOCK = frozenset(animal_rollouts.animal_names())
+
+
+def _tile_at(me: dict, idx: int):
+    x, y = workers.TILE_COORDS[idx]
+    return me["tiles"][y][x]
+
+
+def _tile_empty(me: dict, idx: int) -> bool:
+    tile = _tile_at(me, idx)
+    return tile is None or (isinstance(tile, dict) and tile.get("kind") == "WEED")
+
+
+def _needs_plant_today(
+    idx: int,
+    queue_idx: int,
+    lag: int,
+    gap: int,
+    pending_dig: bool,
+    empty_at_dawn: set[int],
+    dig_plant_ok: bool,
+) -> QueueItem | None:
+    if lag > 0 or gap > 0 or pending_dig:
+        return None
+    if not tile_ops_can_start(idx, empty_at_dawn, dig_plant_ok):
+        return None
+    queue = TILE_QUEUES.get(idx, [])
+    if queue_idx >= len(queue):
+        return None
+    item = queue[queue_idx]
+    if item.kind != "crop":
+        return None
+    return item
+
+
+def tile_ops_can_start(idx: int, empty_at_dawn: set[int], dig_plant_ok: bool) -> bool:
+    return idx in empty_at_dawn or dig_plant_ok
+
+
+def _needs_animal_today(
+    idx: int,
+    day: int,
+    me: dict,
+    queue_idx: int,
+    lag: int,
+    gap: int,
+) -> QueueItem | None:
+    if lag > 0 or gap > 0:
+        return None
+    queue = TILE_QUEUES.get(idx, [])
+    if queue_idx >= len(queue):
+        return None
+    item = queue[queue_idx]
+    if item.kind != "animal":
+        return None
+    tile = _tile_at(me, idx)
+    if tile is None:
+        return item
+    if isinstance(tile, dict) and tile.get("kind") in ("COOP", "PASTURE"):
+        if not tile.get("animal"):
+            return item
+    return None
+
+
+def _needs_build_today(
+    idx: int,
+    me: dict,
+    queue_idx: int,
+    lag: int,
+    gap: int,
+) -> QueueItem | None:
+    if lag > 0 or gap > 0:
+        return None
+    queue = TILE_QUEUES.get(idx, [])
+    if queue_idx >= len(queue):
+        return None
+    item = queue[queue_idx]
+    if item.kind != "animal":
+        return None
+    tile = _tile_at(me, idx)
+    if tile is None:
+        return item
+    return None
+
+
+def needed_buys(
+    me: dict,
+    private: dict,
+    day: int,
+    tile_state: dict,
+    empty_at_dawn: set[int],
+) -> tuple[Counter[str], Counter[str], int]:
+    """Return (seeds, animals, wheat_pickup_need)."""
+    seeds: Counter[str] = Counter()
+    animals: Counter[str] = Counter()
+    wheat_need = 0
+
+    for idx in range(workers.NUM_TILES):
+        st = tile_state.get(idx, {})
+        qi = st.get("queue_idx", 0)
+        lag = st.get("lag", 0)
+        gap = st.get("gap", 0)
+        pending_dig = st.get("pending_dig", False)
+        dig_plant_ok = st.get("dig_plant_ok", False)
+
+        crop = _needs_plant_today(
+            idx, qi, lag, gap, pending_dig, empty_at_dawn, dig_plant_ok
+        )
+        if crop and _tile_empty(me, idx):
+            seeds[crop.label] += 1
+
+        animal = _needs_animal_today(idx, day, me, qi, lag, gap)
+        if animal:
+            tile = _tile_at(me, idx)
+            if tile is None:
+                build = _needs_build_today(idx, me, qi, lag, gap)
+                if build:
+                    pass  # BUILD only, no buy yet
+            elif isinstance(tile, dict) and not tile.get("animal"):
+                animals[animal.label] += 1
+
+        build_item = _needs_build_today(idx, me, qi, lag, gap)
+        if build_item and _tile_at(me, idx) is None:
+            pass
+
+    for worker in workers.HAND_WORKERS:
+        if script.zone_needs_feed_wheat(me, worker, tile_state):
+            wheat_need = max(wheat_need, script.WHEAT_PICKUP_PER_HAND)
+
+    return seeds, animals, wheat_need
+
+
+def build_orders(
+    obs: dict,
+    me: dict,
+    private: dict,
+    day: int,
+    hour: int,
+    tile_state: dict,
+    empty_at_dawn: set[int] | None = None,
+) -> list[list]:
+    prices = obs["market"]["prices"]
+    orders: list[list] = []
+    dawn = empty_at_dawn if empty_at_dawn is not None else set()
+
+    if hour == 0:
+        hires_needed = min(2, workers.NUM_HIRES - len(me["hands"]))
+        for _ in range(hires_needed):
+            orders.append(["HIRE"])
+    elif hour == 1:
+        if len(me["hands"]) < workers.NUM_HIRES:
+            orders.append(["HIRE"])
+
+    needed_seeds, needed_animals, wheat_need = needed_buys(
+        me, private, day, tile_state, dawn
+    )
+    wheat_feed_need = script.total_wheat_feed_need(me, tile_state, private)
+
+    seeds = private["seeds"]
+    money = int(me["money"])
+
+    if day < script.SEASON_LAST_DAY:
+        for crop, count in needed_seeds.items():
+            deficit = count - seeds.get(crop, 0)
+            if deficit <= 0:
+                continue
+            cost = rollouts.seed_cost(crop)
+            buy = min(deficit, money // cost) if cost else 0
+            if buy > 0:
+                orders.append(["BUY_SEED", crop, buy])
+                money -= buy * cost
+
+        shed = private["shed"]
+        for animal, count in needed_animals.items():
+            in_shed = shed.get(animal, 0)
+            in_inv = sum(inv.get(animal, 0) for inv in private["inventories"])
+            deficit = count - in_shed - in_inv
+            if deficit <= 0:
+                continue
+            cost = animal_rollouts.animal_cost(animal)
+            buy = min(deficit, money // cost) if cost else 0
+            if buy > 0:
+                orders.append(["BUY_ANIMAL", animal, buy])
+                money -= buy * cost
+
+        wheat_in_shed = shed.get("WHEAT", 0)
+        if wheat_need > wheat_in_shed:
+            deficit = wheat_need - wheat_in_shed
+            cost = int(prices.get("WHEAT", 0) or 0)
+            buy = min(deficit, money // cost) if cost else 0
+            if buy > 0:
+                orders.append(["BUY_PRODUCT", "WHEAT", buy])
+                money -= buy * cost
+
+    sells = _sell_orders(private, me, day, hour, wheat_feed_need)
+    if len(orders) + len(sells) > MAX_ORDERS:
+        sells = sells[: max(0, MAX_ORDERS - len(orders))]
+    orders.extend(sells)
+
+    return orders[:MAX_ORDERS]
+
+
+def _sell_orders(
+    private: dict, me: dict, day: int, hour: int, wheat_feed_need: int = 0
+) -> list[list]:
+    shed = private["shed"]
+    sells: list[list] = []
+
+    if day >= script.SEASON_LAST_DAY:
+        for product, count in sorted(shed.items()):
+            if count > 0 and product in SELLABLE and product not in LIVESTOCK:
+                sells.append(["SELL", product, count])
+        return sells
+
+    for product, count in sorted(shed.items()):
+        if count <= 0 or product not in SELLABLE or product in LIVESTOCK:
+            continue
+        if product == "WHEAT":
+            excess = count - wheat_feed_need
+            if excess > 0:
+                sells.append(["SELL", "WHEAT", excess])
+        elif product == "FERTILIZER":
+            sells.append(["SELL", "FERTILIZER", count])
+        else:
+            sells.append(["SELL", product, count])
+    return sells
+
+
+def defer_farmer_hour0(hour: int, orders: list[list], me: dict) -> bool:
+    """Engine runs farmer before market on h=0 — PASS until buys execute."""
+    if hour != 0:
+        return False
+    if len(me["hands"]) < 2:
+        return True
+    for order in orders:
+        if order and order[0] in ("BUY_SEED", "BUY_ANIMAL", "BUY_PRODUCT", "HIRE"):
+            return True
+    return False

@@ -1,69 +1,63 @@
-"""Turn-by-turn execution: market, replan trigger, snake routing, tile ops."""
+"""Scripted turn-by-turn executor: snake routes + rollout-driven tile ops."""
 
 from __future__ import annotations
 
-from collections import Counter
+from agent import market, rollouts, script, tile_ops, workers
 
-from agent import animal_rollouts, planner, rollouts, workers
-
-TILE_COORDS = workers.TILE_COORDS
-SHED_ADJACENT = workers.SHED_ADJACENT
-
-WHEAT_FEED_RESERVE_DAYS = 2
+_EXECUTOR: "Executor | None" = None
 
 
 def _log(msg: str) -> None:
     print(msg, flush=True)
 
 
-def _format_action_list(action: list) -> str:
+def _fmt(action: list) -> str:
     return " ".join(str(x) for x in action)
 
 
-def _format_market(orders: list) -> str:
-    parts = []
-    for order in orders:
-        parts.append(" ".join(str(x) for x in order))
-    return " ".join(parts)
+def _step_toward(fx: int, fy: int, tx: int, ty: int) -> str:
+    if fx < tx:
+        return "EAST"
+    if fx > tx:
+        return "WEST"
+    if fy < ty:
+        return "SOUTH"
+    if fy > ty:
+        return "NORTH"
+    return "PASS"
 
 
-def _zone_empty_counts(me: dict) -> dict[str, int]:
-    counts = {w: 0 for w in workers.WORKERS}
-    for worker, indices in workers.WORKER_TILES.items():
-        for idx in indices:
-            x, y = workers.TILE_COORDS[idx]
-            if me["tiles"][y][x] is None:
-                counts[worker] += 1
-    return counts
+def _tile_at(me: dict, idx: int):
+    x, y = workers.TILE_COORDS[idx]
+    return me["tiles"][y][x]
 
 
-def _log_snap(obs: dict, me: dict, day: int, hour: int) -> None:
-    zone_empty = _zone_empty_counts(me)
-    shops = obs.get("town", {}).get("unlocked_shops", [])
-    demand_by_product = rollouts.shop_demand_by_product(shops)
-    prices = obs["market"]["prices"]
-    zone_parts = " ".join(f"{w}_empty={zone_empty[w]}" for w in workers.WORKERS)
-    demand_parts = " ".join(
-        f"demand_{product}={demand_by_product.get(product, 0)}"
-        for product in sorted(demand_by_product.keys())
-    )
-    price_parts = " ".join(
-        f"{key}={int(prices.get(key, 0) or 0)}" for key in sorted(prices.keys())
-    )
-    _log(
-        f"[snap] d={day} h={hour} money={int(me['money'])} "
-        f"{zone_parts} shops={len(shops)} {demand_parts} {price_parts}"
-    )
+def _zone_empty(me: dict, worker: str) -> int:
+    n = 0
+    for idx in workers.WORKER_TILES[worker]:
+        tile = _tile_at(me, idx)
+        if tile is None:
+            n += 1
+    return n
 
 
 class Executor:
     def __init__(self) -> None:
-        self.plan: list[dict] = []
-        self.plant_profiles: dict[tuple[int, int], str] = {}
-        self.animal_profiles: dict[tuple[int, int], str] = {}
-        self.last_replan_day: int | None = None
-        self._route_idx: dict[str, int] = {w: 0 for w in workers.WORKERS}
-        self._hand_for_worker: dict[str, int] = workers.assign_hand_workers([])
+        self._route_idx = {w: 0 for w in workers.WORKERS}
+        self._preamble_idx = {w: 0 for w in workers.WORKERS}
+        self._tile_state: dict[int, dict] = {}
+        self._empty_at_dawn: set[int] = set()
+        for idx in range(workers.NUM_TILES):
+            queue = script.TILE_QUEUES.get(idx, [])
+            first_lag = queue[0].start_lag if queue else 0
+            self._tile_state[idx] = {
+                "queue_idx": 0,
+                "lag": first_lag,
+                "gap": 0,
+                "pending_dig": False,
+                "dig_plant_ok": False,
+                "active": False,
+            }
 
     def step(self, obs: dict) -> dict:
         player = obs["player"]
@@ -71,1142 +65,285 @@ class Executor:
         private = obs["private"]
         day = obs["day"]
         hour = obs["hour"]
-        prices = obs["market"]["prices"]
 
         if hour == 0:
-            for w in workers.WORKERS:
-                self._route_idx[w] = 0
-            self._hand_for_worker = workers.assign_hand_workers(me["hands"])
+            self._on_new_day(me, day)
 
         if hour == 0:
-            if self._should_full_replan():
-                self._replan(obs, me, day, prices)
-            elif self._should_patch(me, day):
-                self._patch_replan(obs, me, day, prices)
+            self._log_snap(obs, me, day, hour)
 
-        if hour == 0:
-            _log_snap(obs, me, day, hour)
-
-        market = self._market_orders(obs, me, private, day, hour, prices)
-
-        if self._defer_snake_for_market(hour, market, me, day):
-            # Engine runs farmer/hands before market on h=0; defer snake to h>=1
-            # so replan → BUY_* → then plant with seeds in stock.
-            farmer_action, farmer_note = ["PASS"], "market-hour"
-            hand_actions = [["PASS"] for _ in me["hands"]]
-        else:
-            farmer_action, farmer_note = self._next_action(
-                "farmer", obs, me, private, day, hour, market
-            )
-            hand_actions = []
-            for i in range(len(me["hands"])):
-                worker = workers.worker_for_hand_idx(i, self._hand_for_worker)
-                action, _note = self._next_action(
-                    worker, obs, me, private, day, hour, market
-                )
-                hand_actions.append(action)
-
-        if market:
-            _log(f"[exec] d={day} h={hour} market {_format_market(market)}")
-        _log(
-            f"[exec] d={day} h={hour} farmer {_format_action_list(farmer_action)}"
-            + (f" {farmer_note}" if farmer_note else "")
+        orders = market.build_orders(
+            obs, me, private, day, hour, self._tile_state, self._empty_at_dawn
         )
-        for i, action in enumerate(hand_actions):
-            _log(
-                f"[exec] d={day} h={hour} hand{i} "
-                f"{_format_action_list(action)}"
+        harvest_only = day >= script.SEASON_LAST_DAY
+
+        if market.defer_farmer_hour0(hour, orders, me):
+            farmer = ["PASS"]
+            hands = [["PASS"] for _ in me["hands"]]
+            note = "market-hour"
+        else:
+            farmer, note = self._worker_action(
+                "farmer", me, private, day, hour, harvest_only
             )
+            hands = [
+                self._worker_action(
+                    workers.worker_for_hand_idx(i), me, private, day, hour, harvest_only
+                )[0]
+                for i in range(len(me["hands"]))
+            ]
 
-        return {"farmer": farmer_action, "hands": hand_actions, "market": market}
+        if orders:
+            _log(f"[exec] d={day} h={hour} market {' '.join(_fmt(o) for o in orders)}")
+        _log(f"[exec] d={day} h={hour} farmer {_fmt(farmer)}" + (f" {note}" if note else ""))
+        for i, act in enumerate(hands):
+            _log(f"[exec] d={day} h={hour} hand{i} {_fmt(act)}")
 
-    @staticmethod
-    def _entry_start(entry: dict) -> int:
-        return entry.get("start_day", entry.get("plant_day", -1))
+        return {"farmer": farmer, "hands": hands, "market": orders}
+
+    def _on_new_day(self, me: dict, day: int) -> None:
+        for w in workers.WORKERS:
+            self._route_idx[w] = 0
+            self._preamble_idx[w] = 0
+
+        for idx in range(workers.NUM_TILES):
+            st = self._tile_state[idx]
+            st["dig_plant_ok"] = False
+            if day > 0:
+                if st["lag"] > 0:
+                    st["lag"] -= 1
+                if st["gap"] > 0:
+                    st["gap"] -= 1
+
+            tile = _tile_at(me, idx)
+            empty = tile is None
+            if st["active"] and empty:
+                item = tile_ops.current_queue_item(idx, st["queue_idx"])
+                qi, lag, gap, dig = tile_ops.on_lifecycle_end(
+                    idx, st["queue_idx"], item, st["pending_dig"]
+                )
+                st["queue_idx"] = qi
+                st["lag"] = max(st["lag"], lag)
+                st["gap"] = max(st["gap"], gap)
+                st["pending_dig"] = dig
+                st["active"] = False
+            elif not empty:
+                st["active"] = True
+
+        self._empty_at_dawn = {
+            idx for idx in range(workers.NUM_TILES) if _tile_at(me, idx) is None
+        }
+
+    def _log_snap(self, obs: dict, me: dict, day: int, hour: int) -> None:
+        shops = obs.get("town", {}).get("unlocked_shops", [])
+        demand = rollouts.shop_demand_by_product(shops)
+        prices = obs["market"]["prices"]
+        parts = " ".join(
+            f"{w}_empty={_zone_empty(me, w)}" for w in workers.WORKERS
+        )
+        demand_s = " ".join(f"demand_{p}={demand.get(p, 0)}" for p in sorted(demand))
+        price_s = " ".join(f"{k}={int(prices.get(k, 0) or 0)}" for k in sorted(prices))
+        _log(
+            f"[snap] d={day} h={hour} money={int(me['money'])} {parts} "
+            f"shops={len(shops)} {demand_s} {price_s}"
+        )
 
     def _worker_pos(self, worker: str, me: dict) -> tuple[int, int]:
         if worker == "farmer":
-            fx, fy = me["farmer"]
-            return fx, fy
-        idx = self._hand_for_worker.get(worker, workers.hand_index(worker))
+            return tuple(me["farmer"])
+        idx = workers.hand_index(worker)
         if idx >= len(me["hands"]):
-            return -1, -1
-        return me["hands"][idx][0], me["hands"][idx][1]
+            return (-1, -1)
+        return tuple(me["hands"][idx])
 
     def _inv_idx(self, worker: str) -> int:
-        if worker == "farmer":
-            return 0
-        return self._hand_for_worker.get(worker, workers.hand_index(worker)) + 1
+        return workers.inventory_index(worker)
 
-    @staticmethod
-    def _inv_at(private: dict, inv_idx: int) -> dict:
-        inventories = private["inventories"]
-        if inv_idx < len(inventories):
-            return inventories[inv_idx]
-        return {}
-
-    def _sync_plant_profiles(self, me: dict) -> None:
-        live = {
-            (idx, tile["planted_day"])
-            for idx in range(workers.NUM_TILES)
-            if isinstance(tile := self._tile_at(me, idx), dict)
-            and tile.get("kind") == "PLANT"
-        }
-        self.plant_profiles = {
-            k: v for k, v in self.plant_profiles.items() if k in live
-        }
-
-    def _sync_animal_profiles(self, me: dict) -> None:
-        live = {
-            (idx, tile["placed_day"])
-            for idx in range(workers.NUM_TILES)
-            if isinstance(tile := self._tile_at(me, idx), dict)
-            and tile.get("kind") in ("COOP", "PASTURE")
-            and tile.get("animal")
-        }
-        self.animal_profiles = {
-            k: v for k, v in self.animal_profiles.items() if k in live
-        }
-
-    def _profile_for_plant(self, idx: int, planted_day: int) -> str:
-        key = (idx, planted_day)
-        if key in self.plant_profiles:
-            return self.plant_profiles[key]
-        for entry in self.plan:
-            if (
-                entry.get("kind", "crop") == "crop"
-                and entry["tile"] == idx
-                and self._entry_start(entry) == planted_day
-            ):
-                return entry.get("profile", "no_fert")
-        return "no_fert"
-
-    def _profile_for_animal(self, idx: int, placed_day: int) -> str:
-        key = (idx, placed_day)
-        if key in self.animal_profiles:
-            return self.animal_profiles[key]
-        for entry in self.plan:
-            if (
-                entry.get("kind") == "animal"
-                and entry["tile"] == idx
-                and self._entry_start(entry) == placed_day
-            ):
-                return entry.get("profile", "no_care")
-        return "no_care"
-
-    def _profile_for_tile(self, idx: int, tile: dict | None, day: int) -> str:
-        if isinstance(tile, dict) and tile.get("kind") == "PLANT":
-            return self._profile_for_plant(idx, tile["planted_day"])
-        if (
-            isinstance(tile, dict)
-            and tile.get("kind") in ("COOP", "PASTURE")
-            and tile.get("animal")
-            and tile.get("placed_day") is not None
-        ):
-            return self._profile_for_animal(idx, tile["placed_day"])
-        entry = self._placement_today(idx, day)
-        if entry:
-            return entry.get("profile", "no_fert")
-        return "no_fert"
-
-    def _should_full_replan(self) -> bool:
-        return self.last_replan_day is None
-
-    def _should_patch(self, me: dict, day: int) -> bool:
-        return bool(self._free_tiles_needing_patch(me, day))
-
-    def _free_tiles_needing_patch(self, me: dict, day: int) -> set[int]:
-        free: set[int] = set()
-        for idx in _empty_tile_indices(me):
-            if not any(
-                entry["tile"] == idx and self._entry_start(entry) >= day
-                for entry in self.plan
-            ):
-                free.add(idx)
-        return free
-
-    def _replan(self, obs: dict, me: dict, day: int, prices: dict) -> None:
-        self._sync_plant_profiles(me)
-        self._sync_animal_profiles(me)
-        states: list[planner.TileState | None] = [None] * workers.NUM_TILES
-        weed_tiles: set[int] = set()
-
-        for idx in range(workers.NUM_TILES):
-            tile = self._tile_at(me, idx)
-            if isinstance(tile, dict) and tile.get("kind") == "PLANT":
-                profile = self._profile_for_plant(idx, tile["planted_day"])
-                states[idx] = (
-                    idx,
-                    tile["crop"],
-                    tile["planted_day"],
-                    profile,
-                    "crop",
-                )
-            elif (
-                isinstance(tile, dict)
-                and tile.get("kind") in ("COOP", "PASTURE")
-                and tile.get("animal")
-            ):
-                profile = self._profile_for_animal(idx, tile["placed_day"])
-                states[idx] = (
-                    idx,
-                    tile["animal"],
-                    tile["placed_day"],
-                    profile,
-                    "animal",
-                )
-            elif isinstance(tile, dict) and tile.get("kind") == "WEED":
-                weed_tiles.add(idx)
-
-        plannable = set(_empty_tile_indices(me))
-        shops = obs.get("town", {}).get("unlocked_shops", [])
-        demand = rollouts.shop_demand_by_product(shops)
-        overage = float(obs.get("remainingOverageTime", 60.0))
-        time_limit = max(2.0, overage - planner.SOLVER_OVERAGE_SAFETY_S)
-        self.plan = planner.solve_plan(
-            plannable,
-            states,
-            day,
-            prices,
-            int(me["money"]),
-            weed_tiles=weed_tiles or None,
-            shop_demand=demand,
-            time_limit_s=time_limit,
-        )
-        self.plan = sorted(
-            self.plan, key=lambda e: (self._entry_start(e), e["tile"])
-        )
-        self.last_replan_day = day
-        _log(
-            f"[executor] replan day={day} weeds={sorted(weed_tiles)} "
-            f"plan={len(self.plan)}"
-        )
-        for entry in self.plan:
-            if entry.get("kind") == "animal":
-                _log(
-                    f"  animal {entry['animal']} {entry['profile']} "
-                    f"tile={entry['tile']} start={entry['start_day']}"
-                )
-            else:
-                _log(
-                    f"  crop {entry['crop']} {entry['profile']} "
-                    f"tile={entry['tile']} start={entry['start_day']}"
-                )
-
-    def _patch_replan(self, obs: dict, me: dict, day: int, prices: dict) -> None:
-        free_tiles = self._free_tiles_needing_patch(me, day)
-        if not free_tiles:
-            return
-        shops = obs.get("town", {}).get("unlocked_shops", [])
-        demand = rollouts.shop_demand_by_product(shops)
-        new_entries = planner.patch_plan(
-            free_tiles,
-            day,
-            prices,
-            self.plan,
-            int(me["money"]),
-            shop_demand=demand,
-        )
-        if not new_entries:
-            return
-        self.plan.extend(new_entries)
-        self.plan = sorted(
-            self.plan, key=lambda e: (self._entry_start(e), e["tile"])
-        )
-        _log(
-            f"[executor] patch day={day} free_tiles={sorted(free_tiles)} "
-            f"added={len(new_entries)} plan={len(self.plan)}"
-        )
-
-    def _placement_today(self, idx: int, day: int) -> dict | None:
-        for entry in self.plan:
-            if entry["tile"] == idx and self._entry_start(entry) == day:
-                return entry
-        return None
-
-    def _build_entry_today(self, idx: int, day: int) -> dict | None:
-        for entry in self.plan:
-            if entry.get("kind") != "animal":
-                continue
-            if entry["tile"] == idx and self._entry_start(entry) == day + 1:
-                return entry
-        return None
-
-    @staticmethod
-    def _seeds_in_stock(private: dict, crop: str) -> bool:
-        return private["seeds"].get(crop, 0) > 0
-
-    def _plan_unfulfilled_today(self, idx: int, day: int, me: dict) -> bool:
-        build_entry = self._build_entry_today(idx, day)
-        if build_entry and self._tile_at(me, idx) is None:
-            return True
-        entry = self._placement_today(idx, day)
-        if not entry:
-            return False
-        tile = self._tile_at(me, idx)
-        if entry.get("kind") == "crop":
-            return tile is None or (
-                isinstance(tile, dict) and tile.get("kind") == "WEED"
-            )
-        if entry.get("kind") == "animal":
-            if tile is None:
-                return True
-            if isinstance(tile, dict) and tile.get("kind") in (
-                "COOP",
-                "PASTURE",
-            ):
-                return not tile.get("animal")
-        return False
-
-    def _waiting_for_h0_market_seeds(
-        self,
-        idx: int,
-        day: int,
-        me: dict,
-        private: dict,
-        hour: int,
-        market: list,
-    ) -> bool:
-        if hour != 0:
-            return False
-        entry = self._placement_today(idx, day)
-        if not entry or entry.get("kind") != "crop":
-            return False
-        tile = self._tile_at(me, idx)
-        if tile is not None and not (
-            isinstance(tile, dict) and tile.get("kind") == "WEED"
-        ):
-            return False
-        crop = entry["crop"]
-        if self._seeds_in_stock(private, crop):
-            return False
-        return any(o[:2] == ["BUY_SEED", crop] for o in market)
-
-    def _waiting_for_market_supply(
-        self,
-        idx: int,
-        day: int,
-        me: dict,
-        private: dict,
-        hour: int,
-        market: list,
-        inv_idx: int,
-    ) -> bool:
-        if self._waiting_for_h0_market_seeds(
-            idx, day, me, private, hour, market
-        ):
-            return True
-        entry = self._placement_today(idx, day)
-        if not entry or entry.get("kind") != "animal":
-            return False
-        tile = self._tile_at(me, idx)
-        if not (
-            isinstance(tile, dict)
-            and tile.get("kind") in ("COOP", "PASTURE")
-            and not tile.get("animal")
-        ):
-            return False
-        animal = entry["animal"]
-        if self._inv_at(private, inv_idx).get(animal, 0) > 0:
-            return False
-        if self._total_inv(private, animal) > 0:
-            return False
-        return any(o[:2] == ["BUY_ANIMAL", animal] for o in market)
-
-    def _planned_crop_plantable(
-        self, idx: int, day: int, me: dict, private: dict
-    ) -> bool:
-        entry = self._placement_today(idx, day)
-        if not entry or entry.get("kind") != "crop":
-            return False
-        tile = self._tile_at(me, idx)
-        if tile is not None and not (
-            isinstance(tile, dict) and tile.get("kind") == "WEED"
-        ):
-            return False
-        return self._seeds_in_stock(private, entry["crop"])
-
-    def _plan_blocks_route_now(
-        self,
-        idx: int,
-        day: int,
-        me: dict,
-        private: dict,
-        hour: int,
-        market: list,
-        inv_idx: int,
-    ) -> bool:
-        if not self._plan_unfulfilled_today(idx, day, me):
-            return False
-        if self._waiting_for_market_supply(
-            idx, day, me, private, hour, market, inv_idx
-        ):
-            return False
-        entry = self._placement_today(idx, day)
-        if entry and entry.get("kind") == "crop":
-            crop = entry["crop"]
-            if not self._seeds_in_stock(private, crop):
-                if hour >= 1:
-                    return not any(o[:2] == ["BUY_SEED", crop] for o in market)
-                return False
-        return True
-
-    def _live_animal_count(self, me: dict) -> int:
-        n = 0
-        for idx in range(workers.NUM_TILES):
-            tile = self._tile_at(me, idx)
-            if (
-                isinstance(tile, dict)
-                and tile.get("kind") in ("COOP", "PASTURE")
-                and tile.get("animal")
-            ):
-                n += 1
-        return n
-
-    def _worker_route_done(self, worker: str) -> bool:
-        return self._route_idx[worker] >= workers.route_len(worker)
-
-    def _snake_done(self) -> bool:
-        return all(self._worker_route_done(w) for w in workers.WORKERS)
-
-    def _feed_ops_for_day(self, me: dict, calendar_day: int, today: int) -> int:
-        count = 0
-        for idx in range(workers.NUM_TILES):
-            tile = self._tile_at(me, idx)
-            if not isinstance(tile, dict) or tile.get("kind") not in (
-                "COOP",
-                "PASTURE",
-            ):
-                continue
-            if not tile.get("animal"):
-                continue
-            profile = self._profile_for_animal(idx, tile["placed_day"])
-            age = calendar_day - tile["placed_day"]
-            if "FEED" not in animal_rollouts.actions_at_age(
-                tile["animal"], age, profile
-            ):
-                continue
-            if calendar_day == today and tile.get("fed_today"):
-                continue
-            count += 1
-        return count
-
-    def _feed_ops_today(self, me: dict, day: int) -> int:
-        return self._feed_ops_for_day(me, day, day)
-
-    def _fert_ops_for_day(self, me: dict, calendar_day: int) -> int:
-        count = 0
-        for idx in range(workers.NUM_TILES):
-            tile = self._tile_at(me, idx)
-            if not isinstance(tile, dict) or tile.get("kind") != "PLANT":
-                continue
-            profile = self._profile_for_tile(idx, tile, calendar_day)
-            crop = tile["crop"]
-            age = calendar_day - tile["planted_day"]
-            actions = rollouts.actions_at_age(crop, age, profile)
-            if "FERTILIZE" in actions:
-                count += 1
-        return count
-
-    def _fert_ops_today(self, me: dict, day: int) -> int:
-        return self._fert_ops_for_day(me, day)
-
-    @staticmethod
-    def _inv_shortfall(private: dict, inv_idx: int, product: str, need: int) -> int:
-        inv = Executor._inv_at(private, inv_idx).get(product, 0)
-        return max(0, need - inv)
-
-    @staticmethod
-    def _total_inv(private: dict, product: str) -> int:
-        total = private["shed"].get(product, 0)
-        for inv in private["inventories"]:
-            total += inv.get(product, 0)
-        return total
-
-    @staticmethod
-    def _buy_deficit(private: dict, product: str, need: int) -> int:
-        if need <= 0:
-            return 0
-        return max(0, need - Executor._total_inv(private, product))
-
-    @staticmethod
-    def _pickup_count(
-        private: dict, inv_idx: int, product: str, need: int
-    ) -> int:
-        shortfall = Executor._inv_shortfall(private, inv_idx, product, need)
-        shed = private["shed"].get(product, 0)
-        return min(shortfall, shed)
-
-    def _shed_pickup(
-        self,
-        worker: str,
-        pos: tuple[int, int],
-        me: dict,
-        private: dict,
-        day: int,
-    ) -> list | None:
-        """Shed-adjacent pickups for a worker standing on a shed tile."""
-        if pos not in SHED_ADJACENT:
-            return None
-
-        inv_idx = self._inv_idx(worker)
-        worker_tiles = set(workers.WORKER_TILES[worker])
-
-        fert_ops = 0
-        for idx in worker_tiles:
-            tile = self._tile_at(me, idx)
-            if not isinstance(tile, dict) or tile.get("kind") != "PLANT":
-                continue
-            profile = self._profile_for_tile(idx, tile, day)
-            crop = tile["crop"]
-            age = day - tile["planted_day"]
-            if "FERTILIZE" in rollouts.actions_at_age(crop, age, profile):
-                fert_ops += 1
-        if fert_ops > 0:
-            n = self._pickup_count(private, inv_idx, "FERTILIZER", fert_ops)
-            if n > 0:
-                return ["PICKUP", "FERTILIZER", n]
-
-        feed_ops = 0
-        for idx in worker_tiles:
-            tile = self._tile_at(me, idx)
-            if not isinstance(tile, dict) or tile.get("kind") not in (
-                "COOP",
-                "PASTURE",
-            ):
-                continue
-            if not tile.get("animal"):
-                continue
-            profile = self._profile_for_animal(idx, tile["placed_day"])
-            age = day - tile["placed_day"]
-            if "FEED" not in animal_rollouts.actions_at_age(
-                tile["animal"], age, profile
-            ):
-                continue
-            if tile.get("fed_today"):
-                continue
-            feed_ops += 1
-        if feed_ops > 0:
-            n = self._pickup_count(private, inv_idx, "WHEAT", feed_ops)
-            if n > 0:
-                return ["PICKUP", "WHEAT", n]
-
-        for entry in self.plan:
-            if entry.get("kind") != "animal":
-                continue
-            if entry["tile"] not in worker_tiles:
-                continue
-            if self._entry_start(entry) != day:
-                continue
-            animal = entry["animal"]
-            if self._inv_at(private, inv_idx).get(animal, 0) <= 0:
-                n = self._pickup_count(private, inv_idx, animal, 1)
-                if n > 0:
-                    return ["PICKUP", animal, n]
-        return None
-
-    def _sellable_product_counts(
-        self, private: dict, me: dict, *, include_inventories: bool
-    ) -> Counter[str]:
-        """Products to SELL: shed only, or shed+inventories when h=23 (before DROP)."""
-        live_animals = self._live_animal_count(me)
-        wheat_reserve = live_animals * WHEAT_FEED_RESERVE_DAYS
-        livestock = set(animal_rollouts.animal_names())
-        totals: Counter[str] = Counter()
-        for product, count in private["shed"].items():
-            if count > 0:
-                totals[product] += count
-        if include_inventories:
-            for inv in private["inventories"]:
-                for product, count in inv.items():
-                    if count > 0:
-                        totals[product] += count
-        sellable: Counter[str] = Counter()
-        for product, count in totals.items():
-            if product == "FERTILIZER":
-                continue
-            if product in livestock:
-                continue
-            if product == "WHEAT":
-                n = max(0, count - wheat_reserve)
-                if n > 0:
-                    sellable[product] = n
-            else:
-                sellable[product] = count
-        return sellable
-
-    def _defer_snake_for_market(
-        self, hour: int, market: list, me: dict, day: int
-    ) -> bool:
-        """h=0 only: wait for today's HIRE/BUY before snake (engine runs market after farmer)."""
-        if hour != 0:
-            return False
-        if workers.NUM_HIRES - len(me["hands"]) > 0:
-            return True
-        for order in market:
-            if not order:
-                continue
-            kind = order[0]
-            if kind == "BUY_SEED" and len(order) >= 2:
-                crop = order[1]
-                for entry in self.plan:
-                    if entry.get("kind") != "crop" or entry["crop"] != crop:
-                        continue
-                    if self._entry_start(entry) != day:
-                        continue
-                    tile = self._tile_at(me, entry["tile"])
-                    if tile is None or (
-                        isinstance(tile, dict) and tile.get("kind") == "WEED"
-                    ):
-                        return True
-            elif kind == "BUY_ANIMAL" and len(order) >= 2:
-                animal = order[1]
-                for entry in self.plan:
-                    if entry.get("kind") != "animal" or entry["animal"] != animal:
-                        continue
-                    if self._entry_start(entry) != day:
-                        continue
-                    tile = self._tile_at(me, entry["tile"])
-                    if isinstance(tile, dict) and tile.get("kind") in (
-                        "COOP",
-                        "PASTURE",
-                    ) and not tile.get("animal"):
-                        return True
-        return False
-
-    def _inv_has_harvest(self, private: dict, inv_idx: int) -> bool:
-        inv = self._inv_at(private, inv_idx)
-        livestock = set(animal_rollouts.animal_names())
-        return any(
-            count > 0 and product not in livestock
-            for product, count in inv.items()
-        )
-
-    def _collect_to_shed_action(
+    def _worker_action(
         self,
         worker: str,
         me: dict,
         private: dict,
-        hour: int,
-        fx: int,
-        fy: int,
-    ) -> tuple[list, str] | None:
-        """Walk to shed and DROP harvest so market can SELL same hour."""
-        inv_idx = self._inv_idx(worker)
-        if not self._inv_has_harvest(private, inv_idx):
-            return None
-        route_done = self._worker_route_done(worker)
-        if not route_done and hour < 23:
-            return None
-        if (fx, fy) in SHED_ADJACENT:
-            return ["DROP"], f"{worker} eod-drop"
-        move = _step_toward(fx, fy, *workers.SHED_DOOR)
-        return [move], f"{worker} eod->shed"
-
-    def _market_orders(
-        self,
-        obs: dict,
-        me: dict,
-        private: dict,
         day: int,
         hour: int,
-        prices: dict,
-    ) -> list:
-        hires: list = []
-        sells: list = []
-        buys: list = []
-
-        if hour == 0:
-            hires_needed = workers.NUM_HIRES - len(me["hands"])
-            for _ in range(hires_needed):
-                hires.append(["HIRE"])
-
-        needed_seeds: Counter[str] = Counter()
-        for entry in self.plan:
-            if entry.get("kind") != "crop":
-                continue
-            start = self._entry_start(entry)
-            if start != day:
-                continue
-            tile = self._tile_at(me, entry["tile"])
-            if tile is None or (
-                isinstance(tile, dict) and tile.get("kind") == "WEED"
-            ):
-                needed_seeds[entry["crop"]] += 1
-
-        if self._snake_done():
-            for entry in self.plan:
-                if entry.get("kind") != "crop":
-                    continue
-                if self._entry_start(entry) != day + 1:
-                    continue
-                tile = self._tile_at(me, entry["tile"])
-                if tile is None or (
-                    isinstance(tile, dict) and tile.get("kind") == "WEED"
-                ):
-                    needed_seeds[entry["crop"]] += 1
-
-        needed_animals: Counter[str] = Counter()
-        for entry in self.plan:
-            if entry.get("kind") != "animal":
-                continue
-            start = self._entry_start(entry)
-            if start not in (day, day + 1):
-                continue
-            tile = self._tile_at(me, entry["tile"])
-            if start == day:
-                if isinstance(tile, dict) and tile.get("kind") in (
-                    "COOP",
-                    "PASTURE",
-                ) and not tile.get("animal"):
-                    needed_animals[entry["animal"]] += 1
-            elif tile is None:
-                needed_animals[entry["animal"]] += 1
-
-        if day == rollouts.SEASON_DAYS - 1:
-            fert = private["shed"].get("FERTILIZER", 0)
-            if fert > 0:
-                sells.append(["SELL", "FERTILIZER", fert])
-
-        sellable = self._sellable_product_counts(
-            private, me, include_inventories=(hour == 23)
-        )
-        for crop, count in sellable.items():
-            sells.append(["SELL", crop, count])
-
-        seeds = private["seeds"]
-        money = me["money"]
-        for crop in rollouts.crop_names():
-            deficit = needed_seeds[crop] - seeds.get(crop, 0)
-            if deficit <= 0:
-                continue
-            cost = rollouts.seed_cost(crop)
-            affordable = min(deficit, money // cost) if cost else 0
-            if affordable > 0:
-                buys.append(["BUY_SEED", crop, affordable])
-                money -= affordable * cost
-
-        for animal in animal_rollouts.animal_names():
-            shed_count = private["shed"].get(animal, 0)
-            inv_total = sum(
-                inv.get(animal, 0) for inv in private["inventories"]
-            )
-            deficit = needed_animals[animal] - shed_count - inv_total
-            if deficit <= 0:
-                continue
-            cost = animal_rollouts.animal_cost(animal)
-            affordable = min(deficit, money // cost) if cost else 0
-            if affordable > 0:
-                buys.append(["BUY_ANIMAL", animal, affordable])
-                money -= affordable * cost
-
-        fert_ops = self._fert_ops_for_day(me, day)
-        feed_ops = self._feed_ops_for_day(me, day, day)
-        if self._snake_done() and day + 1 < rollouts.SEASON_DAYS:
-            fert_ops += self._fert_ops_for_day(me, day + 1)
-            feed_ops += self._feed_ops_for_day(me, day + 1, day)
-
-        fert_deficit = self._buy_deficit(private, "FERTILIZER", fert_ops)
-        if fert_deficit > 0:
-            fert_cost = int(prices.get("FERTILIZER", 0) or 0)
-            affordable = min(fert_deficit, money // fert_cost) if fert_cost else 0
-            if affordable > 0:
-                buys.append(["BUY_PRODUCT", "FERTILIZER", affordable])
-                money -= affordable * fert_cost
-
-        wheat_deficit = self._buy_deficit(private, "WHEAT", feed_ops)
-        if wheat_deficit > 0:
-            wheat_cost = int(prices.get("WHEAT", 0) or 0)
-            affordable = min(wheat_deficit, money // wheat_cost) if wheat_cost else 0
-            if affordable > 0:
-                buys.append(["BUY_PRODUCT", "WHEAT", affordable])
-                money -= affordable * wheat_cost
-
-        max_orders = 10
-        if hour == 23:
-            orders = sells + buys
-            while len(orders) > max_orders and buys:
-                buys.pop()
-        else:
-            orders = hires + buys + sells
-            if len(orders) > max_orders:
-                while len(hires) + len(buys) + len(sells) > max_orders and sells:
-                    sells.pop()
-                orders = hires + buys + sells
-        return orders[:max_orders]
-
-    @staticmethod
-    def _can_act_at(me: dict, x: int, y: int) -> bool:
-        return me["tiles"][y][x] != "LOCKED"
-
-    def _next_action(
-        self,
-        worker: str,
-        obs: dict,
-        me: dict,
-        private: dict,
-        day: int,
-        hour: int,
-        market: list,
+        harvest_only: bool,
     ) -> tuple[list, str]:
-        """Preamble sneak, then strict daily snake for one worker."""
         fx, fy = self._worker_pos(worker, me)
         if fx < 0:
             return ["PASS"], "no-hand"
 
-        route = workers.WORKER_ROUTE_GLOBAL[worker]
         inv_idx = self._inv_idx(worker)
 
-        if not self._can_act_at(me, fx, fy):
-            move = _step_toward(fx, fy, *workers.SHED_DOOR)
-            return [move], f"{worker} leave-locked-via-door"
+        if harvest_only:
+            act = self._harvest_only(worker, me, private, day, fx, fy, inv_idx)
+            if act:
+                return act
 
-        if (fx, fy) in SHED_ADJACENT:
-            pickup = self._shed_pickup(worker, (fx, fy), me, private, day)
-            if pickup:
-                return pickup, f"{worker} spawn-pickup"
+        if worker != "farmer":
+            if hour < workers.HAND_START_HOUR.get(worker, 1):
+                return ["PASS"], f"{worker} wait"
+            if not harvest_only:
+                pre = self._preamble_action(worker, me, private, fx, fy)
+                if pre:
+                    return pre
 
-        if hour >= 23:
-            collect = self._collect_to_shed_action(
-                worker, me, private, hour, fx, fy
-            )
-            if collect:
-                return collect
-
-        if route:
-            first_idx = route[0]
-            ftx, fty = TILE_COORDS[first_idx]
-            if (fx, fy) != (ftx, fty) and self._route_idx[worker] == 0:
-                move = _step_toward(fx, fy, ftx, fty)
-                return [move], f"{worker} approach"
-
+        route = workers.WORKER_ROUTES[worker]
         if self._route_idx[worker] >= len(route):
-            if self._worker_zone_has_pending(
-                worker, obs, me, private, day, hour, market
-            ):
+            if self._zone_pending(worker, me, private, day, inv_idx, harvest_only):
                 self._route_idx[worker] = 0
             else:
-                collect = self._collect_to_shed_action(
-                    worker, me, private, hour, fx, fy
-                )
-                if collect:
-                    return collect
-                return ["PASS"], f"{worker} route=done"
+                drop = self._drop_if_adjacent(fx, fy, private, inv_idx)
+                return drop or (["PASS"], f"{worker} done")
 
         idx = route[self._route_idx[worker]]
-        tx, ty = TILE_COORDS[idx]
-        tile_note = f"{worker} tile={idx} route={self._route_idx[worker]}"
+        tx, ty = workers.TILE_COORDS[idx]
+        st = self._tile_state[idx]
 
-        if (fx, fy) != (tx, ty):
-            move = _step_toward(fx, fy, tx, ty)
-            return [move], f"{tile_note} move"
+        if (fx, fy) == (tx, ty):
+            if not harvest_only:
+                pickup = self._shed_pickup(worker, fx, fy, private, inv_idx, me)
+                if pickup:
+                    return pickup
 
-        pickup = self._shed_pickup(worker, (fx, fy), me, private, day)
-        if pickup:
-            return pickup, f"{tile_note} pickup"
-
-        pending = self._pending_for_tile(
-            obs, me, private, idx, day, inv_idx
-        )
-        if pending:
-            for act in pending:
-                action = self._format_action(
-                    act, obs, me, private, idx, day, inv_idx
-                )
-                if action:
-                    return action, f"{tile_note} op={act}"
-            pickup = self._shed_pickup(worker, (fx, fy), me, private, day)
-            if pickup:
-                return pickup, f"{tile_note} blocked-pickup"
-            return ["PASS"], f"{tile_note} blocked"
-
-        if self._plan_blocks_route_now(
-            idx, day, me, private, hour, market, inv_idx
-        ):
-            pickup = self._shed_pickup(worker, (fx, fy), me, private, day)
-            if pickup:
-                return pickup, f"{tile_note} plan-pickup"
-            if (fx, fy) not in SHED_ADJACENT:
-                move = _step_toward(fx, fy, *workers.SHED_DOOR)
-                return [move], f"{tile_note} plan-blocked->shed"
-            return ["PASS"], f"{tile_note} plan-blocked"
-
-        self._route_idx[worker] += 1
-        if self._route_idx[worker] >= len(route):
-            if self._worker_zone_has_pending(
-                worker, obs, me, private, day, hour, market
-            ):
-                self._route_idx[worker] = 0
-            else:
-                collect = self._collect_to_shed_action(
-                    worker, me, private, hour, fx, fy
-                )
-                if collect:
-                    return collect
-                return ["PASS"], f"{worker} route=done"
-
-        next_idx = route[self._route_idx[worker]]
-        ntx, nty = TILE_COORDS[next_idx]
-        if (fx, fy) != (ntx, nty):
-            move = _step_toward(fx, fy, ntx, nty)
-            return (
-                [move],
-                f"{worker} tile={next_idx} route={self._route_idx[worker]} skip->move",
+            action = tile_ops.next_tile_action(
+                idx, me, private, day, inv_idx,
+                st["queue_idx"], st["lag"], st["gap"], st["pending_dig"],
+                harvest_only=harvest_only,
+                empty_at_dawn=self._empty_at_dawn,
+                dig_plant_ok=st["dig_plant_ok"],
             )
-        return (
-            ["PASS"],
-            f"{worker} tile={next_idx} route={self._route_idx[worker]} skip",
-        )
-
-    def _worker_zone_has_pending(
-        self,
-        worker: str,
-        obs: dict,
-        me: dict,
-        private: dict,
-        day: int,
-        hour: int,
-        market: list,
-    ) -> bool:
-        inv_idx = self._inv_idx(worker)
-        for idx in workers.WORKER_ROUTE_GLOBAL[worker]:
-            if self._planned_crop_plantable(idx, day, me, private):
-                return True
-            pending = self._pending_for_tile(
-                obs, me, private, idx, day, inv_idx
-            )
-            if not pending:
-                continue
-            for act in pending:
-                if self._format_action(
-                    act, obs, me, private, idx, day, inv_idx
+            if action:
+                if action[0] in ("PLANT", "PLACE", "BUILD_COOP", "BUILD_PASTURE"):
+                    st["active"] = True
+                    st["dig_plant_ok"] = False
+                if action[0] == "DIG" and st["pending_dig"]:
+                    st["pending_dig"] = False
+                    st["dig_plant_ok"] = True
+                    item = tile_ops.current_queue_item(idx, st["queue_idx"])
+                    if item and item.label == "STRAWBERRY":
+                        st["queue_idx"] += 1
+                if (
+                    action[0] == "HARVEST"
+                    and isinstance(_tile_at(me, idx), dict)
+                    and _tile_at(me, idx).get("crop") == "STRAWBERRY"
+                    and day - _tile_at(me, idx)["planted_day"] == tile_ops.STRAWBERRY_LAST_AGE
                 ):
-                    return True
+                    st["pending_dig"] = True
+                return action, f"{worker} t{idx + 1}"
+
+            self._route_idx[worker] += 1
+            if self._route_idx[worker] < len(route):
+                ntx, nty = workers.TILE_COORDS[route[self._route_idx[worker]]]
+                return [_step_toward(fx, fy, ntx, nty)], f"{worker} next"
+            return ["PASS"], f"{worker} tile-done"
+
+        return [_step_toward(fx, fy, tx, ty)], f"{worker} ->t{idx + 1}"
+
+    def _preamble_action(
+        self, worker: str, me: dict, private: dict, fx: int, fy: int
+    ) -> tuple[list, str] | None:
+        steps = workers.PREAMBLE.get(worker, [])
+        pi = self._preamble_idx[worker]
+        if pi >= len(steps):
+            return None
+
+        step = steps[pi]
+        inv_idx = self._inv_idx(worker)
+        inv = private["inventories"][inv_idx] if inv_idx < len(private["inventories"]) else {}
+
+        if step == "PICKUP_WHEAT":
+            need = script.wheat_pickup_needed(me, worker, self._tile_state, inv)
+            if need <= 0:
+                self._preamble_idx[worker] += 1
+                return self._preamble_action(worker, me, private, fx, fy)
+            if (fx, fy) not in workers.SHED_ADJACENT:
+                return ["PASS"], f"{worker} pre-wait-shed"
+            n = min(need, private["shed"].get("WHEAT", 0))
+            if n > 0:
+                self._preamble_idx[worker] += 1
+                return ["PICKUP", "WHEAT", n], f"{worker} pre-wheat"
+            self._preamble_idx[worker] += 1
+            return self._preamble_action(worker, me, private, fx, fy)
+
+        if step == "PICKUP_ANIMALS":
+            label = script.next_animal_pickup(
+                me, worker, self._tile_state, private, inv_idx
+            )
+            if label is None:
+                self._preamble_idx[worker] += 1
+                return self._preamble_action(worker, me, private, fx, fy)
+            if (fx, fy) not in workers.SHED_ADJACENT:
+                return ["PASS"], f"{worker} pre-wait-shed"
+            return ["PICKUP", label, 1], f"{worker} pre-animal"
+
+        self._preamble_idx[worker] += 1
+        return [step], f"{worker} pre"
+
+    def _zone_pending(
+        self, worker: str, me: dict, private: dict, day: int, inv_idx: int, harvest_only: bool
+    ) -> bool:
+        for idx in workers.WORKER_TILES[worker]:
+            st = self._tile_state[idx]
+            if tile_ops.tile_needs_work(
+                idx, me, private, day, inv_idx,
+                st["queue_idx"], st["lag"], st["gap"], st["pending_dig"],
+                harvest_only=harvest_only,
+                empty_at_dawn=self._empty_at_dawn,
+                dig_plant_ok=st["dig_plant_ok"],
+            ):
+                return True
+            if harvest_only and tile_ops.tile_has_harvestable(idx, me, day):
+                return True
         return False
 
-    def _pending_for_tile(
-        self,
-        obs: dict,
-        me: dict,
-        private: dict,
-        idx: int,
-        day: int,
-        inv_idx: int,
-    ) -> list[str]:
-        tile = self._tile_at(me, idx)
-        inv = self._inv_at(private, inv_idx)
+    def _shed_pickup(
+        self, worker: str, fx: int, fy: int, private: dict, inv_idx: int, me: dict
+    ) -> tuple[list, str] | None:
+        if (fx, fy) not in workers.SHED_ADJACENT:
+            return None
+        inv = private["inventories"][inv_idx] if inv_idx < len(private["inventories"]) else {}
 
-        if isinstance(tile, dict) and tile.get("kind") == "WEED":
-            return ["DIG"]
+        if worker != "farmer":
+            need = script.wheat_pickup_needed(me, worker, self._tile_state, inv)
+            if need > 0:
+                n = min(need, private["shed"].get("WHEAT", 0))
+                if n > 0:
+                    return ["PICKUP", "WHEAT", n], "wheat"
 
-        build_entry = self._build_entry_today(idx, day)
-        if tile is None and build_entry:
-            animal = build_entry["animal"]
-            return [animal_rollouts.build_action_for(animal)]
-
-        if isinstance(tile, dict) and tile.get("kind") == "PLANT":
-            crop = tile["crop"]
-            age = day - tile["planted_day"]
-            profile = self._profile_for_tile(idx, tile, day)
-            actions = [
-                a
-                for a in rollouts.actions_at_age(crop, age, profile)
-                if a != "PLANT"
-            ]
-            return _filter_crop_pending(tile, actions, inv)
-
-        if isinstance(tile, dict) and tile.get("kind") in ("COOP", "PASTURE"):
-            if tile.get("animal"):
-                return self._animal_pending_for_tile(
-                    idx, tile, day, inv
-                )
-            entry = self._placement_today(idx, day)
-            if entry and entry.get("kind") == "animal":
-                animal = entry["animal"]
-                if inv.get(animal, 0) > 0:
-                    return [f"PLACE {animal}"]
-            return []
-
-        if tile is None:
-            entry = self._placement_today(idx, day)
-            if entry and entry.get("kind") == "animal":
-                return [animal_rollouts.build_action_for(entry["animal"])]
-            if entry and entry.get("kind") == "crop":
-                crop = entry["crop"]
-                profile = entry.get("profile", "no_fert")
-                if not self._seeds_in_stock(private, crop):
-                    return []
-                return list(rollouts.actions_at_age(crop, 0, profile))
-
-        return []
-
-    def _animal_pending_for_tile(
-        self, idx: int, tile: dict, day: int, inv: dict
-    ) -> list[str]:
-        animal = tile["animal"]
-        profile = self._profile_for_animal(idx, tile["placed_day"])
-        age = day - tile["placed_day"]
-        raw = animal_rollouts.actions_at_age(animal, age, profile)
-        wheat = inv.get("WHEAT", 0)
-        pending: list[str] = []
-        for action in raw:
-            if action == "PLACE":
-                continue
-            if action == "FEED" and (tile.get("fed_today") or wheat <= 0):
-                continue
-            if action == "CARE" and tile.get("cared_today"):
-                continue
-            if action == "HARVEST" and tile.get("yield_units", 0) <= 0:
-                continue
-            if action == "COLLECT_FERTILIZER" and not tile.get(
-                "fertilizer_available"
-            ):
-                continue
-            pending.append(action)
-        if tile.get("yield_units", 0) > 0 and "HARVEST" not in pending:
-            pending.insert(0, "HARVEST")
-        return pending
-
-    def _format_action(
-        self,
-        action: str,
-        obs: dict,
-        me: dict,
-        private: dict,
-        idx: int,
-        day: int,
-        inv_idx: int,
-    ) -> list | None:
-        tile = self._tile_at(me, idx)
-        inv = self._inv_at(private, inv_idx)
-
-        if action in ("BUILD_COOP", "BUILD_PASTURE"):
-            if tile is not None:
-                return None
-            return [action]
-
-        if action.startswith("PLACE"):
-            animal = action.split()[1] if " " in action else None
-            if not animal:
-                entry = self._placement_today(idx, day)
-                if not entry or entry.get("kind") != "animal":
-                    return None
-                animal = entry["animal"]
-            if inv.get(animal, 0) <= 0:
-                return None
-            if not isinstance(tile, dict) or tile.get("kind") not in (
-                "COOP",
-                "PASTURE",
-            ):
-                return None
-            if tile.get("animal"):
-                return None
-            profile = "no_care"
-            entry = self._placement_today(idx, day)
-            if entry:
-                profile = entry.get("profile", "no_care")
-            self.animal_profiles[(idx, day)] = profile
-            return ["PLACE", animal]
-
-        if action == "PLANT":
-            if tile is not None:
-                return None
-            entry = self._placement_today(idx, day)
-            crop = entry["crop"] if entry else None
-            if not crop:
-                return None
-            if private["seeds"].get(crop, 0) <= 0:
-                return None
-            profile = entry.get("profile", "no_fert") if entry else "no_fert"
-            self.plant_profiles[(idx, day)] = profile
-            return ["PLANT", crop]
-
-        if action == "FERTILIZE":
-            if inv.get("FERTILIZER", 0) <= 0:
-                return None
-            return ["FERTILIZE"]
-
-        if action == "FEED":
-            if inv.get("WHEAT", 0) <= 0:
-                return None
-            return ["FEED"]
-
-        if action in ("WATER", "HARVEST", "DIG", "CARE", "COLLECT_FERTILIZER"):
-            return [action]
-
+            label = script.next_animal_pickup(
+                me, worker, self._tile_state, private, inv_idx
+            )
+            if label:
+                return ["PICKUP", label, 1], "animal"
         return None
 
-    @staticmethod
-    def _crop_harvest_today(tile, day: int, profile: str = "no_fert") -> bool:
-        if not isinstance(tile, dict) or tile.get("kind") != "PLANT":
-            return False
-        crop = tile["crop"]
-        age = day - tile["planted_day"]
-        if age in rollouts.harvest_ages(crop, profile):
-            return True
-        actions = rollouts.actions_at_age(crop, age, profile)
-        return "HARVEST" in actions and tile.get("yield_units", 0) > 0
+    def _drop_if_adjacent(
+        self, fx: int, fy: int, private: dict, inv_idx: int
+    ) -> tuple[list, str] | None:
+        if (fx, fy) not in workers.SHED_ADJACENT:
+            return None
+        inv = private["inventories"][inv_idx] if inv_idx < len(private["inventories"]) else {}
+        if any(v > 0 for v in inv.values()):
+            return ["DROP"], "drop"
+        return None
 
-    @staticmethod
-    def _animal_harvest_today(tile, day: int, profile: str = "no_care") -> bool:
-        if not isinstance(tile, dict) or tile.get("kind") not in ("COOP", "PASTURE"):
-            return False
-        if not tile.get("animal"):
-            return False
-        animal = tile["animal"]
-        age = day - tile["placed_day"]
-        if age in animal_rollouts.harvest_ages(animal, profile):
-            return tile.get("yield_units", 0) > 0
-        actions = animal_rollouts.actions_at_age(animal, age, profile)
-        return "HARVEST" in actions and tile.get("yield_units", 0) > 0
+    def _harvest_only(
+        self, worker: str, me: dict, private: dict, day: int, fx: int, fy: int, inv_idx: int
+    ) -> tuple[list, str] | None:
+        if self._zone_pending(worker, me, private, day, inv_idx, True):
+            return None
 
-    @staticmethod
-    def _tile_at(me: dict, idx: int):
-        x, y = TILE_COORDS[idx]
-        return me["tiles"][y][x]
+        drop = self._drop_if_adjacent(fx, fy, private, inv_idx)
+        if drop:
+            return drop
 
+        if (fx, fy) != workers.SHED_DOOR:
+            return [_step_toward(fx, fy, *workers.SHED_DOOR)], f"{worker} ->shed"
 
-def _empty_tile_indices(me: dict) -> frozenset[int]:
-    empty: set[int] = set()
-    for idx in range(workers.NUM_TILES):
-        if Executor._tile_at(me, idx) is None:
-            empty.add(idx)
-    return frozenset(empty)
-
-
-def _filter_crop_pending(
-    tile: dict, actions: list[str], inv: dict | None = None
-) -> list[str]:
-    pending = []
-    for action in actions:
-        if action == "WATER" and tile.get("watered_today"):
-            continue
-        if action == "HARVEST" and tile.get("yield_units", 0) <= 0:
-            continue
-        if (
-            action == "FERTILIZE"
-            and inv is not None
-            and inv.get("FERTILIZER", 0) <= 0
-        ):
-            continue
-        pending.append(action)
-    return pending
-
-
-def _step_toward(fx: int, fy: int, tx: int, ty: int) -> str:
-    if tx > fx:
-        return "EAST"
-    if tx < fx:
-        return "WEST"
-    if ty > fy:
-        return "SOUTH"
-    if ty < fy:
-        return "NORTH"
-    return "PASS"
-
-
-_controller = Executor()
+        return ["PASS"], f"{worker} shed-wait"
 
 
 def step(obs: dict) -> dict:
-    return _controller.step(obs)
+    global _EXECUTOR
+    if _EXECUTOR is None:
+        _EXECUTOR = Executor()
+    return _EXECUTOR.step(obs)

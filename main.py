@@ -1,4 +1,4 @@
-"""Live set-packing plant agent."""
+"""Scripted one-land farming agent."""
 
 from agent.executor import step as _step
 
