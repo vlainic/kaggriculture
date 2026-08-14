@@ -95,21 +95,23 @@ def _build_tile_queues() -> dict[int, list[QueueItem]]:
     q: dict[int, list[QueueItem]] = {}
 
     for idx in range(3):
-        q[idx] = _wheat(6)
+        q[idx] = _carrot(1) + _wheat(5)
     for idx in range(3, 6):
         q[idx] = _carrot(2) + _wheat(4)
     for idx in range(6, 9):
         q[idx] = _melon(2, start_lag=1) + _wheat(1)
 
-    for idx in (9, 10, 15, 16):
+    for idx in (9, 15):  # tiles 10, 16
         q[idx] = _wheat(1) + [_animal("SHEEP")]
-    for idx in (11, 12, 17, 18):
-        q[idx] = _wheat(1) + _melon(2, replant_gap=1)
+    for idx in (10, 16):  # tiles 11, 17 — carrot before sheep
+        q[idx] = _wheat(1) + _carrot(1) + [_animal("SHEEP")]
+    for idx in (11, 12, 17, 18):  # tiles 12,13,18,19
+        q[idx] = _wheat(1) + _melon(2, replant_gap=3)
     for idx in (13, 14, 19, 20):
         q[idx] = _wheat(1) + _melon(2, start_lag=1, replant_gap=1)
 
     q[21] = _wheat(1) + [_animal("COW")]
-    q[22] = _wheat(1) + [_animal("COW", start_lag=1)]
+    q[22] = _wheat(2) + [_animal("COW")]  # tile 23: wheat, wheat, cow
     q[23] = _wheat(1) + [
         QueueItem("crop", "STRAWBERRY", profile=CROP_PROFILE),
         QueueItem("crop", "CARROT", profile=CROP_PROFILE, dig_before=True),

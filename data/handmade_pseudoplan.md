@@ -5,7 +5,8 @@ https://docs.google.com/spreadsheets/d/1H1mb1uw7uObnRZ80nzWn6JVygtBHWfsCDZ4B99s8
 ## Farmer: tiles 1-9
 
 Tiles 1,2,3:
-- 6 wheets with 2-3xWater-2 ops
+- 1 carrot with 2-2xWater-2 ops
+- then 5 wheats with 2-3xWater-2 ops
 Tiles 4,5,6:
 - 2 carrots with 2-2xWater-2 ops
 - then 4 wheets with 2-2xWater-2 ops
@@ -17,11 +18,14 @@ Tiles 7,8,9 (1 day lag):
 
 All 6 tiles start with 1 wheet each 2-2xWater-2 ops, then...
 
-Tile 10,11 & 16,17:
-- Sheeps with doing it all: feed, care, collect fert, harvest every 3 when possible
+Tile 10 & 16:
+- Sheep with doing it all: feed, care, collect fert, harvest every 3 when possible
+Tile 11 & 17:
+- 1 carrot with 2-2xWater-2 ops (delays second sheep)
+- then sheep with doing it all: feed, care, collect fert, harvest every 3 when possible
 Tile 12,13 & 18,19:
 - 2 melons with 2-9xWater-2 ops
-    - note: 1 day break between harvest and plant
+    - note: 3 day break between harvest and plant
 Tiles 14,15 & 20,21:
 - 2 melons with 2-9xWater-2 ops
     - note: 1 tile break between harvest and plant
@@ -34,8 +38,8 @@ All 6 tiles start with 1 wheat each 2-2xWater-2 ops, then...
 Tile 22:
 - Cow with doint it all: feed, care, collect fert, harvest every 3 when possible
 Tile 23:
-- Cow with doint it all: feed, care, collect fert, harvest every 3 when possible
-    - note: 1 day lag in respect to tile 22
+- 2 wheats with 2-2xWater-2 ops (~5 day productive lag vs tile 22 cow)
+- then cow with doing it all: feed, care, collect fert, harvest every 3 when possible
 Tile 24:
 - Strawbery with non-fert patern: 2-8xWater-4x(Water->Harvest) ops
 - then 2 carrots with 2-2xWater-2 ops
