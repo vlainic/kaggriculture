@@ -122,7 +122,9 @@ def _build_tile_queues() -> dict[int, list[QueueItem]]:
     return q
 
 
-TILE_QUEUES: dict[int, list[QueueItem]] = _build_tile_queues()
+from agent.planner import get_tile_queues
+
+TILE_QUEUES: dict[int, list[QueueItem]] = get_tile_queues(_build_tile_queues)
 
 
 def worker_for_tile(idx: int) -> str:
