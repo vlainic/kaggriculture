@@ -1,0 +1,30 @@
+---
+description: Never submit to Kaggle without explicit user request — agents and automation only
+alwaysApply: true
+---
+# Kaggle submission — agents must NOT submit
+
+**Cursor agents, subagents, and automation must NEVER submit to Kaggle unless the user explicitly asks in that conversation** (e.g. "submit to Kaggle", "run kaggle competitions submit").
+
+## Forbidden without explicit user request
+
+- Running `scripts/smoke_and_submit.sh` (even with `--submit`)
+- Running `kaggle competitions submit`
+- Any script, Makefile target, or CI step that uploads a submission bundle
+- Treating "verify", "test plan", "rebuild", or plan todo "resubmit" as permission to submit
+
+## Allowed for agents (local only)
+
+- `scripts/smoke_test.sh` — build tarball + local 720-step smoke test
+- Inline `kaggle_environments` smoke: `make("kaggriculture", ...); env.run([...])`
+- Building `submission.tar.gz` without uploading (if the user asked to build the bundle)
+
+## When the user explicitly asks to submit
+
+- Run `scripts/smoke_and_submit.sh --submit "their message"` (not the smoke-only script)
+- Or run `kaggle competitions submit` with the path and message they specify
+- Do not submit on your own initiative after fixes, smoke passes, or completed plans
+
+## Humans
+
+Users may run `scripts/smoke_and_submit.sh --submit "message"` locally anytime.

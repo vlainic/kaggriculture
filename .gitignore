@@ -4,5 +4,5 @@ vendor/
 vendor_wheels/
 build/
 submission.tar.gz
-.cursor/
+# .cursor/
 submissions/

@@ -1,85 +1,69 @@
 # System Patterns
 
-## ⚠️ Legacy: WSP multi-worker agent (ABANDONED Aug 12, 2026)
-
-The following was built and **judged a failure**. Documented for archeology only. **Do not extend** without explicit user request. See `docs/weighted_set_packing_failer.md`.
+## Current: handmade-chain assignment + snake executor (Aug 15)
 
 ```
-obs → Executor.step
-  ├─ hour0: reset routes; assign_hand_workers
-  ├─ replan: day 0 → CP-SAT solve_plan (~8.7k candidates, 3–25s)
-  │          later → patch_plan (greedy, empty tiles)
-  ├─ market: HIRE/BUY/SELL (≤10 orders)
-  ├─ h=0: often PASS all workers (market-hour) — engine runs market after farmer
-  └─ h≥1: per-worker snake → tile ops → shed trips → route=done PASS / eod DROP
+import:
+  data/{crop,animal}_rollouts.json + handmade_dp_candidates.json
+  stamp chains → CP-SAT count[zone][chain]
+  decode counts onto WORKER_TILES → TILE_QUEUES
+
+obs → executor.step
+  ├─ hour0: reset routes; assign_hand_workers; HIRE / BUY
+  ├─ market: dump SELL from shed (≤10 orders)
+  └─ snake: preamble (hire wheat pickup if animals) → tile ops → shed
 ```
 
-**Failure modes:** planner calendar ≠ executor physics; zone-starved farmer; 8–15 PASS/worker/day; not scalable multi-land.
+`main.py` → `executor.step`. Planner runs **once at import**, not per turn.
+
+### Assignment master (planner + notebook)
+
+- **Vars:** `count[zone][chain]` IntVar `0..zone_size`, `sum == zone_size`. Not `x[tile][chain]` — tiles in a zone are interchangeable; per-tile binaries explode permutation symmetry (183s–40min OPTIMAL proofs).
+- **Ops:** stamped tile actions + per-chain pickups (animal place, wheat-on-FEED, fert). Hire preamble = zone-day 0/1: `preamble <=> animal_count >= 1` via `preamble <= animal_count` and `animal_count <= preamble * zsize`. Farmer zone: no preamble. Do **not** use 654-term `OnlyEnforceIf` over tiles.
+- **Cash / W/F:** daily `balance` chain (domain 0–200k), inventory levels, buy shortfall at I0 ($25 wheat / $100 fert).
+- **Decode:** pop tiles from `WORKER_TILES[zone]` in order; any matching assignment is valid.
+- **Notebook** (`OneLand-Assignement-Handmade-Candidates.ipynb`): can prove OPTIMAL (~66s, obj 83620, `num_workers=1`, no timeout). Optional `OBJECTIVE_GOOD_ENOUGH`.
+- **Planner:** `OBJECTIVE_GOOD_ENOUGH = 80_000` + callback, `num_workers=1`, **no** `max_time_in_seconds`. Import ~0.8s FEASIBLE.
+
+### Executor (do not “fix” via planner)
+
+- Snake routes, `SHED_DOOR = (4,4)` for locked-hand PICKUP
+- Hire preamble at **runtime** (wheat pickup when zone has animals) — master also counts it now
+- `market.py` sells entire shed each hour — Open-I0 plan vs glut is a **sell** problem
+
+### Engine facts
+
+- Turn order: farmer/hands → market → farm update → day rollover
+- h=0: seeds from market are not in `private["seeds"]` during same-hour farmer action → PASS (`market-hour`)
+- SELL from shed; harvest goes to worker inv; eod dump inv→shed
+- Daily re-hire
 
 ---
 
-## Patterns worth keeping (any future agent)
+## Anti-patterns
 
-### Worker spatial model (`agent/workers.py`)
-
-| Worker | Tiles | NET_TILE_OPS | Spawn |
-| --- | --- | --- | --- |
-| farmer | 9 | 15 | `(4,4)` unlocked |
-| hire1 | 6 | 15 | `(5,4)` LOCKED |
-| hire2 | 6 | 15 | `(4,5)` LOCKED |
-| hire3 | 4 | 14 | `(5,5)` LOCKED |
-
-- **`SHED_DOOR = (4,4)`** — locked hands must route here for PICKUP.
-- **`assign_hand_workers()`** — spawn position → worker zone.
-
-### Engine facts (planner must respect)
-
-- **Turn order:** farmer/hands act → then market → then farm update → day rollover.
-- **h=0:** seeds bought by market are **not** in `private["seeds"]` during farmer action same hour.
-- **Harvest** → worker inv; **SELL** from shed (unless explicitly including inv); engine dumps inv→shed at day rollover.
-- **Daily re-hire** — hands cleared each day; HIRE at h=0 required.
-
-### Diagnostics
-
-- **`[snap]`** at h=0: money, `{worker}_empty`, prices, shop demand (`executor.py`).
-- **`experiments/live_analysis.ipynb`:** PASS bars, zone empty, plan Gantt, money (end = next-day h=0), Kaggle reward dot.
-
-### Submission workflow
-
-| Script | Who |
-| --- | --- |
-| `scripts/smoke_test.sh` | Agents + users (local only) |
-| `scripts/smoke_and_submit.sh --submit` | Users only |
-| Agents never `kaggle competitions submit` without explicit user ask |
+1. **Per-tile assignment binaries** when constraints are zone-shared — permutation symmetry, not model size.
+2. **Reified OR via two `OnlyEnforceIf` linear sums** for preamble — use count + linear 0/1.
+3. **Season-long WSP** (abandoned Aug 12) — tile ops ≠ executor turns; candidate explosion.
+4. **Trusting solver obj as bank** — I0 prices; dump sells crash melon.
+5. **CP-SAT `num_workers=8`** while the user has other jobs — keep 1 unless asked.
+6. **Committing `.cursor/`** — gitignored; Cursor will refuse the commit.
 
 ---
 
-## Anti-patterns (learned from WSP)
+## Legacy WSP (do not extend)
 
-1. **Season-long CP-SAT** on 25+ tiles with 4 workers — too slow, too brittle, wrong abstraction.
-2. **Separate planner + executor** without shared movement/shed/market model — endless coupling bugs.
-3. **Weight bonuses** to fix zone balance — games objective (e.g. all placements day 24–25).
-4. **Trusting smoke reward** without live_analysis PASS/zone charts.
-5. **`[snap]` h=23 as end-of-day money** — logs before actions; use next-day h=0 or Kaggle score.
+See `docs/weighted_set_packing_failer.md`. Old day-0 ~8.7k set-packing candidates. Current `planner.py` is **not** that code.
 
 ---
 
-## Recommended future architecture (not implemented)
-
-- **Executor-first** or **short-horizon** (3–7 day) replan with bounded candidates.
-- **Per-zone heuristics** or small MILP per worker, not one global season pack.
-- **Farmer-first staging** before filling hire zones.
-- Master layer (hire/land/shop) separate from tile ops.
-
----
-
-## Repo layout (current — legacy WSP code present)
+## Repo layout
 
 ```
-main.py → agent/executor.py → agent/planner.py (CP-SAT)
-agent/{workers,rollouts,animal_rollouts,ops_budget}.py
-data/{crop_rollouts,animal_rollouts}.json
-docs/weighted_set_packing_failer.md   ← read this before touching planner
-experiments/live_analysis.ipynb
+main.py → agent/executor.py → script.TILE_QUEUES
+agent/planner.py          # zone-count CP-SAT at import
+agent/{script,workers,tile_ops,market,rollouts,animal_rollouts}.py
+data/{crop_rollouts,animal_rollouts,handmade_dp_candidates}.json
+experiments/OneLand-Assignement-Handmade-Candidates.ipynb
 scripts/{smoke_test,smoke_and_submit,vendor_ortools}.sh
 ```
