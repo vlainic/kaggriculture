@@ -42,6 +42,19 @@ Agents never submit without explicit user request (`kaggle-submission.mdc`).
 
 Notebook OPTIMAL (same model, threshold 0): ~66s, obj 83620. Do not expect that at Kaggle import.
 
+## Mockup SCIP (`Assignement-Master-Mockup.ipynb`)
+
+Same zone-count MIP as OneLand (counts, daily W/F, cash chain, I0 buys $25/$100, hire $4/day). **SCIP via `pywraplp`**, not CP-SAT. No hire preamble. Yields via `harvest_map`. FEED is inventory, not seed cost.
+
+| Knob | Value |
+| --- | --- |
+| Backend | SCIP |
+| TimeLimit (notebook) | 10s + `limits/gap=0.15` |
+| Typical 10s | obj ~83820, 588 vars |
+| 60s smoke OPTIMAL | obj ~83910, cash floor 695, wheat buy 16 |
+
+SCIP is slower than OneLand CP-SAT (~0.8s to 80k). Do not switch backends unless asked.
+
 ## Diagnostics
 
 - Logs: `[planner]`, `[exec]`, `[snap]`, `Player 0: reward=`
@@ -58,7 +71,8 @@ Notebook OPTIMAL (same model, threshold 0): ~66s, obj 83620. Do not expect that 
 | Doc | Purpose |
 | --- | --- |
 | `docs/project_overview.md` | Game rules |
-| `experiments/OneLand-Assignement-Handmade-Candidates.ipynb` | Zone-count master (source of planner model) |
+| `experiments/OneLand-Assignement-Handmade-Candidates.ipynb` | Zone-count CP-SAT master (source of planner model) |
+| `experiments/Assignement-Master-Mockup.ipynb` | SCIP sibling — economy aligned, no preamble |
 | `docs/weighted_set_packing_failer.md` | Old WSP — do not resume |
 | `.cursor/skills/kaggriculture-domain` | Mechanics |
 | `.cursor/skills/kaggriculture-agent-conventions` | Agent conventions |

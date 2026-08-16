@@ -29,5 +29,6 @@ Planner scores harvests at **I0 / base price** (melon $250). Executor `_sell_ord
 - Plan/Act via `core-plan-act` skill
 - Agents: `smoke_test.sh` only; never submit without explicit ask
 - CP-SAT `num_workers = 1` when the user has other jobs on the machine
+- Mockup `Assignement-Master-Mockup.ipynb` stays on SCIP; do not add hire preamble or extra PICKUPs unless asked
 - Do not commit `.cursor/` (gitignore); do not stage `logs.txt`
 - `live_analysis.ipynb` for post-run diagnosis from Kaggle logs

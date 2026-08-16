@@ -36,5 +36,6 @@ Heuristic/rule-based Python agent (no ML/RL pipeline) that wins on the ladder.
 ## Key references
 
 - Rules: `docs/project_overview.md`
-- Assignment notebook: `experiments/OneLand-Assignement-Handmade-Candidates.ipynb`
+- Assignment notebook (CP-SAT, planner source): `experiments/OneLand-Assignement-Handmade-Candidates.ipynb`
+- Mockup notebook (SCIP, no preamble): `experiments/Assignement-Master-Mockup.ipynb`
 - WSP failure (do not resume): `docs/weighted_set_packing_failer.md`
