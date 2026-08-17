@@ -212,10 +212,16 @@ def next_animal_pickup(
     return None
 
 
+def _inventory_index(worker: str) -> int:
+    if worker == "farmer":
+        return 0
+    return HAND_WORKERS.index(worker) + 1
+
+
 def total_wheat_feed_need(me: dict, tile_state: dict, private: dict) -> int:
     total = 0
-    for i, worker in enumerate(HAND_WORKERS):
-        inv_idx = i + 1
+    for worker in WORKERS:
+        inv_idx = _inventory_index(worker)
         inv = (
             private["inventories"][inv_idx]
             if inv_idx < len(private["inventories"])

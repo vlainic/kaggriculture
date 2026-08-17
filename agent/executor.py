@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from agent import market, rollouts, script, tile_ops, workers
+from agent import market, planner, rollouts, script, tile_ops, workers
 
 _EXECUTOR: "Executor | None" = None
 
@@ -68,6 +68,10 @@ class Executor:
 
         if hour == 0:
             self._on_new_day(me, day)
+            try:
+                planner.replan(obs, script.TILE_QUEUES, self._tile_state)
+            except Exception as exc:
+                _log(f"[planner] replan failed d={day}: {exc}")
 
         if hour == 0:
             self._log_snap(obs, me, day, hour)
@@ -302,18 +306,17 @@ class Executor:
             return None
         inv = private["inventories"][inv_idx] if inv_idx < len(private["inventories"]) else {}
 
-        if worker != "farmer":
-            need = script.wheat_pickup_needed(me, worker, self._tile_state, inv)
-            if need > 0:
-                n = min(need, private["shed"].get("WHEAT", 0))
-                if n > 0:
-                    return ["PICKUP", "WHEAT", n], "wheat"
+        need = script.wheat_pickup_needed(me, worker, self._tile_state, inv)
+        if need > 0:
+            n = min(need, private["shed"].get("WHEAT", 0))
+            if n > 0:
+                return ["PICKUP", "WHEAT", n], "wheat"
 
-            label = script.next_animal_pickup(
-                me, worker, self._tile_state, private, inv_idx
-            )
-            if label:
-                return ["PICKUP", label, 1], "animal"
+        label = script.next_animal_pickup(
+            me, worker, self._tile_state, private, inv_idx
+        )
+        if label:
+            return ["PICKUP", label, 1], "animal"
         return None
 
     def _drop_if_adjacent(

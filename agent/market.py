@@ -12,6 +12,9 @@ SELLABLE = frozenset(
     rollouts.CROP_NAMES + animal_rollouts.ANIMAL_PRODUCTS + ("FERTILIZER",)
 )
 LIVESTOCK = frozenset(animal_rollouts.animal_names())
+PREMIUM_DRIP = frozenset({"STRAWBERRY", "MELON", "MILK", "WOOL"})
+DRIP_PER_HOUR = 1
+HIRE_COST = 4
 
 
 def _tile_at(me: dict, idx: int):
@@ -136,7 +139,7 @@ def needed_buys(
         if build_item and _tile_at(me, idx) is None:
             pass
 
-    for worker in workers.HAND_WORKERS:
+    for worker in workers.WORKERS:
         if script.zone_needs_feed_wheat(me, worker, tile_state):
             wheat_need = max(wheat_need, script.WHEAT_PICKUP_PER_HAND)
 
@@ -171,6 +174,10 @@ def build_orders(
 
     seeds = private["seeds"]
     money = int(me["money"])
+    wheat_price = int(prices.get("WHEAT", 0) or 25)
+    feed_reserve = wheat_feed_need * wheat_price
+    hire_reserve = HIRE_COST * max(0, workers.NUM_HIRES - len(me["hands"]))
+    spendable = max(0, money - feed_reserve - hire_reserve)
 
     if day < script.SEASON_LAST_DAY:
         for crop, count in needed_seeds.items():
@@ -178,9 +185,10 @@ def build_orders(
             if deficit <= 0:
                 continue
             cost = rollouts.seed_cost(crop)
-            buy = min(deficit, money // cost) if cost else 0
+            buy = min(deficit, spendable // cost) if cost else 0
             if buy > 0:
                 orders.append(["BUY_SEED", crop, buy])
+                spendable -= buy * cost
                 money -= buy * cost
 
         shed = private["shed"]
@@ -191,9 +199,10 @@ def build_orders(
             if deficit <= 0:
                 continue
             cost = animal_rollouts.animal_cost(animal)
-            buy = min(deficit, money // cost) if cost else 0
+            buy = min(deficit, spendable // cost) if cost else 0
             if buy > 0:
                 orders.append(["BUY_ANIMAL", animal, buy])
+                spendable -= buy * cost
                 money -= buy * cost
 
         wheat_in_shed = shed.get("WHEAT", 0)
@@ -234,6 +243,10 @@ def _sell_orders(
                 sells.append(["SELL", "WHEAT", excess])
         elif product == "FERTILIZER":
             sells.append(["SELL", "FERTILIZER", count])
+        elif product in PREMIUM_DRIP:
+            qty = min(count, DRIP_PER_HOUR)
+            if qty > 0:
+                sells.append(["SELL", product, qty])
         else:
             sells.append(["SELL", product, count])
     return sells
