@@ -41,10 +41,24 @@ def _zone_empty(me: dict, worker: str) -> int:
     return n
 
 
+def _manhattan(fx: int, fy: int, tx: int, ty: int) -> int:
+    return abs(fx - tx) + abs(fy - ty)
+
+
+def _inv_nonempty(private: dict, inv_idx: int) -> bool:
+    inv = (
+        private["inventories"][inv_idx]
+        if inv_idx < len(private["inventories"])
+        else {}
+    )
+    return any(v > 0 for v in inv.values())
+
+
 class Executor:
     def __init__(self) -> None:
         self._route_idx = {w: 0 for w in workers.WORKERS}
         self._preamble_idx = {w: 0 for w in workers.WORKERS}
+        self._endgame_done = {w: set() for w in workers.WORKERS}
         self._tile_state: dict[int, dict] = {}
         self._empty_at_dawn: set[int] = set()
         for idx in range(workers.NUM_TILES):
@@ -68,10 +82,11 @@ class Executor:
 
         if hour == 0:
             self._on_new_day(me, day)
-            try:
-                planner.replan(obs, script.TILE_QUEUES, self._tile_state)
-            except Exception as exc:
-                _log(f"[planner] replan failed d={day}: {exc}")
+            if day < script.SEASON_LAST_DAY:
+                try:
+                    planner.replan(obs, script.TILE_QUEUES, self._tile_state)
+                except Exception as exc:
+                    _log(f"[planner] replan failed d={day}: {exc}")
 
         if hour == 0:
             self._log_snap(obs, me, day, hour)
@@ -81,7 +96,7 @@ class Executor:
         )
         harvest_only = day >= script.SEASON_LAST_DAY
 
-        if market.defer_farmer_hour0(hour, orders, me):
+        if market.defer_farmer_hour0(hour, orders, me, day):
             farmer = ["PASS"]
             hands = [["PASS"] for _ in me["hands"]]
             note = "market-hour"
@@ -136,6 +151,8 @@ class Executor:
         self._empty_at_dawn = {
             idx for idx in range(workers.NUM_TILES) if _tile_at(me, idx) is None
         }
+        if day >= script.SEASON_LAST_DAY:
+            self._endgame_done = {w: set() for w in workers.WORKERS}
 
     def _log_snap(self, obs: dict, me: dict, day: int, hour: int) -> None:
         shops = obs.get("town", {}).get("unlocked_shops", [])
@@ -177,18 +194,18 @@ class Executor:
 
         inv_idx = self._inv_idx(worker)
 
+        if worker != "farmer":
+            start_hour = 0 if harvest_only else workers.HAND_START_HOUR.get(worker, 1)
+            if hour < start_hour:
+                return ["PASS"], f"{worker} wait"
+
         if harvest_only:
-            act = self._harvest_only(worker, me, private, day, fx, fy, inv_idx)
-            if act:
-                return act
+            return self._endgame_action(worker, me, private, day, fx, fy, inv_idx)
 
         if worker != "farmer":
-            if hour < workers.HAND_START_HOUR.get(worker, 1):
-                return ["PASS"], f"{worker} wait"
-            if not harvest_only:
-                pre = self._preamble_action(worker, me, private, fx, fy)
-                if pre:
-                    return pre
+            pre = self._preamble_action(worker, me, private, fx, fy)
+            if pre:
+                return pre
 
         route = workers.WORKER_ROUTES[worker]
         if self._route_idx[worker] >= len(route):
@@ -241,6 +258,111 @@ class Executor:
             return ["PASS"], f"{worker} tile-done"
 
         return [_step_toward(fx, fy, tx, ty)], f"{worker} ->t{idx + 1}"
+
+    def _endgame_tile_needs_work(
+        self,
+        idx: int,
+        me: dict,
+        private: dict,
+        day: int,
+        inv_idx: int,
+    ) -> bool:
+        if tile_ops.tile_has_harvestable(idx, me, day):
+            return True
+        st = self._tile_state[idx]
+        return (
+            tile_ops.next_tile_action(
+                idx,
+                me,
+                private,
+                day,
+                inv_idx,
+                st["queue_idx"],
+                st["lag"],
+                st["gap"],
+                st["pending_dig"],
+                harvest_only=True,
+                empty_at_dawn=self._empty_at_dawn,
+                dig_plant_ok=st["dig_plant_ok"],
+            )
+            is not None
+        )
+
+    def _endgame_nearest_target(
+        self,
+        worker: str,
+        fx: int,
+        fy: int,
+        me: dict,
+        private: dict,
+        day: int,
+        inv_idx: int,
+    ) -> int | None:
+        best_idx: int | None = None
+        best_dist = 10**9
+        for idx in workers.WORKER_TILES[worker]:
+            if idx in self._endgame_done[worker]:
+                continue
+            if not self._endgame_tile_needs_work(idx, me, private, day, inv_idx):
+                continue
+            tx, ty = workers.TILE_COORDS[idx]
+            dist = _manhattan(fx, fy, tx, ty)
+            if dist < best_dist:
+                best_dist = dist
+                best_idx = idx
+        return best_idx
+
+    def _endgame_action(
+        self,
+        worker: str,
+        me: dict,
+        private: dict,
+        day: int,
+        fx: int,
+        fy: int,
+        inv_idx: int,
+    ) -> tuple[list, str]:
+        drop = self._drop_if_adjacent(fx, fy, private, inv_idx)
+        if drop:
+            self._endgame_done[worker].clear()
+            return drop
+
+        target = self._endgame_nearest_target(
+            worker, fx, fy, me, private, day, inv_idx
+        )
+        if target is None:
+            if _inv_nonempty(private, inv_idx):
+                if (fx, fy) in workers.SHED_ADJACENT:
+                    return ["DROP"], f"{worker} drop"
+                return [_step_toward(fx, fy, *workers.SHED_DOOR)], f"{worker} ->shed"
+            return ["PASS"], f"{worker} done"
+
+        tx, ty = workers.TILE_COORDS[target]
+        if (fx, fy) != (tx, ty):
+            return [_step_toward(fx, fy, tx, ty)], f"{worker} ->t{target + 1}"
+
+        st = self._tile_state[target]
+        action = tile_ops.next_tile_action(
+            target,
+            me,
+            private,
+            day,
+            inv_idx,
+            st["queue_idx"],
+            st["lag"],
+            st["gap"],
+            st["pending_dig"],
+            harvest_only=True,
+            empty_at_dawn=self._empty_at_dawn,
+            dig_plant_ok=st["dig_plant_ok"],
+        )
+        if action:
+            if action[0] in ("HARVEST", "COLLECT_FERTILIZER"):
+                self._endgame_done[worker].add(target)
+            return action, f"{worker} t{target + 1}"
+
+        self._endgame_done[worker].add(target)
+        return ["PASS"], f"{worker} t{target + 1}-skip"
 
     def _preamble_action(
         self, worker: str, me: dict, private: dict, fx: int, fy: int
@@ -328,21 +450,6 @@ class Executor:
         if any(v > 0 for v in inv.values()):
             return ["DROP"], "drop"
         return None
-
-    def _harvest_only(
-        self, worker: str, me: dict, private: dict, day: int, fx: int, fy: int, inv_idx: int
-    ) -> tuple[list, str] | None:
-        if self._zone_pending(worker, me, private, day, inv_idx, True):
-            return None
-
-        drop = self._drop_if_adjacent(fx, fy, private, inv_idx)
-        if drop:
-            return drop
-
-        if (fx, fy) != workers.SHED_DOOR:
-            return [_step_toward(fx, fy, *workers.SHED_DOOR)], f"{worker} ->shed"
-
-        return ["PASS"], f"{worker} shed-wait"
 
 
 def step(obs: dict) -> dict:

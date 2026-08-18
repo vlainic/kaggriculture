@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
 from typing import Callable
 
-from agent import animal_rollouts, dp_catalog, rollouts
+from agent import animal_rollouts, dp_catalog, rollouts, script
 from ortools.sat.python import cp_model
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -520,7 +521,7 @@ def _solve_assignment(
     )
 
     solver = cp_model.CpSolver()
-    solver.parameters.num_workers = 1
+    solver.parameters.num_workers = os.cpu_count() or 1
     threshold = max(1000, int(OBJECTIVE_GOOD_ENOUGH * horizon / NUM_DAYS))
     callback = _GoodEnoughCallback(threshold)
     t0 = time.perf_counter()
@@ -607,6 +608,8 @@ def chain_to_queue_items(chain: list, horizon: int = NUM_DAYS) -> list:
 
 def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None:
     day = obs["day"]
+    if day >= script.SEASON_LAST_DAY:
+        return
     horizon = NUM_DAYS - day
     if horizon <= 0:
         return

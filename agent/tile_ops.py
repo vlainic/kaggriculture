@@ -6,6 +6,7 @@ from agent import animal_rollouts, rollouts, script, workers
 from agent.script import QueueItem, TILE_QUEUES
 
 STRAWBERRY_LAST_AGE = 16
+ONE_TIME_CROPS = frozenset({"WHEAT", "CARROT", "MELON"})
 
 
 def _tile_at(me: dict, idx: int):
@@ -81,10 +82,10 @@ def tile_needs_work(
         return True
     if pending_dig:
         return True
-    if lag > 0 or gap > 0:
-        return False
     if harvest_only and tile_has_harvestable(idx, me, day):
         return True
+    if lag > 0 or gap > 0:
+        return False
     item = current_queue_item(idx, queue_idx)
     if item is None:
         return False
@@ -138,6 +139,8 @@ def next_tile_action(
             return ["DIG"]
 
     if lag > 0 or gap > 0:
+        if harvest_only:
+            return _harvest_only_fallback(idx, me, day)
         return None
 
     item = current_queue_item(idx, queue_idx)
@@ -206,8 +209,12 @@ def _crop_action(
         actions = [a for a in actions if a != "DIG"]
 
     for act in actions:
-        if harvest_only and act not in ("HARVEST", "WATER"):
-            continue
+        if harvest_only:
+            if act == "WATER":
+                if crop not in ONE_TIME_CROPS or tile.get("watered_today"):
+                    continue
+            elif act != "HARVEST":
+                continue
         if act == "WATER" and tile.get("watered_today"):
             continue
         if act == "PLANT":

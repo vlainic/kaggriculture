@@ -214,7 +214,7 @@ def build_orders(
                 orders.append(["BUY_PRODUCT", "WHEAT", buy])
                 money -= buy * cost
 
-    sells = _sell_orders(private, me, day, hour, wheat_feed_need)
+    sells = _sell_orders(private, me, day, hour, wheat_feed_need, prices)
     if len(orders) + len(sells) > MAX_ORDERS:
         sells = sells[: max(0, MAX_ORDERS - len(orders))]
     orders.extend(sells)
@@ -223,15 +223,33 @@ def build_orders(
 
 
 def _sell_orders(
-    private: dict, me: dict, day: int, hour: int, wheat_feed_need: int = 0
+    private: dict,
+    me: dict,
+    day: int,
+    hour: int,
+    wheat_feed_need: int = 0,
+    prices: dict | None = None,
 ) -> list[list]:
     shed = private["shed"]
     sells: list[list] = []
 
     if day >= script.SEASON_LAST_DAY:
-        for product, count in sorted(shed.items()):
-            if count > 0 and product in SELLABLE and product not in LIVESTOCK:
-                sells.append(["SELL", product, count])
+        candidates = [
+            (product, count)
+            for product, count in shed.items()
+            if count > 0 and product in SELLABLE and product not in LIVESTOCK
+        ]
+        if not candidates:
+            return sells
+        price_map = prices or {}
+        candidates.sort(
+            key=lambda x: x[1] * int(price_map.get(x[0], 0) or 0),
+            reverse=True,
+        )
+        start = hour % len(candidates)
+        rotated = candidates[start:] + candidates[:start]
+        for product, count in rotated[:MAX_ORDERS]:
+            sells.append(["SELL", product, count])
         return sells
 
     for product, count in sorted(shed.items()):
@@ -252,8 +270,10 @@ def _sell_orders(
     return sells
 
 
-def defer_farmer_hour0(hour: int, orders: list[list], me: dict) -> bool:
+def defer_farmer_hour0(hour: int, orders: list[list], me: dict, day: int) -> bool:
     """Engine runs farmer before market on h=0 — PASS until buys execute."""
+    if day >= script.SEASON_LAST_DAY:
+        return False
     if hour != 0:
         return False
     if len(me["hands"]) < 2:
