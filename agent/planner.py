@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import time
 from pathlib import Path
 from typing import Callable
@@ -394,6 +393,15 @@ class _GoodEnoughCallback(cp_model.CpSolverSolutionCallback):
             self.StopSearch()
 
 
+def _earliest_animal_day(raw_chain: list) -> int:
+    best = 10**9
+    for profile_key, start_day in raw_chain:
+        label, _ = _parse_profile_key(profile_key)
+        if label in ANIMAL_NAMES:
+            best = min(best, int(start_day))
+    return best
+
+
 def _solve_assignment(
     chains,
     *,
@@ -402,6 +410,7 @@ def _solve_assignment(
     empty_counts: dict[str, int],
     locked_by_worker: dict[str, dict],
     starting_money: int,
+    max_time: float = 20.0,
 ):
     model = cp_model.CpModel()
     count = {}
@@ -521,7 +530,8 @@ def _solve_assignment(
     )
 
     solver = cp_model.CpSolver()
-    solver.parameters.num_workers = os.cpu_count() or 1
+    solver.parameters.num_workers = 8
+    solver.parameters.max_time_in_seconds = max_time
     threshold = max(1000, int(OBJECTIVE_GOOD_ENOUGH * horizon / NUM_DAYS))
     callback = _GoodEnoughCallback(threshold)
     t0 = time.perf_counter()
@@ -537,10 +547,14 @@ def _solve_assignment(
         remaining = [idx for idx in WORKER_TILES[worker] if idx in empty_set]
         if not remaining:
             continue
+        slots = []
         for ci, chain in enumerate(chains):
             n = int(solver.Value(count[worker][ci]))
             for _ in range(n):
-                assigned[remaining.pop(0)] = chain["raw_chain"]
+                slots.append(chain["raw_chain"])
+        slots.sort(key=_earliest_animal_day)
+        for i, idx in enumerate(remaining):
+            assigned[idx] = slots[i]
 
     obj = solver.ObjectiveValue()
     print(
@@ -660,6 +674,7 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
         empty_counts=empty_counts,
         locked_by_worker=locked_by_worker,
         starting_money=int(me["money"]),
+        max_time=5.0,
     )
 
     for idx in replan_tiles:
@@ -699,6 +714,7 @@ def _build_from_solver() -> dict[int, list]:
         empty_counts=empty_counts,
         locked_by_worker=locked_by_worker,
         starting_money=STARTING_MONEY,
+        max_time=20.0,
     )
     return {
         tile: chain_to_queue_items(assigned.get(tile, []), NUM_DAYS)

@@ -186,6 +186,9 @@ def _animals_needed_for_zone(
         if item.kind != "animal":
             continue
         tile = _tile_at(me, idx)
+        if tile is None:
+            needed[item.label] = needed.get(item.label, 0) + 1
+            continue
         if not isinstance(tile, dict):
             continue
         if tile.get("kind") not in ("COOP", "PASTURE"):

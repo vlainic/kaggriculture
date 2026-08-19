@@ -19,6 +19,33 @@ def _inv_at(private: dict, inv_idx: int) -> dict:
     return invs[inv_idx] if inv_idx < len(invs) else {}
 
 
+def zone_has_animal(me: dict, tile_idx: int) -> bool:
+    """Check if the zone containing tile_idx has any animal."""
+    for tiles in workers.WORKER_TILES.values():
+        if tile_idx in tiles:
+            for idx in tiles:
+                tile = _tile_at(me, idx)
+                if isinstance(tile, dict) and tile.get("kind") in ("COOP", "PASTURE"):
+                    if tile.get("animal"):
+                        return True
+            return False
+    return False
+
+
+def crop_needs_fertilize_by_age(tile: dict, day: int) -> bool:
+    """Check if crop needs fertilization based on age."""
+    if tile.get("crop") == "MELON":
+        return False
+    crop = tile.get("crop")
+    if "with_fert" not in rollouts.profiles_for(crop):
+        return False
+    age = day - tile["planted_day"]
+    fert_ages = rollouts.fertilize_ages(crop, "with_fert")
+    if age not in fert_ages:
+        return False
+    return tile.get("fertilized_until_day", -1) < day
+
+
 def current_queue_item(idx: int, queue_idx: int) -> QueueItem | None:
     queue = TILE_QUEUES.get(idx, [])
     if queue_idx >= len(queue):
@@ -95,7 +122,9 @@ def tile_needs_work(
             _start_lifecycle(item, private, inv_idx, harvest_only, idx, dawn, dig_plant_ok)
             is not None
         )
-    return _lifecycle_pending(tile, day, item, inv_idx, private, harvest_only)
+    return _lifecycle_pending(
+        tile, day, item, inv_idx, private, harvest_only, idx, me
+    )
 
 
 def _lifecycle_pending(
@@ -105,9 +134,23 @@ def _lifecycle_pending(
     inv_idx: int,
     private: dict,
     harvest_only: bool,
+    tile_idx: int = -1,
+    me: dict | None = None,
 ) -> bool:
     if tile.get("kind") == "PLANT":
-        return _crop_action(tile, day, item, harvest_only) is not None
+        return (
+            _crop_action(
+                tile,
+                day,
+                item,
+                harvest_only,
+                tile_idx=tile_idx,
+                me=me,
+                private=private,
+                inv_idx=inv_idx,
+            )
+            is not None
+        )
     if tile.get("kind") in ("COOP", "PASTURE"):
         return _animal_action(tile, day, item, private, inv_idx, harvest_only) is not None
     return False
@@ -156,7 +199,16 @@ def next_tile_action(
 
     if isinstance(tile, dict):
         if tile.get("kind") == "PLANT":
-            act = _crop_action(tile, day, item, harvest_only)
+            act = _crop_action(
+                tile,
+                day,
+                item,
+                harvest_only,
+                tile_idx=idx,
+                me=me,
+                private=private,
+                inv_idx=inv_idx,
+            )
             if act:
                 return act
             if harvest_only:
@@ -191,6 +243,9 @@ def _start_lifecycle(
         if private["seeds"].get(item.label, 0) <= 0:
             return None
         return ["PLANT", item.label]
+    inv = _inv_at(private, inv_idx)
+    if inv.get(item.label, 0) <= 0:
+        return None
     return [animal_rollouts.build_action_for(item.label)]
 
 
@@ -199,6 +254,11 @@ def _crop_action(
     day: int,
     item: QueueItem,
     harvest_only: bool,
+    *,
+    tile_idx: int = -1,
+    me: dict | None = None,
+    private: dict | None = None,
+    inv_idx: int = 0,
 ) -> list | None:
     crop = tile["crop"]
     profile = item.profile if item.kind == "crop" else script.CROP_PROFILE
@@ -207,6 +267,18 @@ def _crop_action(
 
     if crop == "STRAWBERRY" and age == STRAWBERRY_LAST_AGE:
         actions = [a for a in actions if a != "DIG"]
+
+    if not harvest_only:
+        if "WATER" in actions and not tile.get("watered_today"):
+            return ["WATER"]
+        if me is not None and private is not None and tile_idx >= 0:
+            inv = _inv_at(private, inv_idx)
+            if (
+                inv.get("FERTILIZER", 0) > 0
+                and zone_has_animal(me, tile_idx)
+                and crop_needs_fertilize_by_age(tile, day)
+            ):
+                return ["FERTILIZE"]
 
     for act in actions:
         if harvest_only:

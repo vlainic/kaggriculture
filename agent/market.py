@@ -127,17 +127,7 @@ def needed_buys(
 
         animal = _needs_animal_today(idx, day, me, qi, lag, gap)
         if animal:
-            tile = _tile_at(me, idx)
-            if tile is None:
-                build = _needs_build_today(idx, me, qi, lag, gap)
-                if build:
-                    pass  # BUILD only, no buy yet
-            elif isinstance(tile, dict) and not tile.get("animal"):
-                animals[animal.label] += 1
-
-        build_item = _needs_build_today(idx, me, qi, lag, gap)
-        if build_item and _tile_at(me, idx) is None:
-            pass
+            animals[animal.label] += 1
 
     for worker in workers.WORKERS:
         if script.zone_needs_feed_wheat(me, worker, tile_state):
