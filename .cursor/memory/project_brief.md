@@ -16,8 +16,8 @@ Heuristic/rule-based Python agent (no ML/RL pipeline) that wins on the ladder.
 
 **Active stack:** one-land **handmade-chain assignment** + snake executor.
 
-- Planner (`agent/planner.py`): CP-SAT **once at import**. Catalog = `data/handmade_dp_candidates.json` (~108 chains + idle). Decision vars = **per-zone chain counts** (tiles in a zone are interchangeable). Decode counts → tiles → `QueueItem` lists.
-- Executor (`agent/executor.py`): snake routes, preamble, tile ops. Reads `script.TILE_QUEUES`. **Unchanged** by the assignment reformulation.
+- Planner (`agent/planner.py`): CP-SAT at **import** (20s) + dawn **replan from day 1** (5s). Catalog = handmade chains + IDLE. Decode: animals (earliest start) → IDLE → crops.
+- Executor: snake + runtime fert (collect animals, FERTILIZE after WATER). No shed fert pickup. No replan on day 0.
 - Hook: `script.TILE_QUEUES = get_tile_queues(_build_tile_queues)` with handmade fallback if solve fails.
 
 **Not this:** season-long weighted set packing (WSP). That was abandoned Aug 12 — see `docs/weighted_set_packing_failer.md`. Do not revive WSP.

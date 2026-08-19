@@ -22,7 +22,7 @@ env = make("kaggriculture", configuration={"episodeSteps": 720}, debug=True)
 env.run(["main.py", "random"])
 ```
 
-Vs `random` smoke (Aug 15 zone-count + 80k stop): planner ~0.8s, reward ~60k. Vs greedy opponent: ~30k (melon glut) — expected with dump sells.
+Vs `random` smoke (Aug 19 fert + skip d=0 replan): planner import ~2–4s, reward ~**58k**. Vs greedy opponent: melon glut still expected with dump sells.
 
 ## Kaggle submit
 
@@ -33,12 +33,12 @@ Agents never submit without explicit user request (`kaggle-submission.mdc`).
 
 | Knob | Value | Notes |
 | --- | --- | --- |
-| `num_workers` | 1 | CPU-polite; user often has other jobs |
-| `max_time_in_seconds` | unset | stop via callback or natural OPTIMAL |
-| `OBJECTIVE_GOOD_ENOUGH` | 80_000 | import-time early stop |
+| `num_workers` | 8 | Kaggle import timed out with `os.cpu_count()` / 1 worker ~61s |
+| `max_time_in_seconds` | 20 import / 5 replan | Split; do not blanket-cap all solves at 10s |
+| `OBJECTIVE_GOOD_ENOUGH` | 80_000 | Keep; live obj ~49k so callback often misses |
 | `NET_TILE_OPS` | 15 / 13 / 13 / 11 | farmer / hire1 / hire2 / hire3 |
 | Balance domain | 0–200_000 | not ±1e6 |
-| Catalog | ~109 chains | 108 handmade + IDLE |
+| Catalog | ~109 chains | handmade + IDLE |
 
 Notebook OPTIMAL (same model, threshold 0): ~66s, obj 83620. Do not expect that at Kaggle import.
 
@@ -63,8 +63,8 @@ SCIP is slower than OneLand CP-SAT (~0.8s to 80k). Do not switch backends unless
 
 ## Compute
 
-- Kaggle ~1.6 vCPU, 60s overage bank — import solve must stay well under that (80k callback does)
-- Do not set CP-SAT `num_workers` to 8 unless the machine is free
+- Kaggle ~60s/turn — import must stay under 20s cap (80k callback does not reliably stop this MIP)
+- Live planner uses 8 CP-SAT workers; notebook OPTIMAL still fine at 1 worker
 
 ## Key docs
 
@@ -74,6 +74,7 @@ SCIP is slower than OneLand CP-SAT (~0.8s to 80k). Do not switch backends unless
 | `experiments/OneLand-Assignement-Handmade-Candidates.ipynb` | Zone-count CP-SAT master (source of planner model) |
 | `experiments/Assignement-Master-Mockup.ipynb` | SCIP sibling — economy aligned, no preamble |
 | `docs/weighted_set_packing_failer.md` | Old WSP — do not resume |
+| `docs/dp_master/fertilze_failure.md` | First fert/planner regression notes |
 | `.cursor/skills/kaggriculture-domain` | Mechanics |
 | `.cursor/skills/kaggriculture-agent-conventions` | Agent conventions |
 

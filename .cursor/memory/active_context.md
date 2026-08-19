@@ -1,65 +1,70 @@
 # Active Context
 
-## Current focus (Aug 16, 2026)
+## Current focus (Aug 19, 2026)
 
-**Mockup SCIP notebook now matches OneLand on economy, not solver.** `experiments/Assignement-Master-Mockup.ipynb` stays on SCIP. Do **not** add hire preamble or extra PICKUP ops.
+**Runtime fertilizer from animals is in**, after a failed first pass (`docs/dp_master/fertilze_failure.md`). Planner still stamps **`no_fert`** chain weights. Executor inserts FERTILIZE from collected bags. Sell drip is still the next **agent** lever vs I0 vs dump.
 
-Live agent is unchanged: `agent/planner.py` zone-count CP-SAT from `experiments/OneLand-Assignement-Handmade-Candidates.ipynb`. Sell drip is still the next **agent** lever.
+## What fertilizer actually does now
 
-## What shipped (Aug 16 — mockup economy)
+Planner stays `no_fert`. Animals sit on **route-first** tiles so collect happens early on the snake.
 
-Edit only `Assignement-Master-Mockup.ipynb`. Three economy items aligned with OneLand:
+**Collect:** animal rollout tape already has `COLLECT_FERTILIZER` (age 1+). Always collect when `fertilizer_available`. **No shed `PICKUP FERTILIZER`.** Market already sells **all** shed fert.
 
-1. **Yields** — `harvest_map = dict(zip(harvest_ages, yield_per_harvest))`. Never use `yield_per_harvest[0]` on every HARVEST. Goose age-4 HARVEST is 200 (not first-harvest units).
-2. **FEED is inventory** — drop the `$10` wheat **seed** subtraction from `timeline_values`. Wheat/fert are open buys at I0, not seed purchases.
-3. **Open W/F + hire burn** — SCIP `W[d]`, `F[d]`, `buy_w[d]`, `buy_f[d]` at $25 / $100; `W[0]=F[0]=0`; cash chain minus buys minus **$4/day** hire. Objective subtracts wheat/fert buys only (hires stay cash-only).
+**Apply:** in `_crop_action`, after WATER on that tile, if inv has FERTILIZER and zone has a placed animal and crop is on a `with_fert` age → `FERTILIZE`, then remaining tape (HARVEST). Tomato age 10 = WATER → FERTILIZE → HARVEST same day. MELON excluded. Do **not** steal PASS hours for a fert hunt.
 
-Also stamped per-candidate daily `feed` / `wheat` / `fert` / `collect` vectors (idle = zeros). Decode prints wheat/fert buy totals + cash floor. No preamble breakdown.
+**Ages (`with_fert`):** WHEAT/CARROT 2; TOMATO 7+10; STRAWBERRY 9+13.
 
-## SCIP vs CP-SAT (user conclusion)
+**Same-day pasture:** BUILD only if the animal is already in that worker’s inventory. Market buys + shed pickup while the tile is still empty. Sequence: BUY → PICKUP → BUILD → PLACE.
 
-Same MIP class as OneLand (zone counts + daily W/F + cash chain). **SCIP is not faster.** Speed win was the count reformulation, not the backend.
+## Decode + replan (IDLE trap)
 
-| Run | Solver | Time | Obj |
-| --- | --- | --- | --- |
-| Mockup before economy | SCIP | ~10–33s | ~105k (wrong yields, no hire/buys) |
-| Mockup 10s gap 15% | SCIP | 10s cap | **83820** (status FEASIBLE) |
-| Mockup 60s smoke | SCIP | ~20s OPTIMAL | **83910**, cash floor 695, wheat buy 16, 588 vars |
-| OneLand 80k stop | CP-SAT | **~0.8s** | 80100 |
-| OneLand OPTIMAL | CP-SAT | ~66s | 83620 |
+CP-SAT assigns **counts**, including IDLE (`[]`). A leftover IDLE tile used to land last (farmer **t9**). Day-0 replan treated empty queue as “exhausted” and stuffed a sheep there (`260819_1`, `replan d=0 assign=1`).
 
-Keep mockup on SCIP unless the user asks to switch.
+**Now:**
 
-## Active decision: Open-I0 plan vs dump sells (agent)
+- Decode sort: animals by earliest `start_day` over the **full chain** → **IDLE** → crop-only.
+- **No replan on day 0** (`executor` + `planner.replan` early return). First fill is d=1+ when a queue is actually done (or IDLE sits until then).
 
-Planner weights use **base / I0 prices** (melon $250). `market._sell_orders` sells **entire shed** every hour. Vs greedy melon dump → price ~$7, bank ~**30k**. Solver 80k ≠ bank.
+Logs: `farmer t{idx+1}` — t1 = index 0 (shed door), t9 = index 8. Not a 0/1 mapping bug.
 
-**Next lever (agent):** sell policy. Do not re-solve assignment to “fix” 30k vs greedy.
+## Solver knobs (live)
+
+Kaggle import timed out at ~61s (`260818_2`). Live planner: `num_workers=8`, import `max_time=20s`, replan `max_time=5s`, `OBJECTIVE_GOOD_ENOUGH=80_000` (callback often never fires; obj scale ~49k). Local smoke after IDLE+d0 skip: **~58k**.
+
+Do not treat 80k/83620 as bank.
+
+## Failures to remember
+
+| Run | What happened |
+| --- | --- |
+| First fert pass | Animal-boolean sort + tile-0 exclude + 10s all solves → 5 sheep, early pasture, $9 cash. Notes: `docs/dp_master/fertilze_failure.md` |
+| `260819_1` | 20s FEASIBLE + IDLE last + **d=0 replan** → extra sheep on t9, tight cash |
+| After d0 skip + IDLE-middle | Cow t1, sheep t2; no t9 sheep from d0; smoke ~58k |
 
 ## User prefs (this arc)
 
-- Mockup: **SCIP**, no hire preamble, no extra PICKUPs
-- Planner: CP-SAT **1 worker** while other jobs run
-- Notebook can stay open (no `max_time`); planner uses 80k stop
-- Do not commit `.cursor/` / `logs.txt`
+- Fert from animals only; sell shed fert
+- Animals on first tiles per zone; IDLE between animals and crops
+- BUILD on PLACE day
+- WATER then FERTILIZE (tomato also HARVEST)
+- No d=0 replan
 - Agents never Kaggle-submit without explicit ask
+- Do not commit `.cursor/`
 
 ## Key files
 
 | File | Role |
 | --- | --- |
-| `experiments/Assignement-Master-Mockup.ipynb` | SCIP count master + economy (yields, I0 buys, $4/day hire) |
-| `experiments/OneLand-Assignement-Handmade-Candidates.ipynb` | CP-SAT source model / OPTIMAL timing |
-| `agent/planner.py` | Zone-count master → queues (live) |
-| `agent/script.py` | `QueueItem`, fallback queues, hook |
-| `agent/executor.py` | Snake + preamble (unchanged) |
-| `agent/market.py` | Dump sells — next **agent** work |
-| `data/handmade_dp_candidates.json` | Chain catalog |
-| `data/animal_with_pickups.json` | Mockup animal profiles (PICKUP every day) |
+| `agent/planner.py` | Count CP-SAT; `_decode_sort_key`; 20s/5s; no d=0 replan |
+| `agent/tile_ops.py` | WATER then FERT; BUILD gated on inv |
+| `agent/market.py` | Buy animals while tile empty; sell all shed fert |
+| `agent/script.py` | Pickup animals for empty due slots |
+| `agent/executor.py` | Snake; skip replan day 0 |
+| `docs/dp_master/fertilze_failure.md` | First-pass failure notes |
+| `agent/market.py` | Dump sells — next **agent** work vs glut |
 
 ## Immediate next steps
 
-- Sell / drip policy for premium goods (melon first) — agent
-- Optionally bake an 83620 assignment JSON if import-time solve should disappear
-- Do not revive WSP; do not add CP-SAT workers without asking
-- Do not switch mockup SCIP → CP-SAT unless asked
+- Sell / drip policy for premium goods (melon first)
+- Optional: bake assignment JSON so Kaggle import skips CP-SAT
+- Do not revive WSP

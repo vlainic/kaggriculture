@@ -15,9 +15,9 @@ Compete on Kaggriculture with an autonomous agent that beats typical heuristic/L
 
 ## How the current agent is supposed to work
 
-1. **Offline / import:** stamp handmade chains from rollouts; CP-SAT picks how many tiles in each zone run each chain, subject to zone ops (tile + pickups + hire preamble), cash ≥ 0, open wheat/fert at I0 prices. Stop at obj ≥ 80k (or OPTIMAL in the notebook).
-2. **Decode:** fill zone tiles arbitrarily from counts (tiles are interchangeable at this abstraction).
-3. **Runtime:** executor follows `TILE_QUEUES` with snake movement. Market still **dump-sells** the shed (greedy).
+1. **Import:** stamp `no_fert` handmade chains; CP-SAT zone counts (20s, 8 workers, 80k stop that often misses).
+2. **Decode:** animals on route-first tiles (earliest animal day in the chain), IDLE in the middle, crops last.
+3. **Runtime:** snake; collect fert from animals; FERTILIZE after WATER if the bag has some. Dawn replan from day 1 fills finished/IDLE tiles. Market dump-sells shed (all fert — intended; melon glut still the gap).
 
 ## Known product gap (expected, Aug 15)
 
