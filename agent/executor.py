@@ -82,7 +82,7 @@ class Executor:
 
         if hour == 0:
             self._on_new_day(me, day)
-            if day < script.SEASON_LAST_DAY:
+            if 0 < day < script.SEASON_LAST_DAY:
                 try:
                     planner.replan(obs, script.TILE_QUEUES, self._tile_state)
                 except Exception as exc:

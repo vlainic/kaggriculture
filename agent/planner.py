@@ -402,6 +402,15 @@ def _earliest_animal_day(raw_chain: list) -> int:
     return best
 
 
+def _decode_sort_key(raw_chain: list) -> tuple:
+    animal_day = _earliest_animal_day(raw_chain)
+    if animal_day < 10**9:
+        return (0, animal_day)
+    if not raw_chain:
+        return (1, 0)
+    return (2, 0)
+
+
 def _solve_assignment(
     chains,
     *,
@@ -552,7 +561,7 @@ def _solve_assignment(
             n = int(solver.Value(count[worker][ci]))
             for _ in range(n):
                 slots.append(chain["raw_chain"])
-        slots.sort(key=_earliest_animal_day)
+        slots.sort(key=_decode_sort_key)
         for i, idx in enumerate(remaining):
             assigned[idx] = slots[i]
 
@@ -622,7 +631,7 @@ def chain_to_queue_items(chain: list, horizon: int = NUM_DAYS) -> list:
 
 def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None:
     day = obs["day"]
-    if day >= script.SEASON_LAST_DAY:
+    if day == 0 or day >= script.SEASON_LAST_DAY:
         return
     horizon = NUM_DAYS - day
     if horizon <= 0:
