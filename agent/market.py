@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 
-from agent import animal_rollouts, rollouts, script, workers
+from agent import animal_rollouts, pricing, rollouts, script, sell_dp, workers
 from agent.script import QueueItem, TILE_QUEUES
 
 MAX_ORDERS = 10
@@ -12,7 +12,8 @@ SELLABLE = frozenset(
     rollouts.CROP_NAMES + animal_rollouts.ANIMAL_PRODUCTS + ("FERTILIZER",)
 )
 LIVESTOCK = frozenset(animal_rollouts.animal_names())
-PREMIUM_DRIP = frozenset({"STRAWBERRY", "MELON", "MILK", "WOOL"})
+PREMIUM_DRIP = frozenset(sell_dp.PREMIUM_PRODUCTS)
+STAPLE_DUMP = frozenset(sell_dp.STAPLE_PRODUCTS)
 DRIP_PER_HOUR = 1
 HIRE_COST = 4
 
@@ -204,12 +205,88 @@ def build_orders(
                 orders.append(["BUY_PRODUCT", "WHEAT", buy])
                 money -= buy * cost
 
-    sells = _sell_orders(private, me, day, hour, wheat_feed_need, prices)
+    sells = _sell_orders(
+        private, me, day, hour, wheat_feed_need, prices, obs["market"]["inventory"]
+    )
     if len(orders) + len(sells) > MAX_ORDERS:
         sells = sells[: max(0, MAX_ORDERS - len(orders))]
     orders.extend(sells)
 
     return orders[:MAX_ORDERS]
+
+
+def _staple_sell_orders(
+    private: dict,
+    market_inv: dict,
+    day: int,
+    wheat_feed_need: int = 0,
+) -> list[list]:
+    """Dump staples immediately when above price floor (wheat keeps feed reserve)."""
+    shed = private["shed"]
+    sells: list[list] = []
+    for product, count in sorted(shed.items()):
+        if count <= 0 or product not in STAPLE_DUMP or product in LIVESTOCK:
+            continue
+        inv = int(market_inv.get(product, pricing.I0_DEFAULT))
+        qty = pricing.allowed_sell_qty(
+            product,
+            inv,
+            count,
+            day,
+            mode="dump",
+            wheat_reserve=wheat_feed_need if product == "WHEAT" else 0,
+            max_sell_per_day=sell_dp.MAX_SELL_PER_DAY,
+            liquidate_from_day=sell_dp.LIQUIDATE_FROM_DAY,
+            floor_ratio=sell_dp.PRICE_FLOOR_RATIO,
+        )
+        if qty > 0:
+            sells.append(["SELL", product, qty])
+    return sells
+
+
+def _premium_sell_orders(
+    private: dict,
+    day: int,
+    wheat_feed_need: int = 0,
+    *,
+    use_dp: bool,
+) -> list[list]:
+    shed = private["shed"]
+    sells: list[list] = []
+    for product in sorted(PREMIUM_DRIP):
+        count = shed.get(product, 0)
+        if count <= 0:
+            continue
+        qty: int | None
+        if use_dp:
+            qty = sell_dp.plan_sell_qty(
+                product,
+                day,
+                count,
+                wheat_feed_need,
+                premium_drip=True,
+            )
+            if qty is None:
+                qty = min(count, DRIP_PER_HOUR)
+        else:
+            qty = min(count, DRIP_PER_HOUR)
+        if qty > 0:
+            sells.append(["SELL", product, qty])
+            if use_dp:
+                sell_dp.commit_sell(product, qty)
+    return sells
+
+
+def _drip_fallback_sell_orders(
+    private: dict,
+    market_inv: dict,
+    day: int,
+    wheat_feed_need: int = 0,
+) -> list[list]:
+    """Legacy drip/dump when sell DP schedule is inactive."""
+    return _staple_sell_orders(
+        private, market_inv, day, wheat_feed_need
+    ) + _premium_sell_orders(private, day, wheat_feed_need, use_dp=False)
 
 
 def _sell_orders(
@@ -219,6 +296,7 @@ def _sell_orders(
     hour: int,
     wheat_feed_need: int = 0,
     prices: dict | None = None,
+    market_inv: dict | None = None,
 ) -> list[list]:
     shed = private["shed"]
     sells: list[list] = []
@@ -242,21 +320,13 @@ def _sell_orders(
             sells.append(["SELL", product, count])
         return sells
 
-    for product, count in sorted(shed.items()):
-        if count <= 0 or product not in SELLABLE or product in LIVESTOCK:
-            continue
-        if product == "WHEAT":
-            excess = count - wheat_feed_need
-            if excess > 0:
-                sells.append(["SELL", "WHEAT", excess])
-        elif product == "FERTILIZER":
-            sells.append(["SELL", "FERTILIZER", count])
-        elif product in PREMIUM_DRIP:
-            qty = min(count, DRIP_PER_HOUR)
-            if qty > 0:
-                sells.append(["SELL", product, qty])
-        else:
-            sells.append(["SELL", product, count])
+    inv = market_inv if market_inv is not None else {}
+
+    if not sell_dp.schedule_active(day):
+        return _drip_fallback_sell_orders(private, inv, day, wheat_feed_need)
+
+    sells = _staple_sell_orders(private, inv, day, wheat_feed_need)
+    sells.extend(_premium_sell_orders(private, day, wheat_feed_need, use_dp=True))
     return sells
 
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from agent import market, planner, rollouts, script, tile_ops, workers
+from agent import market, planner, rollouts, script, sell_dp, tile_ops, workers
 
 _EXECUTOR: "Executor | None" = None
 
@@ -82,11 +82,19 @@ class Executor:
 
         if hour == 0:
             self._on_new_day(me, day)
-            if 0 < day < script.SEASON_LAST_DAY:
+            if day <= script.SEASON_LAST_DAY:
+                if 0 < day < script.SEASON_LAST_DAY:
+                    try:
+                        planner.replan(obs, script.TILE_QUEUES, self._tile_state)
+                    except Exception as exc:
+                        _log(f"[planner] replan failed d={day}: {exc}")
                 try:
-                    planner.replan(obs, script.TILE_QUEUES, self._tile_state)
+                    wheat_feed = script.total_wheat_feed_need(
+                        me, self._tile_state, private
+                    )
+                    sell_dp.replan(obs, self._tile_state, wheat_feed_reserve=wheat_feed)
                 except Exception as exc:
-                    _log(f"[planner] replan failed d={day}: {exc}")
+                    _log(f"[sell_dp] replan failed d={day}: {exc}")
 
         if hour == 0:
             self._log_snap(obs, me, day, hour)
