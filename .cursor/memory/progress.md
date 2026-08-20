@@ -1,6 +1,6 @@
 # Progress
 
-## Strategic status (Aug 19, 2026)
+## Strategic status (Aug 20, 2026)
 
 | Track | Status |
 | --- | --- |
@@ -29,6 +29,7 @@
 
 | Issue | Notes |
 | --- | --- |
+| **Weeds from missed watering** | Snake sometimes misses tail-tile WATER; `consecutive_unwatered` → weed. Guardrail experiments reverted Aug 20 — revisit later with minimal skip-only approach (no detours). |
 | **I0 vs dump sells** | Melon plan at $250; greedy glut ~$7. Fix sells, not assignment. |
 | **80k callback vs ~49k obj** | Import often hits 20s FEASIBLE; `good_enough` rarely true. Still use 80k. |
 | IDLE leftover | One tile may stay empty until d=1 replan — intended now (middle of zone). |
@@ -54,9 +55,10 @@ Details: `docs/dp_master/fertilze_failure.md`.
 
 1. **Sell drip** for melon / premium — agent
 2. Optional: export assignment JSON so Kaggle import skips CP-SAT
-3. Catalog quality — secondary to sells
-4. Multi-land — not started
-5. Mockup: leave SCIP unless asked
+3. **Later:** watering guardrails — occasional weeds; user reverted Aug 20 attempts
+4. Catalog quality — secondary to sells
+5. Multi-land — not started
+6. Mockup: leave SCIP unless asked
 
 ## Do not do unless asked
 
@@ -64,6 +66,7 @@ Details: `docs/dp_master/fertilze_failure.md`.
 - Shed `PICKUP FERTILIZER`
 - Replan on day 0
 - Kaggle submit
+- Water/feed guardrails that reorder snake or defer CARE/FERTILIZE (reverted Aug 20)
 - Treat 80k/83620/83910 as achieved bank
 - Switch mockup SCIP → CP-SAT
 - Add hire preamble / extra PICKUPs to the mockup

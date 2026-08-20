@@ -1,8 +1,26 @@
 # Active Context
 
-## Current focus (Aug 19, 2026)
+## Current focus (Aug 20, 2026)
 
-**Runtime fertilizer from animals is in**, after a failed first pass (`docs/dp_master/fertilze_failure.md`). Planner still stamps **`no_fert`** chain weights. Executor inserts FERTILIZE from collected bags. Sell drip is still the next **agent** lever vs I0 vs dump.
+**Water/feed guardrails reverted.** User undid all executor/tile_ops changes for at-risk watering and feeding. Occasional **weeds from missed watering** remain a known issue — revisit later with minimal changes only (no route detours).
+
+**Sell drip / price floor** was the prior arc (50% floor, premium hoard fix). **Runtime fertilizer from animals** is still live.
+
+## Known issue: weeds from unwatering
+
+Sometimes crops turn to weeds because the snake route runs out of hours before tail tiles get WATER. Root causes explored:
+
+- `lag` / `gap` in tile state can block normal watering on some tiles
+- Route capacity: farmer may finish zone before every tile is visited same day
+- At-risk = `consecutive_unwatered >= 1` and not `watered_today`; weed at 2 missed days
+
+**Do not repeat without user ask:**
+
+- Route reorder / detour (`care_first_route`) — user rejected
+- Aggressive action deferral (skip CARE, FERTILIZE zone-wide) — made things worse (~35k selfplay, sheep deaths in 260820_3)
+- Zone-wide COLLECT_FERTILIZER skip — leaves workers idle on at-risk tiles
+
+**If revisited later:** keep normal snake queue; skip only non-essential actions (primarily COLLECT_FERTILIZER) on **non-at-risk** tiles when zone has at-risk tiles; never skip HARVEST; urgent WATER/FEED may bypass lag/gap.
 
 ## What fertilizer actually does now
 
@@ -40,6 +58,7 @@ Do not treat 80k/83620 as bank.
 | First fert pass | Animal-boolean sort + tile-0 exclude + 10s all solves → 5 sheep, early pasture, $9 cash. Notes: `docs/dp_master/fertilze_failure.md` |
 | `260819_1` | 20s FEASIBLE + IDLE last + **d=0 replan** → extra sheep on t9, tight cash |
 | After d0 skip + IDLE-middle | Cow t1, sheep t2; no t9 sheep from d0; smoke ~58k |
+| `260820_2` / `260820_3` | Occasional weeds from missed watering; guardrail attempts (deferral, zone skip) hurt score or caused animal deaths — **reverted** |
 
 ## User prefs (this arc)
 
@@ -67,4 +86,5 @@ Do not treat 80k/83620 as bank.
 
 - Sell / drip policy for premium goods (melon first)
 - Optional: bake assignment JSON so Kaggle import skips CP-SAT
+- **Later:** minimal guardrails for missed watering → weeds (user reverted Aug 20; do not detour snake)
 - Do not revive WSP
