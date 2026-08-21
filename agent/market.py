@@ -28,6 +28,30 @@ def _tile_empty(me: dict, idx: int) -> bool:
     return tile is None or (isinstance(tile, dict) and tile.get("kind") == "WEED")
 
 
+def _count_live_animals(me: dict) -> int:
+    return sum(
+        1
+        for idx in range(workers.NUM_TILES)
+        if isinstance(_tile_at(me, idx), dict) and _tile_at(me, idx).get("animal")
+    )
+
+
+def _count_animals_placing_today(
+    me: dict,
+    day: int,
+    tile_state: dict,
+) -> int:
+    n = 0
+    for idx in range(workers.NUM_TILES):
+        st = tile_state.get(idx, {})
+        animal = _needs_animal_today(
+            idx, day, me, st.get("queue_idx", 0), st.get("lag", 0), st.get("gap", 0)
+        )
+        if animal:
+            n += 1
+    return n
+
+
 def _needs_plant_today(
     idx: int,
     queue_idx: int,
@@ -130,9 +154,7 @@ def needed_buys(
         if animal:
             animals[animal.label] += 1
 
-    for worker in workers.WORKERS:
-        if script.zone_needs_feed_wheat(me, worker, tile_state):
-            wheat_need = max(wheat_need, script.WHEAT_PICKUP_PER_HAND)
+    wheat_need = script.total_wheat_feed_need(me, tile_state, private)
 
     return seeds, animals, wheat_need
 
@@ -162,13 +184,29 @@ def build_orders(
         me, private, day, tile_state, dawn
     )
     wheat_feed_need = script.total_wheat_feed_need(me, tile_state, private)
+    live_animals = _count_live_animals(me)
+    wheat_reserve = max(wheat_feed_need, live_animals)
 
     seeds = private["seeds"]
+    shed = private["shed"]
     money = int(me["money"])
     wheat_price = int(prices.get("WHEAT", 0) or 25)
-    feed_reserve = wheat_feed_need * wheat_price
+    feed_reserve = wheat_reserve * wheat_price
     hire_reserve = HIRE_COST * max(0, workers.NUM_HIRES - len(me["hands"]))
     spendable = max(0, money - feed_reserve - hire_reserve)
+
+    if hour == 0 and day < script.SEASON_LAST_DAY:
+        wheat_in_shed = shed.get("WHEAT", 0)
+        placing_today = _count_animals_placing_today(me, day, tile_state)
+        dawn_wheat_need = live_animals + placing_today
+        if wheat_in_shed < dawn_wheat_need:
+            deficit = dawn_wheat_need - wheat_in_shed
+            cost = wheat_price
+            buy = min(deficit, money // cost, MAX_ORDERS - len(orders)) if cost else 0
+            if buy > 0:
+                orders.append(["BUY_PRODUCT", "WHEAT", buy])
+                money -= buy * cost
+                spendable = max(0, money - feed_reserve - hire_reserve)
 
     if day < script.SEASON_LAST_DAY:
         for crop, count in needed_seeds.items():
@@ -182,7 +220,6 @@ def build_orders(
                 spendable -= buy * cost
                 money -= buy * cost
 
-        shed = private["shed"]
         for animal, count in needed_animals.items():
             in_shed = shed.get(animal, 0)
             in_inv = sum(inv.get(animal, 0) for inv in private["inventories"])
@@ -206,7 +243,7 @@ def build_orders(
                 money -= buy * cost
 
     sells = _sell_orders(
-        private, me, day, hour, wheat_feed_need, prices, obs["market"]["inventory"]
+        private, me, day, hour, wheat_reserve, prices, obs["market"]["inventory"]
     )
     if len(orders) + len(sells) > MAX_ORDERS:
         sells = sells[: max(0, MAX_ORDERS - len(orders))]
@@ -220,12 +257,16 @@ def _staple_sell_orders(
     market_inv: dict,
     day: int,
     wheat_feed_need: int = 0,
+    *,
+    hour: int = 0,
 ) -> list[list]:
     """Dump staples immediately when above price floor (wheat keeps feed reserve)."""
     shed = private["shed"]
     sells: list[list] = []
     for product, count in sorted(shed.items()):
         if count <= 0 or product not in STAPLE_DUMP or product in LIVESTOCK:
+            continue
+        if product == "WHEAT" and hour < 5:
             continue
         inv = int(market_inv.get(product, pricing.I0_DEFAULT))
         qty = pricing.allowed_sell_qty(
@@ -282,10 +323,12 @@ def _drip_fallback_sell_orders(
     market_inv: dict,
     day: int,
     wheat_feed_need: int = 0,
+    *,
+    hour: int = 0,
 ) -> list[list]:
     """Legacy drip/dump when sell DP schedule is inactive."""
     return _staple_sell_orders(
-        private, market_inv, day, wheat_feed_need
+        private, market_inv, day, wheat_feed_need, hour=hour
     ) + _premium_sell_orders(private, day, wheat_feed_need, use_dp=False)
 
 
@@ -323,9 +366,13 @@ def _sell_orders(
     inv = market_inv if market_inv is not None else {}
 
     if not sell_dp.schedule_active(day):
-        return _drip_fallback_sell_orders(private, inv, day, wheat_feed_need)
+        return _drip_fallback_sell_orders(
+            private, inv, day, wheat_feed_need, hour=hour
+        )
 
-    sells = _staple_sell_orders(private, inv, day, wheat_feed_need)
+    sells = _staple_sell_orders(
+        private, inv, day, wheat_feed_need, hour=hour
+    )
     sells.extend(_premium_sell_orders(private, day, wheat_feed_need, use_dp=True))
     return sells
 

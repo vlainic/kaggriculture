@@ -19,6 +19,17 @@ def _inv_at(private: dict, inv_idx: int) -> dict:
     return invs[inv_idx] if inv_idx < len(invs) else {}
 
 
+def tile_needs_feed(tile: dict | None, day: int) -> bool:
+    """True if tile has a live animal that still needs feeding today."""
+    if not isinstance(tile, dict):
+        return False
+    if tile.get("kind") not in ("COOP", "PASTURE"):
+        return False
+    if not tile.get("animal"):
+        return False
+    return not tile.get("fed_today")
+
+
 def zone_has_animal(me: dict, tile_idx: int) -> bool:
     """Check if the zone containing tile_idx has any animal."""
     for tiles in workers.WORKER_TILES.values():
@@ -122,6 +133,9 @@ def tile_needs_work(
             _start_lifecycle(item, private, inv_idx, harvest_only, idx, dawn, dig_plant_ok)
             is not None
         )
+    if isinstance(tile, dict) and tile.get("kind") in ("COOP", "PASTURE"):
+        if tile_needs_feed(tile, day):
+            return True
     return _lifecycle_pending(
         tile, day, item, inv_idx, private, harvest_only, idx, me
     )
@@ -152,6 +166,8 @@ def _lifecycle_pending(
             is not None
         )
     if tile.get("kind") in ("COOP", "PASTURE"):
+        if tile_needs_feed(tile, day):
+            return True
         return _animal_action(tile, day, item, private, inv_idx, harvest_only) is not None
     return False
 
@@ -246,6 +262,8 @@ def _start_lifecycle(
     inv = _inv_at(private, inv_idx)
     if inv.get(item.label, 0) <= 0:
         return None
+    if item.kind == "animal" and inv.get("WHEAT", 0) <= 0:
+        return None
     return [animal_rollouts.build_action_for(item.label)]
 
 
@@ -314,6 +332,8 @@ def _animal_action(
         inv = _inv_at(private, inv_idx)
         if inv.get(item.label, 0) <= 0:
             return None
+        if inv.get("WHEAT", 0) <= 0:
+            return None
         return ["PLACE", item.label]
 
     age = day - tile["placed_day"]
@@ -324,6 +344,10 @@ def _animal_action(
             continue
         if act == "FEED" and tile.get("fed_today"):
             continue
+        if act == "FEED":
+            inv = _inv_at(private, inv_idx)
+            if inv.get("WHEAT", 0) <= 0:
+                return None
         if act == "CARE" and tile.get("cared_today"):
             continue
         if act == "COLLECT_FERTILIZER" and not tile.get("fertilizer_available"):
@@ -332,10 +356,6 @@ def _animal_action(
             continue
         if act == "PLACE":
             continue
-        if act == "FEED":
-            inv = _inv_at(private, inv_idx)
-            if inv.get("WHEAT", 0) <= 0:
-                continue
         return [act] + ([animal] if act == "PLACE" else [])
     return None
 

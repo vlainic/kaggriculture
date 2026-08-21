@@ -139,35 +139,45 @@ def _tile_at(me: dict, idx: int):
     return me["tiles"][y][x]
 
 
-def zone_needs_feed_wheat(me: dict, worker: str, tile_state: dict) -> bool:
-    """True if zone has live animals or is placing one today (needs FEED wheat)."""
+def zone_animal_feed_count(me: dict, worker: str, tile_state: dict) -> int:
+    """Live animals plus animals queued for place today in this zone."""
+    count = 0
     for idx in WORKER_TILES[worker]:
         tile = _tile_at(me, idx)
         if isinstance(tile, dict) and tile.get("animal"):
-            return True
+            count += 1
+            continue
         st = tile_state.get(idx, {})
         if st.get("lag", 0) > 0 or st.get("gap", 0) > 0:
             continue
         qi = st.get("queue_idx", 0)
-        if qi >= len(TILE_QUEUES.get(idx, [])):
+        queue = TILE_QUEUES.get(idx, [])
+        if qi >= len(queue):
             continue
-        item = TILE_QUEUES[idx][qi]
+        item = queue[qi]
         if item.kind != "animal":
             continue
         if tile is None:
+            count += 1
             continue
         if isinstance(tile, dict) and tile.get("kind") in ("COOP", "PASTURE"):
             if not tile.get("animal"):
-                return True
-    return False
+                count += 1
+    return count
+
+
+def zone_needs_feed_wheat(me: dict, worker: str, tile_state: dict) -> bool:
+    """True if zone has live animals or is placing one today (needs FEED wheat)."""
+    return zone_animal_feed_count(me, worker, tile_state) > 0
 
 
 def wheat_pickup_needed(
     me: dict, worker: str, tile_state: dict, inv: dict
 ) -> int:
-    if not zone_needs_feed_wheat(me, worker, tile_state):
+    need = zone_animal_feed_count(me, worker, tile_state)
+    if need <= 0:
         return 0
-    return max(0, WHEAT_PICKUP_PER_HAND - inv.get("WHEAT", 0))
+    return max(0, need - inv.get("WHEAT", 0))
 
 
 def _animals_needed_for_zone(

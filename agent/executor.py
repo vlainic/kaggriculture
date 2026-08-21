@@ -259,6 +259,26 @@ class Executor:
                     st["pending_dig"] = True
                 return action, f"{worker} t{idx + 1}"
 
+            tile = _tile_at(me, idx)
+            if tile_ops.tile_needs_feed(tile, day):
+                inv = (
+                    private["inventories"][inv_idx]
+                    if inv_idx < len(private["inventories"])
+                    else {}
+                )
+                if inv.get("WHEAT", 0) <= 0:
+                    if (fx, fy) in workers.SHED_ADJACENT:
+                        n = min(
+                            script.wheat_pickup_needed(
+                                me, worker, self._tile_state, inv
+                            ),
+                            private["shed"].get("WHEAT", 0),
+                        )
+                        if n > 0:
+                            return ["PICKUP", "WHEAT", n], f"{worker} feed-wait"
+                    return ["PASS"], f"{worker} feed-wait"
+                return ["PASS"], f"{worker} feed-wait"
+
             self._route_idx[worker] += 1
             if self._route_idx[worker] < len(route):
                 ntx, nty = workers.TILE_COORDS[route[self._route_idx[worker]]]

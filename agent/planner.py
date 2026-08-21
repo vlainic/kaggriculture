@@ -28,7 +28,7 @@ WORKER_TILES = {
     "hire2": list(range(15, 21)),
     "hire3": list(range(21, 25)),
 }
-NET_TILE_OPS = {"farmer": 15, "hire1": 13, "hire2": 13, "hire3": 11}
+NET_TILE_OPS = {"farmer": 14, "hire1": 12, "hire2": 12, "hire3": 10}
 PROFILE_SUFFIXES = ("no_fert", "with_fert", "no_care", "with_care")
 ANIMAL_NAMES = frozenset(animal_rollouts.animal_names())
 CROP_PROFILE = "no_fert"
