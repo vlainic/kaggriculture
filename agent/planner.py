@@ -61,24 +61,50 @@ def _i0_prices(crops_data: dict, animals_data: dict) -> dict[str, int]:
     return prices
 
 
+def _opponent_product_tile_counts(opp_farm: dict) -> dict[str, int]:
+    """Count opponent tiles producing each market product (visible farm only)."""
+    counts: dict[str, int] = {}
+    for row in opp_farm.get("tiles", []):
+        for tile in row:
+            if not isinstance(tile, dict):
+                continue
+            kind = tile.get("kind")
+            if kind == "PLANT":
+                crop = tile.get("crop")
+                if crop:
+                    counts[crop] = counts.get(crop, 0) + 1
+            elif kind in ("COOP", "PASTURE"):
+                animal = tile.get("animal")
+                if animal:
+                    product = animal_rollouts.product_for(animal)
+                    counts[product] = counts.get(product, 0) + 1
+    return counts
+
+
 def effective_price(
     product: str,
     market_prices: dict,
     shops: list[str],
     i0_prices: dict[str, int],
+    opp_tile_counts: dict[str, int] | None = None,
 ) -> int:
     demand = rollouts.shop_demand_by_product(shops)
-    base = int(market_prices.get(product, i0_prices.get(product, 0)) or 0)
-    return base * (1 + demand.get(product, 0))
+    quoted = int(market_prices.get(product, i0_prices.get(product, 0)) or 0)
+    opp = (opp_tile_counts or {}).get(product, 0)
+    factor = max(0.0, 1.0 - opp / 10.0)
+    return int(quoted * (1 + demand.get(product, 0)) * factor)
 
 
 def make_price_of(
     market_prices: dict,
     shops: list[str],
     i0_prices: dict[str, int],
+    opp_tile_counts: dict[str, int] | None = None,
 ) -> Callable[[str], int]:
     def price_of(product: str) -> int:
-        return effective_price(product, market_prices, shops, i0_prices)
+        return effective_price(
+            product, market_prices, shops, i0_prices, opp_tile_counts
+        )
 
     return price_of
 
@@ -645,7 +671,9 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
     crops_data = _load_json("crop_rollouts.json")
     animals_data = _load_json("animal_rollouts.json")
     i0 = _i0_prices(crops_data, animals_data)
-    price_of = make_price_of(market_prices, shops, i0)
+    opp_farm = obs["farms"][1 - player]
+    opp_counts = _opponent_product_tile_counts(opp_farm)
+    price_of = make_price_of(market_prices, shops, i0, opp_counts)
 
     handmade_chains = dp_catalog.build_catalog(horizon, price_of)
     chains = _build_chains(crops_data, animals_data, handmade_chains, horizon, price_of)
@@ -700,9 +728,13 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
                 "active": False,
             }
 
+    opp_log = " ".join(
+        f"opp_{p}={n}" for p, n in sorted(opp_counts.items()) if n > 0
+    )
     print(
         f"[planner] replan d={day} shops={len(shops)} "
-        f"catalog={len(handmade_chains)} assign={len(replan_tiles)} preserved={preserved}",
+        f"catalog={len(handmade_chains)} assign={len(replan_tiles)} preserved={preserved}"
+        + (f" {opp_log}" if opp_log else ""),
         flush=True,
     )
 
