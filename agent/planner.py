@@ -91,8 +91,8 @@ def effective_price(
     demand = rollouts.shop_demand_by_product(shops)
     quoted = int(market_prices.get(product, i0_prices.get(product, 0)) or 0)
     opp = (opp_tile_counts or {}).get(product, 0)
-    factor = max(0.0, 1.0 - opp / 10.0)
-    return int(quoted * (1 + demand.get(product, 0)) * factor)
+    opp_bonus = max(0.1, 1.0 - opp / 10.0)
+    return int(quoted * (1 + demand.get(product, 0) + opp_bonus))
 
 
 def make_price_of(
