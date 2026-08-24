@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
+
+from ortools.sat.python import cp_model
 
 from agent import animal_rollouts, dp_catalog, rollouts, script
 from agent.zoning import (
@@ -14,11 +16,10 @@ from agent.zoning import (
     NET_TILE_OPS,
     NUM_TILES,
     TILE_COORDS,
-    WORKERS,
     WORKER_TILES,
+    WORKERS,
     worker_for_tile,
 )
-from ortools.sat.python import cp_model
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
