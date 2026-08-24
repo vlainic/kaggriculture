@@ -8,27 +8,25 @@ from pathlib import Path
 from typing import Callable
 
 from agent import animal_rollouts, dp_catalog, rollouts, script
+from agent.zoning import (
+    HAND_WORKERS,
+    HIRE_DAILY_COST,
+    NET_TILE_OPS,
+    NUM_TILES,
+    TILE_COORDS,
+    WORKERS,
+    WORKER_TILES,
+    worker_for_tile,
+)
 from ortools.sat.python import cp_model
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 NUM_DAYS = 30
-NUM_TILES = 25
 WHEAT_PRICE = 25
 FERT_PRICE = 100
 MAX_BUY = NUM_TILES * NUM_DAYS
 STARTING_MONEY = 3000
-HIRE_DAILY_COST = 1 + 1 + 2
-
-WORKERS = ("farmer", "hire1", "hire2", "hire3")
-HAND_WORKERS = ("hire1", "hire2", "hire3")
-WORKER_TILES = {
-    "farmer": list(range(0, 9)),
-    "hire1": list(range(9, 15)),
-    "hire2": list(range(15, 21)),
-    "hire3": list(range(21, 25)),
-}
-NET_TILE_OPS = {"farmer": 14, "hire1": 12, "hire2": 12, "hire3": 10}
 PROFILE_SUFFIXES = ("no_fert", "with_fert", "no_care", "with_care")
 ANIMAL_NAMES = frozenset(animal_rollouts.animal_names())
 CROP_PROFILE = "no_fert"
@@ -339,16 +337,7 @@ def _build_chains(
     return chains
 
 
-def _worker_for_tile(idx: int) -> str:
-    for worker, indices in WORKER_TILES.items():
-        if idx in indices:
-            return worker
-    return "farmer"
-
-
 def _tile_at(me: dict, idx: int):
-    from agent.script import TILE_COORDS
-
     x, y = TILE_COORDS[idx]
     return me["tiles"][y][x]
 
@@ -688,7 +677,7 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
 
     for idx in range(NUM_TILES):
         tile = _tile_at(me, idx)
-        worker = _worker_for_tile(idx)
+        worker = worker_for_tile(idx)
         st = (tile_state or {}).get(idx, {})
         if tile is not None:
             seg = _stamp_locked_tile(tile, day, horizon, price_of, crops_data, animals_data)

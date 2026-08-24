@@ -5,53 +5,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from agent.zoning import (
+    HAND_WORKERS,
+    NUM_HIRES,
+    NUM_TILES,
+    TILE_COORDS,
+    WORKERS,
+    WORKER_TILES,
+)
+
 Kind = Literal["crop", "animal"]
-
-# Tile grid (x, y) — tile 1 = (4, 4) = shed door
-#  24 23 13 14 15
-#  25 22 12 11 10
-#  19 18  9  8  7
-#  20 17  4  5  6
-#  21 16  3  2  1
-TILE_COORDS: list[tuple[int, int]] = [
-    (4, 4), (3, 4), (2, 4), (2, 3), (3, 3), (4, 3), (4, 2), (3, 2), (2, 2),  # 1-9 farmer
-    (4, 1), (3, 1), (2, 1), (2, 0), (3, 0), (4, 0),  # 10-15 top
-    (1, 4), (1, 3), (1, 2), (0, 2), (0, 3), (0, 4),  # 16-21 left
-    (1, 1), (1, 0), (0, 0), (0, 1),  # 22-25 corner
-]
-NUM_TILES = len(TILE_COORDS)
-
-WORKERS = ("farmer", "hire1", "hire2", "hire3")
-HAND_WORKERS = ("hire1", "hire2", "hire3")
-
-WORKER_TILES: dict[str, list[int]] = {
-    "farmer": list(range(0, 9)),
-    "hire1": list(range(9, 15)),
-    "hire2": list(range(15, 21)),
-    "hire3": list(range(21, 25)),
-}
-
-# Snake routes as tile indices (visit order)
-WORKER_ROUTES: dict[str, list[int]] = {
-    "farmer": [0, 1, 2, 3, 4, 5, 6, 7, 8],
-    "hire1": [9, 10, 11, 12, 13, 14],
-    "hire2": [15, 16, 17, 18, 19, 20],
-    "hire3": [21, 22, 23, 24],
-}
-
-# Preamble: first move from spawn, optional wheat pickup, then approach zone.
-PREAMBLE: dict[str, list[str]] = {
-    "farmer": [],
-    "hire1": ["WEST", "PICKUP_WHEAT", "PICKUP_ANIMALS", "NORTH", "NORTH", "NORTH"],
-    "hire2": ["NORTH", "PICKUP_WHEAT", "PICKUP_ANIMALS", "WEST", "WEST", "WEST"],
-    "hire3": ["WEST", "PICKUP_WHEAT", "PICKUP_ANIMALS", "WEST", "WEST", "NORTH", "NORTH", "NORTH"],
-}
-
-HAND_START_HOUR: dict[str, int] = {"hire1": 1, "hire2": 1, "hire3": 1}
-
-SHED_DOOR: tuple[int, int] = (4, 4)
-SHED_ADJACENT: frozenset[tuple[int, int]] = frozenset({(4, 4), (5, 4), (4, 5), (5, 5)})
-NUM_HIRES = 3
 SEASON_LAST_DAY = 29
 WHEAT_RESERVE_CAP = 10
 FERT_RESERVE_CAP = 10
@@ -125,13 +88,6 @@ def _build_tile_queues() -> dict[int, list[QueueItem]]:
 from agent.planner import get_tile_queues
 
 TILE_QUEUES: dict[int, list[QueueItem]] = get_tile_queues(_build_tile_queues)
-
-
-def worker_for_tile(idx: int) -> str:
-    for worker, indices in WORKER_TILES.items():
-        if idx in indices:
-            return worker
-    return "farmer"
 
 
 def _tile_at(me: dict, idx: int):

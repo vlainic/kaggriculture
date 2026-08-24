@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
-from agent import script
+from agent import zoning
 
-WORKERS = script.WORKERS
-HAND_WORKERS = script.HAND_WORKERS
-TILE_COORDS = script.TILE_COORDS
-NUM_TILES = script.NUM_TILES
-WORKER_TILES = script.WORKER_TILES
-WORKER_ROUTES = script.WORKER_ROUTES
-PREAMBLE = script.PREAMBLE
-HAND_START_HOUR = script.HAND_START_HOUR
-SHED_DOOR = script.SHED_DOOR
-SHED_ADJACENT = script.SHED_ADJACENT
-NUM_HIRES = script.NUM_HIRES
+WORKERS = zoning.WORKERS
+HAND_WORKERS = zoning.HAND_WORKERS
+TILE_COORDS = zoning.TILE_COORDS
+NUM_TILES = zoning.NUM_TILES
+WORKER_TILES = zoning.WORKER_TILES
+WORKER_ROUTES = zoning.WORKER_ROUTES
+PREAMBLE = zoning.PREAMBLE
+HAND_START_HOUR = zoning.HAND_START_HOUR
+SHED_DOOR = zoning.SHED_DOOR
+SHED_ADJACENT = zoning.SHED_ADJACENT
+NUM_HIRES = zoning.NUM_HIRES
 
 # hands[0]=top (hire1), hands[1]=left (hire2), hands[2]=corner (hire3)
 HAND_ORDER = HAND_WORKERS
