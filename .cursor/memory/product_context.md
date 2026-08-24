@@ -17,11 +17,11 @@ Compete on Kaggriculture with an autonomous agent that beats typical heuristic/L
 
 1. **Import:** stamp `no_fert` handmade chains; CP-SAT zone counts (20s, 8 workers, 80k stop that often misses).
 2. **Decode:** animals on route-first tiles (earliest animal day in the chain), IDLE in the middle, crops last.
-3. **Runtime:** snake; collect fert from animals; FERTILIZE after WATER if the bag has some. Dawn replan from day 1 fills finished/IDLE tiles. Market dump-sells shed (all fert — intended; melon glut still the gap).
+3. **Runtime:** snake; collect fert from animals; FERTILIZE after WATER if the bag has some. Stay on unfed pastures. Dawn replan from day 1 fills finished/IDLE tiles and **reprices catalog with live market + opponent tile counts**. Market: 50% floor + premium DP drip; wheat reserved / no early wheat sells.
 
-## Known product gap (expected, Aug 15)
+## Known product gap
 
-Planner scores harvests at **I0 / base price** (melon $250). Executor `_sell_orders` dumps full shed every hour. Vs a greedy opponent that also dumps melon, price can fall to ~$7 and bank ~30k. Vs `random` smoke ~60k. **80k solver obj is not bank.** Next lever is sell policy (drip / hold), not another assignment solve.
+Day-0 catalog still uses **i0**. Replans use **live quotes** × `max(0.1, 1 + shop_demand − opp_tiles/10)`. Sell DP + 50% floor replaced full-shed dump for premiums; wheat is feed-reserved. **80k solver obj is not bank.** Occasional weeds from missed WATER remain.
 
 ## User workflow preferences
 

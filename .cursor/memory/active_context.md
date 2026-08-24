@@ -1,10 +1,22 @@
 # Active Context
 
-## Current focus (Aug 20, 2026)
+## Current focus (Aug 24, 2026)
 
-**Water/feed guardrails reverted.** User undid all executor/tile_ops changes for at-risk watering and feeding. Occasional **weeds from missed watering** remain a known issue — revisit later with minimal changes only (no route detours).
+**Planner opponent price factor is live** on dawn `replan` only (not day-0 `_build_from_solver`). Catalog `quoted` uses **live** `obs["market"]["prices"]` at replan; i0 only as missing-key fallback.
 
-**Sell drip / price floor** was the prior arc (50% floor, premium hoard fix). **Runtime fertilizer from animals** is still live.
+Live formula in `agent/planner.py` `effective_price`:
+
+```python
+opp_bonus = -opp_tiles / 10.0
+price_factor = 1 + shop_demand + opp_bonus
+return int(quoted * max(0.1, price_factor))
+```
+
+i.e. `quoted * max(0.1, 1 + shop_demand - opp_tiles/10)`. Count opponent `PLANT` crops and live animals (`product_for`). Day-0 solver catalog stays `i0 * (1 + demand)` with no opp counts.
+
+**Feed-stay (hire3 sheep deaths) is live.** Do not treat `FEED`+empty wheat as “tile done.” Stay on unfed pasture; PLACE requires inv wheat; dawn buy wheat vs live+placing; no `SELL WHEAT` at hour 0–4.
+
+Occasional **weeds from missed watering** still known — no snake detours. Sell 50% floor + premium sell DP still live.
 
 ## Known issue: weeds from unwatering
 
@@ -74,17 +86,16 @@ Do not treat 80k/83620 as bank.
 
 | File | Role |
 | --- | --- |
-| `agent/planner.py` | Count CP-SAT; `_decode_sort_key`; 20s/5s; no d=0 replan |
-| `agent/tile_ops.py` | WATER then FERT; BUILD gated on inv |
-| `agent/market.py` | Buy animals while tile empty; sell all shed fert |
-| `agent/script.py` | Pickup animals for empty due slots |
-| `agent/executor.py` | Snake; skip replan day 0 |
-| `docs/dp_master/fertilze_failure.md` | First-pass failure notes |
-| `agent/market.py` | Dump sells — next **agent** work vs glut |
+| `agent/planner.py` | Count CP-SAT; live `effective_price` + opp tile counts on `replan`; `NET_TILE_OPS` −1 vs old |
+| `agent/tile_ops.py` | `tile_needs_feed`; PLACE needs wheat; WATER then FERT |
+| `agent/executor.py` | Snake; skip replan day 0; **do not advance** off unfed pasture |
+| `agent/market.py` | h=0 wheat vs live+placing; no WHEAT sell h<5; 50% floor sells |
+| `agent/sell_dp.py` | Premium drip DP; wheat feed reserve |
+| `agent/script.py` | Zone wheat pickup = live + placing today |
 
 ## Immediate next steps
 
-- Sell / drip policy for premium goods (melon first)
-- Optional: bake assignment JSON so Kaggle import skips CP-SAT
-- **Later:** minimal guardrails for missed watering → weeds (user reverted Aug 20; do not detour snake)
+- Watch whether additive opponent term (`-opp/10` inside `1+demand`, floor 0.1) is the intended catalog vs earlier multiply form
+- Confirm hire3 `PLACE ≈ BUILD` and same-day `FEED` on next smoke / submission
+- **Later:** minimal watering guardrails (no snake detours)
 - Do not revive WSP

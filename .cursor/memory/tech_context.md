@@ -36,7 +36,7 @@ Agents never submit without explicit user request (`kaggle-submission.mdc`).
 | `num_workers` | 8 | Kaggle import timed out with `os.cpu_count()` / 1 worker ~61s |
 | `max_time_in_seconds` | 20 import / 5 replan | Split; do not blanket-cap all solves at 10s |
 | `OBJECTIVE_GOOD_ENOUGH` | 80_000 | Keep; live obj ~49k so callback often misses |
-| `NET_TILE_OPS` | 15 / 13 / 13 / 11 | farmer / hire1 / hire2 / hire3 |
+| `NET_TILE_OPS` | 14 / 12 / 12 / 10 | farmer / hire1 / hire2 / hire3 (−1 slack for care) |
 | Balance domain | 0–200_000 | not ±1e6 |
 | Catalog | ~109 chains | handmade + IDLE |
 

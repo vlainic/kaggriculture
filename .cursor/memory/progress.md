@@ -1,6 +1,6 @@
 # Progress
 
-## Strategic status (Aug 20, 2026)
+## Strategic status (Aug 24, 2026)
 
 | Track | Status |
 | --- | --- |
@@ -9,7 +9,9 @@
 | **Runtime fertilizer** | **Live** — collect from animals, FERTILIZE after WATER; no shed pickup |
 | **Mockup SCIP notebook** | Economy aligned with OneLand. SCIP, **no preamble**. Not faster than CP-SAT. |
 | **Snake executor** | Working; same-day BUILD/PLACE; skip d=0 replan |
-| **Sell policy** | Still greedy dump (fert: sell all shed — OK). Melon glut still the bank leak. |
+| **Sell policy** | 50% price floor on all sellables; staples dump; premium sell DP drip; wheat reserved for feed; **no SELL WHEAT hours 0–4** |
+| **Opponent in planner** | Replan-only: `quoted * max(0.1, 1 + shop_demand − opp_tiles/10)` |
+| **Animal feed execution** | Stay on pasture until FEED; PLACE requires inv wheat |
 | **Competition submission** | Local smoke only unless user asks |
 
 ## What works
@@ -21,6 +23,7 @@
 | Replan | Dawn fill of exhausted/empty queues; **not day 0** |
 | Fert | Collect from tape; apply after WATER if inv bag > 0 + zone has animal |
 | Same-day pasture | Buy/pickup while empty; BUILD only with animal in inv |
+| Smoke vs random (Aug 21 feed-stay) | ~**62k**; hire3 PLACE=BUILD=1, same-day FEED |
 | Smoke vs random (Aug 19) | ~**58k** after IDLE-middle + skip d=0 |
 | Mockup SCIP economy | OPTIMAL obj **83910**; 10s gap **83820** |
 | Fallback `_build_tile_queues()` | If JSON/ortools/solve fails |
@@ -30,6 +33,7 @@
 | Issue | Notes |
 | --- | --- |
 | **Weeds from missed watering** | Snake sometimes misses tail-tile WATER; `consecutive_unwatered` → weed. Guardrail experiments reverted Aug 20 — revisit later with minimal skip-only approach (no detours). |
+| **hire3 sheep deaths (260821_*)** | PLACE then leave without FEED (`FEED`+0 wheat → None → route advance). Mitigated by stay-until-fed + wheat dawn buy. |
 | **I0 vs dump sells** | Melon plan at $250; greedy glut ~$7. Fix sells, not assignment. |
 | **80k callback vs ~49k obj** | Import often hits 20s FEASIBLE; `good_enough` rarely true. Still use 80k. |
 | IDLE leftover | One tile may stay empty until d=1 replan — intended now (middle of zone). |
@@ -53,7 +57,7 @@ Details: `docs/dp_master/fertilze_failure.md`.
 
 ## What's left
 
-1. **Sell drip** for melon / premium — agent
+1. Validate opponent additive factor vs multiply form on real replans
 2. Optional: export assignment JSON so Kaggle import skips CP-SAT
 3. **Later:** watering guardrails — occasional weeds; user reverted Aug 20 attempts
 4. Catalog quality — secondary to sells

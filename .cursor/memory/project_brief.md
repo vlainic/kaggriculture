@@ -12,12 +12,13 @@ Kaggle Simulations competition **Kaggriculture** — 720-turn, two-player farmin
 
 Heuristic/rule-based Python agent (no ML/RL pipeline) that wins on the ladder.
 
-## Current implementation (Aug 15, 2026)
+## Current implementation (Aug 24, 2026)
 
 **Active stack:** one-land **handmade-chain assignment** + snake executor.
 
-- Planner (`agent/planner.py`): CP-SAT at **import** (20s) + dawn **replan from day 1** (5s). Catalog = handmade chains + IDLE. Decode: animals (earliest start) → IDLE → crops.
-- Executor: snake + runtime fert (collect animals, FERTILIZE after WATER). No shed fert pickup. No replan on day 0.
+- Planner (`agent/planner.py`): CP-SAT at **import** (20s) + dawn **replan from day 1** (5s). Catalog = handmade chains + IDLE. Decode: animals (earliest start) → IDLE → crops. Replan catalog prices: live market × `max(0.1, 1 + demand − opp_tiles/10)`.
+- Executor: snake + stay-until-fed; runtime fert (collect animals, FERTILIZE after WATER). No shed fert pickup. No replan on day 0.
+- Market: 50% floor + premium sell DP; wheat dawn buy / no early wheat sells.
 - Hook: `script.TILE_QUEUES = get_tile_queues(_build_tile_queues)` with handmade fallback if solve fails.
 
 **Not this:** season-long weighted set packing (WSP). That was abandoned Aug 12 — see `docs/weighted_set_packing_failer.md`. Do not revive WSP.

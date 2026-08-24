@@ -29,12 +29,21 @@ obs → executor.step
 - **Mockup notebook:** SCIP sibling, no preamble. SCIP is **not** faster than CP-SAT.
 - **Live planner:** `OBJECTIVE_GOOD_ENOUGH = 80_000`, `num_workers=8`, import 20s / replan 5s (Kaggle 60s turn). Obj scale ~49k so 80k callback often never hits.
 
-### Executor + fert (runtime, not CP-SAT)
+### Planner catalog prices (`effective_price`)
+
+- **Day 0 `_build_from_solver`:** i0 quoted, empty shops, **no** opponent counts.
+- **Dawn `replan`:** live market prices × `max(0.1, 1 + shop_demand − opp_tiles/10)`.
+- Opponent tiles: `PLANT.crop` or live `COOP`/`PASTURE` animal → `animal_rollouts.product_for`. Empty/WEED/empty structure ignored.
+- Floor **0.1** is on the whole `price_factor`, not a separate multiply.
+
+### Executor + fert + feed (runtime, not CP-SAT)
 
 - Snake routes, `SHED_DOOR = (4,4)` for wheat/animal PICKUP — **never** shed fert
-- BUILD pasture/coop only if animal already in worker inv; PLACE same day
+- BUILD pasture/coop only if animal already in worker inv; PLACE same day **and** `inv.WHEAT >= 1`
+- Unfed animal (`tile_needs_feed`): `tile_needs_work` stays true even if `_animal_action` is None; **do not** `route_idx += 1`; PASS or PICKUP wheat
 - FERTILIZE after WATER on that tile if bag > 0 + zone has a live animal + `with_fert` age; then HARVEST from tape
-- `market.py` dump-sells shed (including **all fertilizer**) — melon glut is still a **sell** problem
+- Skip `COLLECT_FERTILIZER` only on **non-at-risk** tiles; never skip HARVEST / CARE / FERTILIZE for route slack
+- Market: h=0 `BUY_PRODUCT WHEAT` if shed < live animals + placing today; skip `SELL WHEAT` when `hour < 5`; sell DP + 50% floor for other goods; wheat feed reserve
 
 ### Engine facts
 
@@ -58,6 +67,8 @@ obs → executor.step
 9. **Switching mockup SCIP → CP-SAT for speed** — same model; SCIP is slower. User kept SCIP.
 10. **FERTILIZE before WATER** — steals watering; tomato age 10 also needs HARVEST after fert.
 11. **BUILD pasture without animal in inv** — pasture sits empty for days (buy was gated on existing pasture).
+12. **Treat FEED-with-no-wheat as no work** — executor advances; sheep die in ~2 days; hire3 PLACE ≫ BUILD.
+13. **Opponent factor on day-0 catalog** — no opp farm yet; replan-only.
 
 ---
 
