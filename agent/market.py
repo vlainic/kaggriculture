@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from collections import Counter
 
-from agent import animal_rollouts, pricing, rollouts, script, sell_dp, workers
-from agent.script import QueueItem, TILE_QUEUES
+from agent import animal_rollouts, pricing, rollouts, script, sell_dp, workers, zoning
+from agent.script import TILE_QUEUES, QueueItem
 
 MAX_ORDERS = 10
 SELLABLE = frozenset(
@@ -15,7 +15,7 @@ LIVESTOCK = frozenset(animal_rollouts.animal_names())
 PREMIUM_DRIP = frozenset(sell_dp.PREMIUM_PRODUCTS)
 STAPLE_DUMP = frozenset(sell_dp.STAPLE_PRODUCTS)
 DRIP_PER_HOUR = 1
-HIRE_COST = 4
+HIRE_COST = zoning.HIRE_DAILY_COST
 
 
 def _tile_at(me: dict, idx: int):
@@ -172,12 +172,9 @@ def build_orders(
     orders: list[list] = []
     dawn = empty_at_dawn if empty_at_dawn is not None else set()
 
-    if hour == 0:
+    if hour in (0, 1):
         hires_needed = min(2, workers.NUM_HIRES - len(me["hands"]))
         for _ in range(hires_needed):
-            orders.append(["HIRE"])
-    elif hour == 1:
-        if len(me["hands"]) < workers.NUM_HIRES:
             orders.append(["HIRE"])
 
     needed_seeds, needed_animals, wheat_need = needed_buys(

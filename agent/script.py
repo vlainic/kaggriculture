@@ -5,13 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from agent import zoning
 from agent.zoning import (
     HAND_WORKERS,
-    NUM_HIRES,
     NUM_TILES,
     TILE_COORDS,
-    WORKERS,
     WORKER_TILES,
+    WORKERS,
 )
 
 Kind = Literal["crop", "animal"]
@@ -54,7 +54,7 @@ def _animal(label: str, **kw) -> QueueItem:
     return QueueItem("animal", label, profile=ANIMAL_PROFILE, **kw)
 
 
-def _build_tile_queues() -> dict[int, list[QueueItem]]:
+def _build_four_tile_queues() -> dict[int, list[QueueItem]]:
     q: dict[int, list[QueueItem]] = {}
 
     for idx in range(3):
@@ -83,6 +83,12 @@ def _build_tile_queues() -> dict[int, list[QueueItem]]:
     q[24] = _wheat(1) + _melon(1, start_lag=1) + _melon(1, start_lag=1)
 
     return q
+
+
+def _build_tile_queues() -> dict[int, list[QueueItem]]:
+    if zoning.CURRENT is zoning.FOUR:
+        return _build_four_tile_queues()
+    return {idx: [] for idx in range(NUM_TILES)}
 
 
 from agent.planner import get_tile_queues

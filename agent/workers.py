@@ -16,7 +16,7 @@ SHED_DOOR = zoning.SHED_DOOR
 SHED_ADJACENT = zoning.SHED_ADJACENT
 NUM_HIRES = zoning.NUM_HIRES
 
-# hands[0]=top (hire1), hands[1]=left (hire2), hands[2]=corner (hire3)
+# Hand order follows HAND_WORKERS in the active layout (see zoning.CURRENT).
 HAND_ORDER = HAND_WORKERS
 
 
