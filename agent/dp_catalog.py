@@ -42,10 +42,11 @@ class Template:
                 value += units * price
         return value
 
+    def _first_yield_day(self, start: int) -> int:
+        return start + min(self.harvest_map)
+
     def fits(self, start: int, horizon: int) -> bool:
-        if self.is_animal:
-            return start < horizon
-        return start + self.tile_free_age < horizon
+        return self._first_yield_day(start) < horizon
 
 
 def _crop_template(crop: str, price_of: Callable[[str], int]) -> Template:

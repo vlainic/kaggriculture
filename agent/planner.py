@@ -55,7 +55,7 @@ def _load_json(name: str) -> dict | list:
 
 def _i0_prices(crops_data: dict, animals_data: dict) -> dict[str, int]:
     prices = {crop: spec["base_price"] for crop, spec in crops_data["crops"].items()}
-    for animal, spec in animals_data["animals"].items():
+    for spec in animals_data["animals"].values():
         prices[spec["product"]] = spec["base_price"]
     return prices
 
@@ -343,6 +343,105 @@ def _tile_at(me: dict, idx: int):
     return me["tiles"][y][x]
 
 
+def _profile_key_for_item(item) -> str:
+    return f"{item.label}_{item.profile}"
+
+
+def _queue_suffix_to_chain(
+    queue: list,
+    qi: int,
+    lag: int,
+    gap: int,
+    from_day: int,
+    horizon: int,
+    me: dict,
+    idx: int,
+) -> list:
+    """Handmade raw_chain on replan horizon for queue[qi:] after board/lag/gap."""
+    from agent import tile_ops
+
+    end_day = from_day + horizon
+    cal = from_day
+    tile = _tile_at(me, idx)
+    chain: list = []
+
+    if isinstance(tile, dict) and tile.get("kind") == "PLANT":
+        crop = tile["crop"]
+        item = queue[qi] if qi < len(queue) else None
+        profile = item.profile if item and item.kind == "crop" else CROP_PROFILE
+        free_day = tile["planted_day"] + rollouts.tile_free_age(crop, profile)
+        cal = max(cal, free_day)
+        if item is not None:
+            qi, lag, gap, _ = tile_ops.on_lifecycle_end(idx, qi, item, False)
+    elif isinstance(tile, dict) and tile.get("kind") in ("COOP", "PASTURE"):
+        if tile.get("animal"):
+            return []
+
+    while qi < len(queue) and cal < end_day:
+        while lag > 0 and cal < end_day:
+            cal += 1
+            lag -= 1
+        while gap > 0 and cal < end_day:
+            cal += 1
+            gap -= 1
+        if cal >= end_day:
+            break
+
+        item = queue[qi]
+        rel = cal - from_day
+        if rel >= horizon:
+            break
+        chain.append([_profile_key_for_item(item), rel])
+        if item.kind == "crop":
+            cal += rollouts.tile_free_age(item.label, item.profile)
+            qi += 1
+            lag = queue[qi].start_lag if qi < len(queue) else 0
+            gap = item.replant_gap
+        else:
+            break
+
+    return chain
+
+
+def _stamp_tile_commitment(
+    idx: int,
+    me: dict,
+    st: dict,
+    queue: list,
+    day: int,
+    horizon: int,
+    price_of: Callable[[str], int],
+    crops_data: dict,
+    animals_data: dict,
+):
+    """Stamp board + remaining queue into replan-horizon daily vectors."""
+    tile = _tile_at(me, idx)
+    qi = st.get("queue_idx", 0)
+    lag = st.get("lag", 0)
+    gap = st.get("gap", 0)
+
+    out = _zero_daily(horizon)
+    cash_by_day = [0] * horizon
+
+    if _tile_occupied_for_lock(tile):
+        seg = _stamp_locked_tile(tile, day, horizon, price_of, crops_data, animals_data)
+        if seg:
+            for key in ZERO_DAILY_KEYS:
+                _add_daily(out[key], seg[key], horizon)
+            _add_daily(cash_by_day, seg["cash_by_day"], horizon)
+
+    raw = _queue_suffix_to_chain(queue, qi, lag, gap, day, horizon, me, idx)
+    if raw:
+        suffix_seg = _stamp_chain(raw, -1, horizon, price_of, crops_data, animals_data)
+        for key in ZERO_DAILY_KEYS:
+            _add_daily(out[key], suffix_seg[key], horizon)
+        _add_daily(cash_by_day, suffix_seg["cash_by_day"], horizon)
+
+    if not any(cash_by_day) and not any(sum(out[k]) for k in ZERO_DAILY_KEYS):
+        return None
+    return {"weight": sum(cash_by_day), "cash_by_day": cash_by_day, **out}
+
+
 def _stamp_locked_tile(
     tile: dict,
     day: int,
@@ -439,6 +538,8 @@ def _solve_assignment(
     locked_by_worker: dict[str, dict],
     starting_money: int,
     max_time: float = 20.0,
+    charge_hire_daily: bool = True,
+    track_shed: bool = True,
 ):
     model = cp_model.CpModel()
     count = {}
@@ -489,46 +590,50 @@ def _solve_assignment(
             if terms or locked_ops:
                 model.Add(sum(terms) + locked_ops <= cap)
 
-    buy_w = []
-    buy_f = []
-    buy_w_cost = []
-    buy_f_cost = []
-    W = [model.NewIntVar(0, MAX_BUY, f"W_{d}") for d in range(horizon + 1)]
-    F = [model.NewIntVar(0, MAX_BUY, f"F_{d}") for d in range(horizon + 1)]
-    model.Add(W[0] == 0)
-    model.Add(F[0] == 0)
+    buy_w: list = []
+    buy_f: list = []
+    buy_w_cost: list = []
+    buy_f_cost: list = []
 
-    for d in range(horizon):
-        feed_d = sum(
-            locked_by_worker[w]["daily_feed"][d]
-            + sum(count[w][ci] * chains[ci]["daily_feed"][d] for ci in range(len(chains)))
-            for w in WORKERS
-        )
-        fert_d = sum(
-            locked_by_worker[w]["daily_fert"][d]
-            + sum(count[w][ci] * chains[ci]["daily_fert"][d] for ci in range(len(chains)))
-            for w in WORKERS
-        )
-        collect_d = sum(
-            locked_by_worker[w]["daily_collect"][d]
-            + sum(count[w][ci] * chains[ci]["daily_collect"][d] for ci in range(len(chains)))
-            for w in WORKERS
-        )
-        wheat_d = sum(
-            locked_by_worker[w]["daily_wheat"][d]
-            + sum(count[w][ci] * chains[ci]["daily_wheat"][d] for ci in range(len(chains)))
-            for w in WORKERS
-        )
-        bw = model.NewIntVar(0, MAX_BUY, f"buy_w_{d}")
-        bf = model.NewIntVar(0, MAX_BUY, f"buy_f_{d}")
-        buy_w.append(bw)
-        buy_f.append(bf)
-        buy_w_cost.append(WHEAT_PRICE * bw)
-        buy_f_cost.append(FERT_PRICE * bf)
-        model.Add(W[d] >= feed_d)
-        model.Add(F[d] >= fert_d)
-        model.Add(W[d + 1] == W[d] - feed_d + wheat_d + bw)
-        model.Add(F[d + 1] == F[d] - fert_d + collect_d + bf)
+    if track_shed:
+        W = [model.NewIntVar(0, MAX_BUY, f"W_{d}") for d in range(horizon + 1)]
+        F = [model.NewIntVar(0, MAX_BUY, f"F_{d}") for d in range(horizon + 1)]
+        model.Add(W[0] == 0)
+        model.Add(F[0] == 0)
+
+        for d in range(horizon):
+            feed_d = sum(
+                locked_by_worker[w]["daily_feed"][d]
+                + sum(count[w][ci] * chains[ci]["daily_feed"][d] for ci in range(len(chains)))
+                for w in WORKERS
+            )
+            fert_d = sum(
+                locked_by_worker[w]["daily_fert"][d]
+                + sum(count[w][ci] * chains[ci]["daily_fert"][d] for ci in range(len(chains)))
+                for w in WORKERS
+            )
+            collect_d = sum(
+                locked_by_worker[w]["daily_collect"][d]
+                + sum(count[w][ci] * chains[ci]["daily_collect"][d] for ci in range(len(chains)))
+                for w in WORKERS
+            )
+            wheat_d = sum(
+                locked_by_worker[w]["daily_wheat"][d]
+                + sum(count[w][ci] * chains[ci]["daily_wheat"][d] for ci in range(len(chains)))
+                for w in WORKERS
+            )
+            bw = model.NewIntVar(0, MAX_BUY, f"buy_w_{d}")
+            bf = model.NewIntVar(0, MAX_BUY, f"buy_f_{d}")
+            buy_w.append(bw)
+            buy_f.append(bf)
+            buy_w_cost.append(WHEAT_PRICE * bw)
+            buy_f_cost.append(FERT_PRICE * bf)
+            model.Add(W[d] >= feed_d)
+            model.Add(F[d] >= fert_d)
+            model.Add(W[d + 1] == W[d] - feed_d + wheat_d + bw)
+            model.Add(F[d + 1] == F[d] - fert_d + collect_d + bf)
+    # else: replan ablation — wheat/fert shed ledger off; executor buys at runtime
+    #   W[d] >= feed_d, F[d] >= fert_d, W/F balance, buy_w/buy_f in cash objective
 
     balance_vars = []
     for d in range(horizon):
@@ -539,23 +644,27 @@ def _solve_assignment(
                 cash = chain["cash_by_day"][d]
                 if cash:
                     day_terms.append(count[w][ci] * cash)
-        day_terms.append(-WHEAT_PRICE * buy_w[d])
-        day_terms.append(-FERT_PRICE * buy_f[d])
-        day_terms.append(-HIRE_DAILY_COST)
+        if track_shed:
+            day_terms.append(-WHEAT_PRICE * buy_w[d])
+            day_terms.append(-FERT_PRICE * buy_f[d])
+        # if charge_hire_daily:
+        #     day_terms.append(-HIRE_DAILY_COST)
+        if charge_hire_daily and track_shed:
+            day_terms.append(-HIRE_DAILY_COST)
         bal = model.NewIntVar(0, 200_000, f"balance_{d}")
         prev = starting_money if d == 0 else balance_vars[-1]
         model.Add(bal == prev + (sum(day_terms) if day_terms else 0))
         balance_vars.append(bal)
 
-    model.Maximize(
-        sum(
-            chains[ci]["weight"] * count[w][ci]
-            for w in WORKERS
-            for ci in range(len(chains))
-        )
-        - sum(buy_w_cost)
-        - sum(buy_f_cost)
-    )
+    obj_terms = [
+        chains[ci]["weight"] * count[w][ci]
+        for w in WORKERS
+        for ci in range(len(chains))
+    ]
+    if track_shed:
+        obj_terms.extend([-c for c in buy_w_cost])
+        obj_terms.extend([-c for c in buy_f_cost])
+    model.Maximize(sum(obj_terms))
 
     solver = cp_model.CpSolver()
     solver.parameters.num_workers = 8
@@ -565,9 +674,16 @@ def _solve_assignment(
     t0 = time.perf_counter()
     status = solver.Solve(model, callback)
     elapsed = time.perf_counter() - t0
+    status_name = solver.StatusName(status)
 
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        raise RuntimeError(f"planner infeasible: {solver.StatusName(status)}")
+        print(
+            f"[planner] status={status_name} good_enough={callback.hit} "
+            f"time={elapsed:.3f}s horizon={horizon} "
+            f"empty={sum(empty_counts.values())}",
+            flush=True,
+        )
+        raise RuntimeError(f"planner infeasible: {status_name}")
 
     empty_set = set(empty_tiles)
     assigned = {tile: [] for tile in range(NUM_TILES)}
@@ -601,12 +717,31 @@ def _occupancy_end(profile_key: str, start_day: int, horizon: int) -> int:
     return start_day + rollouts.tile_free_age(label, profile_name)
 
 
-def _replan_eligible(idx: int, tile, st: dict, queues: dict) -> bool:
-    if tile is not None:
+def _tile_empty_for_replan(tile) -> bool:
+    return tile is None or (
+        isinstance(tile, dict) and tile.get("kind") == "WEED"
+    )
+
+
+def _tile_occupied_for_lock(tile) -> bool:
+    if not isinstance(tile, dict):
         return False
-    queue = queues.get(idx, [])
+    if tile.get("kind") == "PLANT":
+        return True
+    if tile.get("kind") in ("COOP", "PASTURE"):
+        return bool(tile.get("animal"))
+    return False
+
+
+def _replan_eligible(idx: int, tile, st: dict, queues: dict) -> bool:
+    if st.get("pending_dig"):
+        return False
+    if not _tile_empty_for_replan(tile):
+        return False
     qi = st.get("queue_idx", 0)
-    return qi >= len(queue)
+    queue = queues.get(idx, [])
+    # Empty at dawn but plan not started yet (e.g. animal tile before PLACE).
+    return not (qi == 0 and queue)
 
 
 def chain_to_queue_items(chain: list, horizon: int = NUM_DAYS) -> list:
@@ -658,6 +793,14 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
 
     player = obs["player"]
     me = obs["farms"][player]
+
+    st_map = tile_state or {}
+    if not any(
+        _replan_eligible(i, _tile_at(me, i), st_map.get(i, {}), tile_queues)
+        for i in range(NUM_TILES)
+    ):
+        return
+
     shops = obs.get("town", {}).get("unlocked_shops", [])
     market_prices = obs.get("market", {}).get("prices", {})
 
@@ -672,43 +815,60 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
     chains = _build_chains(crops_data, animals_data, handmade_chains, horizon, price_of)
 
     replan_tiles = []
-    preserved = 0
+    locked_tiles = 0
     empty_counts = {w: 0 for w in WORKERS}
     locked_by_worker = {w: _zero_daily(horizon) | {"cash_by_day": [0] * horizon} for w in WORKERS}
 
     for idx in range(NUM_TILES):
         tile = _tile_at(me, idx)
         worker = worker_for_tile(idx)
-        st = (tile_state or {}).get(idx, {})
-        if tile is not None:
-            seg = _stamp_locked_tile(tile, day, horizon, price_of, crops_data, animals_data)
-            if seg:
-                _aggregate_locked(locked_by_worker, worker, seg, horizon)
-        elif _replan_eligible(idx, tile, st, tile_queues):
+        st = st_map.get(idx, {})
+        if _replan_eligible(idx, tile, st, tile_queues):
             replan_tiles.append(idx)
             empty_counts[worker] += 1
         else:
-            preserved += 1
+            seg = _stamp_tile_commitment(
+                idx, me, st, tile_queues.get(idx, []), day, horizon,
+                price_of, crops_data, animals_data,
+            )
+            if seg:
+                _aggregate_locked(locked_by_worker, worker, seg, horizon)
+                locked_tiles += 1
 
     if not replan_tiles:
         print(
-            f"[planner] replan d={day} skip assign preserved={preserved}",
+            f"[planner] replan d={day} skip assign locked={locked_tiles}",
             flush=True,
         )
         return
 
-    assigned = _solve_assignment(
-        chains,
-        horizon=horizon,
-        empty_tiles=replan_tiles,
-        empty_counts=empty_counts,
-        locked_by_worker=locked_by_worker,
-        starting_money=int(me["money"]),
-        max_time=5.0,
-    )
+    assert sum(empty_counts.values()) == len(replan_tiles)
+
+    assigned: dict[int, list] = {}
+    try:
+        assigned = _solve_assignment(
+            chains,
+            horizon=horizon,
+            empty_tiles=replan_tiles,
+            empty_counts=empty_counts,
+            locked_by_worker=locked_by_worker,
+            starting_money=int(me["money"]),
+            max_time=15.0,
+            charge_hire_daily=False,
+            track_shed=False,
+        )
+    except RuntimeError as exc:
+        if "infeasible" not in str(exc).lower():
+            raise
+        print(
+            f"[planner] replan d={day} INFEASIBLE keep={len(replan_tiles)}",
+            flush=True,
+        )
+        return
 
     for idx in replan_tiles:
-        tile_queues[idx] = chain_to_queue_items(assigned.get(idx, []), horizon)
+        chain = assigned.get(idx, [])
+        tile_queues[idx] = chain_to_queue_items(chain, horizon)
         if tile_state is not None:
             queue = tile_queues[idx]
             first_lag = queue[0].start_lag if queue else 0
@@ -721,12 +881,26 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
                 "active": False,
             }
 
+    if replan_tiles:
+        samples = []
+        for idx in replan_tiles[:5]:
+            chain = assigned.get(idx, [])
+            if not chain:
+                samples.append(f"t{idx + 1}:IDLE")
+                continue
+            pl = ",".join(
+                f"{_parse_profile_key(k)[0]}@{s}" for k, s in chain
+            )
+            samples.append(f"t{idx + 1}:{pl}")
+        print(f"[planner] replan assign {', '.join(samples)}", flush=True)
+
     opp_log = " ".join(
         f"opp_{p}={n}" for p, n in sorted(opp_counts.items()) if n > 0
     )
+    n_assigned = len(replan_tiles)
     print(
         f"[planner] replan d={day} shops={len(shops)} "
-        f"catalog={len(handmade_chains)} assign={len(replan_tiles)} preserved={preserved}"
+        f"catalog={len(handmade_chains)} assign={n_assigned} locked={locked_tiles}"
         + (f" {opp_log}" if opp_log else ""),
         flush=True,
     )
@@ -761,7 +935,7 @@ def get_tile_queues(fallback: Callable[[], dict]) -> dict:
     if _cached_queues is None:
         try:
             _cached_queues = _build_from_solver()
-        except Exception as exc:
+        except (RuntimeError, OSError, ValueError, KeyError, TypeError) as exc:
             print(f"[planner] fallback to script queues: {exc}", flush=True)
             _cached_queues = fallback()
     return _cached_queues
