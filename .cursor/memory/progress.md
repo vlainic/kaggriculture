@@ -1,14 +1,15 @@
 # Progress
 
-## Strategic status (Aug 24, 2026)
+## Strategic status (Aug 26, 2026)
 
 | Track | Status |
 | --- | --- |
 | **WSP / season set packing** | Abandoned Aug 12 — `docs/weighted_set_packing_failer.md` |
 | **Handmade-chain assignment** | **Live** — zone-count CP-SAT at import → `TILE_QUEUES`; dawn replan from **day 1** |
+| **Layout catalog** | **Live** — `agent/zoning.py` `FOUR` + `FIVE`; `CURRENT = FIVE`; `bind()` |
 | **Runtime fertilizer** | **Live** — collect from animals, FERTILIZE after WATER; no shed pickup |
 | **Mockup SCIP notebook** | Economy aligned with OneLand. SCIP, **no preamble**. Not faster than CP-SAT. |
-| **Snake executor** | Working; same-day BUILD/PLACE; skip d=0 replan |
+| **Snake executor** | Working; same-day BUILD/PLACE; skip d=0 replan; layout-driven routes |
 | **Sell policy** | 50% price floor on all sellables; staples dump; premium sell DP drip; wheat reserved for feed; **no SELL WHEAT hours 0–4** |
 | **Opponent in planner** | Replan-only: `quoted * max(0.1, 1 + shop_demand − opp_tiles/10)` |
 | **Animal feed execution** | Stay on pasture until FEED; PLACE requires inv wheat |
@@ -26,7 +27,8 @@
 | Smoke vs random (Aug 21 feed-stay) | ~**62k**; hire3 PLACE=BUILD=1, same-day FEED |
 | Smoke vs random (Aug 19) | ~**58k** after IDLE-middle + skip d=0 |
 | Mockup SCIP economy | OPTIMAL obj **83910**; 10s gap **83820** |
-| Fallback `_build_tile_queues()` | If JSON/ortools/solve fails |
+| Fallback `_build_tile_queues()` | FOUR handmade only if `CURRENT is FOUR`; else empty queues |
+| Zoning `FOUR` / `FIVE` | Switch via `CURRENT`; planner imports derived tables |
 
 ## Known issues
 
@@ -57,12 +59,13 @@ Details: `docs/dp_master/fertilze_failure.md`.
 
 ## What's left
 
-1. Validate opponent additive factor vs multiply form on real replans
-2. Optional: export assignment JSON so Kaggle import skips CP-SAT
-3. **Later:** watering guardrails — occasional weeds; user reverted Aug 20 attempts
-4. Catalog quality — secondary to sells
-5. Multi-land — not started
-6. Mockup: leave SCIP unless asked
+1. Smoke / score-check **FIVE** layout (hire $7/day, 4 hands, new tile indices)
+2. Validate opponent additive factor vs multiply form on real replans
+3. Optional: export assignment JSON so Kaggle import skips CP-SAT
+4. **Later:** watering guardrails — occasional weeds; user reverted Aug 20 attempts
+5. Catalog quality — secondary to sells
+6. Multi-land — draft in `data/two_lands.md`, **not wired**
+7. Mockup: leave SCIP unless asked
 
 ## Do not do unless asked
 
@@ -74,3 +77,5 @@ Details: `docs/dp_master/fertilze_failure.md`.
 - Treat 80k/83620/83910 as achieved bank
 - Switch mockup SCIP → CP-SAT
 - Add hire preamble / extra PICKUPs to the mockup
+- Delete `FOUR` when adding layouts — keep the catalog; flip `CURRENT`
+- Author zone geometry as JSON (Python `Layout` is the API)

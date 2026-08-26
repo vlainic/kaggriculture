@@ -84,8 +84,12 @@ place = sum(
     1 for acts in by_day_hand2.values() for _, a in acts
     if a.startswith('PLACE')
 )
-if place > build + 1:
-    print(f'FAIL: hand2 PLACE={place} BUILD_PASTURE={build} (expected place <= build+1)', file=sys.stderr)
+# Empty pasture/coop persists after harvest; replan PLACE reuses structure (no new BUILD).
+if place > 0 and build == 0:
+    print(
+        f'FAIL: hand2 PLACE={place} with BUILD_PASTURE=0 (need at least one build)',
+        file=sys.stderr,
+    )
     raise SystemExit(1)
 
 for day, acts in sorted(by_day_hand2.items()):

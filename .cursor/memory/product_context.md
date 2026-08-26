@@ -15,9 +15,9 @@ Compete on Kaggriculture with an autonomous agent that beats typical heuristic/L
 
 ## How the current agent is supposed to work
 
-1. **Import:** stamp `no_fert` handmade chains; CP-SAT zone counts (20s, 8 workers, 80k stop that often misses).
+1. **Import:** bind `zoning.CURRENT` (default **FIVE**); stamp `no_fert` handmade chains; CP-SAT zone counts (20s, 8 workers, 80k stop that often misses).
 2. **Decode:** animals on route-first tiles (earliest animal day in the chain), IDLE in the middle, crops last.
-3. **Runtime:** snake; collect fert from animals; FERTILIZE after WATER if the bag has some. Stay on unfed pastures. Dawn replan from day 1 fills finished/IDLE tiles and **reprices catalog with live market + opponent tile counts**. Market: 50% floor + premium DP drip; wheat reserved / no early wheat sells.
+3. **Runtime:** snake from layout routes/preambles; collect fert from animals; FERTILIZE after WATER if the bag has some. Stay on unfed pastures. Dawn replan from day 1 fills finished/IDLE tiles and **reprices catalog with live market + opponent tile counts**. Market: 50% floor + premium DP drip; wheat reserved / no early wheat sells; 2+2 hire on FIVE.
 
 ## Known product gap
 

@@ -36,15 +36,17 @@ Agents never submit without explicit user request (`kaggle-submission.mdc`).
 | `num_workers` | 8 | Kaggle import timed out with `os.cpu_count()` / 1 worker ~61s |
 | `max_time_in_seconds` | 20 import / 5 replan | Split; do not blanket-cap all solves at 10s |
 | `OBJECTIVE_GOOD_ENOUGH` | 80_000 | Keep; live obj ~49k so callback often misses |
-| `NET_TILE_OPS` | 14 / 12 / 12 / 10 | farmer / hire1 / hire2 / hire3 (−1 slack for care) |
+| `NET_TILE_OPS` | from `zoning` | FOUR: 14/12/12/10; FIVE: 18/13/14/14/15 |
+| `HIRE_DAILY_COST` | from `zoning` | fib sum of hands: FOUR=4, FIVE=7 |
 | Balance domain | 0–200_000 | not ±1e6 |
 | Catalog | ~109 chains | handmade + IDLE |
+| Layout switch | `zoning.CURRENT` | `FOUR` or `FIVE`; call `bind()` |
 
 Notebook OPTIMAL (same model, threshold 0): ~66s, obj 83620. Do not expect that at Kaggle import.
 
 ## Mockup SCIP (`Assignement-Master-Mockup.ipynb`)
 
-Same zone-count MIP as OneLand (counts, daily W/F, cash chain, I0 buys $25/$100, hire $4/day). **SCIP via `pywraplp`**, not CP-SAT. No hire preamble. Yields via `harvest_map`. FEED is inventory, not seed cost.
+Same zone-count MIP as OneLand (counts, daily W/F, cash chain, I0 buys $25/$100, hire fib-sum/day — notebook still assumes 3 hands / $4). **SCIP via `pywraplp`**, not CP-SAT. No hire preamble. Yields via `harvest_map`. FEED is inventory, not seed cost.
 
 | Knob | Value |
 | --- | --- |
@@ -75,6 +77,8 @@ SCIP is slower than OneLand CP-SAT (~0.8s to 80k). Do not switch backends unless
 | `experiments/Assignement-Master-Mockup.ipynb` | SCIP sibling — economy aligned, no preamble |
 | `docs/weighted_set_packing_failer.md` | Old WSP — do not resume |
 | `docs/dp_master/fertilze_failure.md` | First fert/planner regression notes |
+| `data/five_zone_plan.md` | FIVE column layout design |
+| `data/two_lands.md` | Two-land / spawn draft (not in code yet) |
 | `.cursor/skills/kaggriculture-domain` | Mechanics |
 | `.cursor/skills/kaggriculture-agent-conventions` | Agent conventions |
 

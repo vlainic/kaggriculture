@@ -1,22 +1,34 @@
 # Active Context
 
-## Current focus (Aug 24, 2026)
+## Current focus (Aug 26, 2026)
 
-**Planner opponent price factor is live** on dawn `replan` only (not day-0 `_build_from_solver`). Catalog `quoted` uses **live** `obs["market"]["prices"]` at replan; i0 only as missing-key fallback.
-
-Live formula in `agent/planner.py` `effective_price`:
+**Layout catalog is live** in `agent/zoning.py`. Zones are no longer hardcoded only in `script`/`planner`.
 
 ```python
-opp_bonus = -opp_tiles / 10.0
-price_factor = 1 + shop_demand + opp_bonus
-return int(quoted * max(0.1, price_factor))
+FOUR = Layout(...)   # classic 3-hand snake (9/6/6/4 tiles)
+FIVE = Layout(...)   # column split, 4 hands (5×5 columns)
+CURRENT = FIVE       # flip to FOUR to restore
+bind(CURRENT)        # fills WORKERS, TILES, PREAMBLE, NET_TILE_OPS, HIRE_DAILY_COST, …
 ```
 
-i.e. `quoted * max(0.1, 1 + shop_demand - opp_tiles/10)`. Count opponent `PLANT` crops and live animals (`product_for`). Day-0 solver catalog stays `i0 * (1 + demand)` with no opp counts.
+- **Python Layouts, not JSON** — preambles + ASCII maps stay in code; JSON would duplicate the same objects.
+- Planner/executor/workers already consume derived tables — no zone-count MIP changes for a new layout.
+- Market: h=0 and h=1 each hire `min(2, NUM_HIRES − len(hands))` → FOUR = 2+1, FIVE = 2+2. Reserve uses `zoning.HIRE_DAILY_COST` (fib: 4 for THREE hands, 7 for FOUR).
+- Handmade fallback queues in `script.py` only when `CURRENT is FOUR`; otherwise empty `{idx: []}`. Live queues still from planner.
 
-**Feed-stay (hire3 sheep deaths) is live.** Do not treat `FEED`+empty wheat as “tile done.” Stay on unfed pasture; PLACE requires inv wheat; dawn buy wheat vs live+placing; no `SELL WHEAT` at hour 0–4.
+**Still live from prior arc:** dawn replan opponent price factor; feed-stay; fert after WATER; no d=0 replan; sell 50% floor + premium DP.
 
-Occasional **weeds from missed watering** still known — no snake detours. Sell 50% floor + premium sell DP still live.
+## FIVE geometry (active)
+
+Doc: `data/five_zone_plan.md`. Tile 1 = shed `(4,4)`. Columns south→north (`4xN`):
+
+| Zone | tiles (0-based) | ops | start_hour | preamble |
+| --- | --- | --- | --- | --- |
+| farmer | 0–4 | 18 | 0 | empty |
+| hire1 | 5–9 | 13 | 1 | W, pickups, 4×W |
+| hire2 | 10–14 | 14 | 1 | N, pickups, 3×W |
+| hire3 | 15–19 | 14 | 2 | W, pickups, 2×W |
+| hire4 | 20–24 | 15 | 2 | N, pickups, 1×W |
 
 ## Known issue: weeds from unwatering
 
@@ -55,13 +67,13 @@ CP-SAT assigns **counts**, including IDLE (`[]`). A leftover IDLE tile used to l
 - Decode sort: animals by earliest `start_day` over the **full chain** → **IDLE** → crop-only.
 - **No replan on day 0** (`executor` + `planner.replan` early return). First fill is d=1+ when a queue is actually done (or IDLE sits until then).
 
-Logs: `farmer t{idx+1}` — t1 = index 0 (shed door), t9 = index 8. Not a 0/1 mapping bug.
+Logs: `farmer t{idx+1}` — t1 = index 0 (shed door). Zone size depends on `CURRENT` (FOUR farmer t9 = index 8; FIVE farmer t5 = index 4).
 
 ## Solver knobs (live)
 
-Kaggle import timed out at ~61s (`260818_2`). Live planner: `num_workers=8`, import `max_time=20s`, replan `max_time=5s`, `OBJECTIVE_GOOD_ENOUGH=80_000` (callback often never fires; obj scale ~49k). Local smoke after IDLE+d0 skip: **~58k**.
+Kaggle import timed out at ~61s (`260818_2`). Live planner: `num_workers=8`, import `max_time=20s`, replan `max_time=5s`, `OBJECTIVE_GOOD_ENOUGH=80_000` (callback often never fires; obj scale ~49k). Local smoke after IDLE+d0 skip: **~58k** (FOUR era).
 
-Do not treat 80k/83620 as bank.
+Do not treat 80k/83620 as bank. FIVE hire cash is **$7/day** (`1+1+2+3`), not $4.
 
 ## Failures to remember
 
@@ -74,6 +86,7 @@ Do not treat 80k/83620 as bank.
 
 ## User prefs (this arc)
 
+- Layouts as Python `Layout` catalog — keep FOUR when adding FIVE; switch via `CURRENT`
 - Fert from animals only; sell shed fert
 - Animals on first tiles per zone; IDLE between animals and crops
 - BUILD on PLACE day
@@ -86,16 +99,19 @@ Do not treat 80k/83620 as bank.
 
 | File | Role |
 | --- | --- |
-| `agent/planner.py` | Count CP-SAT; live `effective_price` + opp tile counts on `replan`; `NET_TILE_OPS` −1 vs old |
+| `agent/zoning.py` | `FOUR` / `FIVE` / `CURRENT` + `bind()` — sole zone source of truth |
+| `agent/planner.py` | Count CP-SAT; imports zones from `zoning` |
+| `agent/workers.py` | Re-exports zoning tables |
+| `agent/script.py` | Queues + helpers; FOUR-only handmade fallback |
+| `agent/market.py` | 2+2 hire pattern; `HIRE_COST = HIRE_DAILY_COST` |
 | `agent/tile_ops.py` | `tile_needs_feed`; PLACE needs wheat; WATER then FERT |
 | `agent/executor.py` | Snake; skip replan day 0; **do not advance** off unfed pasture |
-| `agent/market.py` | h=0 wheat vs live+placing; no WHEAT sell h<5; 50% floor sells |
-| `agent/sell_dp.py` | Premium drip DP; wheat feed reserve |
-| `agent/script.py` | Zone wheat pickup = live + placing today |
+| `data/five_zone_plan.md` | FIVE design note |
+| `data/two_lands.md` | Draft two-land / spawn notes — **not wired yet** |
 
 ## Immediate next steps
 
-- Watch whether additive opponent term (`-opp/10` inside `1+demand`, floor 0.1) is the intended catalog vs earlier multiply form
-- Confirm hire3 `PLACE ≈ BUILD` and same-day `FEED` on next smoke / submission
-- **Later:** minimal watering guardrails (no snake detours)
+- Smoke / validate FIVE layout (ops caps, hire timing, empty fallback)
+- Watch whether additive opponent term is the intended catalog vs earlier multiply form
+- **Later:** watering guardrails (no snake detours); two-land from `data/two_lands.md`
 - Do not revive WSP
