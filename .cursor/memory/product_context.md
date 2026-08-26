@@ -15,13 +15,14 @@ Compete on Kaggriculture with an autonomous agent that beats typical heuristic/L
 
 ## How the current agent is supposed to work
 
-1. **Import:** bind `zoning.CURRENT` (default **FIVE**); stamp `no_fert` handmade chains; CP-SAT zone counts (20s, 8 workers, 80k stop that often misses).
-2. **Decode:** animals on route-first tiles (earliest animal day in the chain), IDLE in the middle, crops last.
-3. **Runtime:** snake from layout routes/preambles; collect fert from animals; FERTILIZE after WATER if the bag has some. Stay on unfed pastures. Dawn replan from day 1 fills finished/IDLE tiles and **reprices catalog with live market + opponent tile counts**. Market: 50% floor + premium DP drip; wheat reserved / no early wheat sells; 2+2 hire on FIVE.
+1. **Import:** bind `zoning.CURRENT` (default **FIVE**); stamp `no_fert` handmade chains; CP-SAT zone counts with shed W/F + hire cash (20s).
+2. **Decode:** animals on route-first tiles, IDLE middle, crops last.
+3. **Dawn replan (day ≥ 1):** lock non-empty / waiting-PLACE tiles for the remaining horizon; assign catalog chains only to empty replan-eligible tiles; **no W/F shed ledger** in the MIP (`track_shed=False`); cash ≥ 0 + ops caps kept. On INFEASIBLE, keep old queues.
+4. **Runtime:** snake; fert after WATER; stay on unfed pastures. Market: 50% floor + premium DP; wheat reserved; 2+2 hire on FIVE.
 
 ## Known product gap
 
-Day-0 catalog still uses **i0**. Replans use **live quotes** × `max(0.1, 1 + shop_demand − opp_tiles/10)`. Sell DP + 50% floor replaced full-shed dump for premiums; wheat is feed-reserved. **80k solver obj is not bank.** Occasional weeds from missed WATER remain.
+Day-0 catalog still uses **i0**. Replans use live quotes × opponent factor. Shed-off replan unlocked mid-season diversity (COW/STRAWBERRY); some late dawns still INFEASIBLE. Local FIVE smoke peaked ~98k once, later ~64k — **do not bank**. Occasional weeds from missed WATER remain.
 
 ## User workflow preferences
 

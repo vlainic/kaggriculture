@@ -2,21 +2,41 @@
 
 ## Current focus (Aug 26, 2026)
 
-**Layout catalog is live** in `agent/zoning.py`. Zones are no longer hardcoded only in `script`/`planner`.
+**Dawn replan overhaul is live** in `agent/planner.py`, on top of the layout catalog (`CURRENT = FIVE`).
+
+### Replan model (what changed)
+
+1. **Tile triage at dawn**
+   - **Variable:** `_replan_eligible` — empty/WEED, not `pending_dig`, and **not** (`qi==0` and queue non-empty). That last guard stops sheep/cow tiles waiting for PLACE from being reassigned every dawn.
+   - **Locked:** everything else → `_stamp_tile_commitment` (board segment + remaining queue suffix) into `locked_by_worker`. Constraints see the full farm; only empties are decision vars.
+
+2. **Commitment stamp**
+   - `_queue_suffix_to_chain` walks lag/gap calendar (mirrors `sell_dp._simulate_queue_harvests`).
+   - `_stamp_tile_commitment` stamps occupied board via `_stamp_locked_tile` then suffixes via `_stamp_chain`.
+
+3. **INFEASIBLE = preserve** — never wipe queues to IDLE (that caused ~37k). Log `status` + elapsed on failure.
+
+4. **`track_shed=False` on replan only** — wheat/fert shed ledger + hire daily cash **off** for dawn replan; day-0 `_build_from_solver` still uses `track_shed=True`. Ablation showed shed W/F was the main batch INFEASIBLE cause (presolve ~0.001s, not timeout). Replan `max_time=15s`; day-0 still 20s.
+
+### Smoke scoreboard (this arc)
+
+| Layout + config | Reward | Notes |
+| --- | --- | --- |
+| FIVE, empty replan + IDLE wipe | ~37k | Bad |
+| FIVE, qi guard + INFEASIBLE preserve + shed on | ~51k | Replan never assigned |
+| FIVE, + `track_shed=False` | **~98.8k** | Replan assign works (COW/STRAWBERRY); some late days still INFEASIBLE |
+| FOUR, same replan | ~71–74k | Smoke PLACE≫BUILD false positive fixed |
+| FIVE (current) | **~63.7k** | Smoke passed after PLACE check fix |
+
+Do not treat 98k as bank — single local vs `random`; FIVE after switch was ~64k.
+
+### Layout
 
 ```python
-FOUR = Layout(...)   # classic 3-hand snake (9/6/6/4 tiles)
-FIVE = Layout(...)   # column split, 4 hands (5×5 columns)
-CURRENT = FIVE       # flip to FOUR to restore
-bind(CURRENT)        # fills WORKERS, TILES, PREAMBLE, NET_TILE_OPS, HIRE_DAILY_COST, …
+CURRENT = FIVE   # flip to FOUR to restore classic 3-hand
 ```
 
-- **Python Layouts, not JSON** — preambles + ASCII maps stay in code; JSON would duplicate the same objects.
-- Planner/executor/workers already consume derived tables — no zone-count MIP changes for a new layout.
-- Market: h=0 and h=1 each hire `min(2, NUM_HIRES − len(hands))` → FOUR = 2+1, FIVE = 2+2. Reserve uses `zoning.HIRE_DAILY_COST` (fib: 4 for THREE hands, 7 for FOUR).
-- Handmade fallback queues in `script.py` only when `CURRENT is FOUR`; otherwise empty `{idx: []}`. Live queues still from planner.
-
-**Still live from prior arc:** dawn replan opponent price factor; feed-stay; fert after WATER; no d=0 replan; sell 50% floor + premium DP.
+Still live: opponent price factor on replan; feed-stay; fert after WATER; no d=0 replan; sell 50% floor + premium DP.
 
 ## FIVE geometry (active)
 
@@ -30,68 +50,48 @@ Doc: `data/five_zone_plan.md`. Tile 1 = shed `(4,4)`. Columns south→north (`4x
 | hire3 | 15–19 | 14 | 2 | W, pickups, 2×W |
 | hire4 | 20–24 | 15 | 2 | N, pickups, 1×W |
 
+## Smoke check: PLACE vs BUILD
+
+`scripts/smoke_test.sh` used to require `PLACE <= BUILD + 1` on hand2. **Wrong** after replan: empty pasture/coop **persists**; later PLACE reuses structure without BUILD. Now: fail only if `PLACE > 0 and BUILD == 0`. Same-day FEED after PLACE kept.
+
 ## Known issue: weeds from unwatering
 
-Sometimes crops turn to weeds because the snake route runs out of hours before tail tiles get WATER. Root causes explored:
-
-- `lag` / `gap` in tile state can block normal watering on some tiles
-- Route capacity: farmer may finish zone before every tile is visited same day
-- At-risk = `consecutive_unwatered >= 1` and not `watered_today`; weed at 2 missed days
-
-**Do not repeat without user ask:**
-
-- Route reorder / detour (`care_first_route`) — user rejected
-- Aggressive action deferral (skip CARE, FERTILIZE zone-wide) — made things worse (~35k selfplay, sheep deaths in 260820_3)
-- Zone-wide COLLECT_FERTILIZER skip — leaves workers idle on at-risk tiles
-
-**If revisited later:** keep normal snake queue; skip only non-essential actions (primarily COLLECT_FERTILIZER) on **non-at-risk** tiles when zone has at-risk tiles; never skip HARVEST; urgent WATER/FEED may bypass lag/gap.
+Sometimes crops turn to weeds because the snake runs out of hours before tail tiles get WATER. Guardrail experiments (route detour, defer CARE/FERT) reverted — do not repeat without user ask.
 
 ## What fertilizer actually does now
 
-Planner stays `no_fert`. Animals sit on **route-first** tiles so collect happens early on the snake.
+Planner stays `no_fert`. Collect from animal tape; FERTILIZE after WATER if inv has fert + zone has animal. No shed fert pickup. Market sells all shed fert.
 
-**Collect:** animal rollout tape already has `COLLECT_FERTILIZER` (age 1+). Always collect when `fertilizer_available`. **No shed `PICKUP FERTILIZER`.** Market already sells **all** shed fert.
+## Decode + replan eligibility
 
-**Apply:** in `_crop_action`, after WATER on that tile, if inv has FERTILIZER and zone has a placed animal and crop is on a `with_fert` age → `FERTILIZE`, then remaining tape (HARVEST). Tomato age 10 = WATER → FERTILIZE → HARVEST same day. MELON excluded. Do **not** steal PASS hours for a fert hunt.
-
-**Ages (`with_fert`):** WHEAT/CARROT 2; TOMATO 7+10; STRAWBERRY 9+13.
-
-**Same-day pasture:** BUILD only if the animal is already in that worker’s inventory. Market buys + shed pickup while the tile is still empty. Sequence: BUY → PICKUP → BUILD → PLACE.
-
-## Decode + replan (IDLE trap)
-
-CP-SAT assigns **counts**, including IDLE (`[]`). A leftover IDLE tile used to land last (farmer **t9**). Day-0 replan treated empty queue as “exhausted” and stuffed a sheep there (`260819_1`, `replan d=0 assign=1`).
-
-**Now:**
-
-- Decode sort: animals by earliest `start_day` over the **full chain** → **IDLE** → crop-only.
-- **No replan on day 0** (`executor` + `planner.replan` early return). First fill is d=1+ when a queue is actually done (or IDLE sits until then).
-
-Logs: `farmer t{idx+1}` — t1 = index 0 (shed door). Zone size depends on `CURRENT` (FOUR farmer t9 = index 8; FIVE farmer t5 = index 4).
+- Decode sort: animals by earliest `start_day` → IDLE → crop-only.
+- **No replan on day 0.**
+- Replan variables: empty/WEED with segment done (`qi > 0` or empty queue), not waiting first PLACE.
 
 ## Solver knobs (live)
 
-Kaggle import timed out at ~61s (`260818_2`). Live planner: `num_workers=8`, import `max_time=20s`, replan `max_time=5s`, `OBJECTIVE_GOOD_ENOUGH=80_000` (callback often never fires; obj scale ~49k). Local smoke after IDLE+d0 skip: **~58k** (FOUR era).
+| Knob | Day-0 | Replan |
+| --- | --- | --- |
+| `max_time` | 20s | 15s |
+| `track_shed` | True | **False** |
+| `charge_hire_daily` | True | False (and shed-gated) |
+| Constraints kept | zone counts, ops caps, locked load, cash ≥ 0 | same minus W/F ledger |
 
-Do not treat 80k/83620 as bank. FIVE hire cash is **$7/day** (`1+1+2+3`), not $4.
+`OBJECTIVE_GOOD_ENOUGH=80_000`. FIVE hire cash **$7/day**.
 
 ## Failures to remember
 
-| Run | What happened |
+| Run / mode | What happened |
 | --- | --- |
-| First fert pass | Animal-boolean sort + tile-0 exclude + 10s all solves → 5 sheep, early pasture, $9 cash. Notes: `docs/dp_master/fertilze_failure.md` |
-| `260819_1` | 20s FEASIBLE + IDLE last + **d=0 replan** → extra sheep on t9, tight cash |
-| After d0 skip + IDLE-middle | Cow t1, sheep t2; no t9 sheep from d0; smoke ~58k |
-| `260820_2` / `260820_3` | Occasional weeds from missed watering; guardrail attempts (deferral, zone skip) hurt score or caused animal deaths — **reverted** |
+| Empty-only replan + IDLE wipe | ~37k — destroyed day-0 suffixes |
+| Batch replan with W/F shed | Always INFEASIBLE (~0.001s) despite locking |
+| `track_shed=False` | Unlocks replan; ~98k FIVE smoke once |
+| Smoke PLACE≤BUILD+1 | False fail on FOUR/FIVE when pasture reused |
 
 ## User prefs (this arc)
 
+- Replan: lock committed horizon; variables = empty only; keep cash ≥ 0; shed W/F off for replan ablation (commented, not deleted)
 - Layouts as Python `Layout` catalog — keep FOUR when adding FIVE; switch via `CURRENT`
-- Fert from animals only; sell shed fert
-- Animals on first tiles per zone; IDLE between animals and crops
-- BUILD on PLACE day
-- WATER then FERTILIZE (tomato also HARVEST)
-- No d=0 replan
 - Agents never Kaggle-submit without explicit ask
 - Do not commit `.cursor/`
 
@@ -99,19 +99,15 @@ Do not treat 80k/83620 as bank. FIVE hire cash is **$7/day** (`1+1+2+3`), not $4
 
 | File | Role |
 | --- | --- |
-| `agent/zoning.py` | `FOUR` / `FIVE` / `CURRENT` + `bind()` — sole zone source of truth |
-| `agent/planner.py` | Count CP-SAT; imports zones from `zoning` |
-| `agent/workers.py` | Re-exports zoning tables |
-| `agent/script.py` | Queues + helpers; FOUR-only handmade fallback |
-| `agent/market.py` | 2+2 hire pattern; `HIRE_COST = HIRE_DAILY_COST` |
-| `agent/tile_ops.py` | `tile_needs_feed`; PLACE needs wheat; WATER then FERT |
-| `agent/executor.py` | Snake; skip replan day 0; **do not advance** off unfed pasture |
-| `data/five_zone_plan.md` | FIVE design note |
-| `data/two_lands.md` | Draft two-land / spawn notes — **not wired yet** |
+| `agent/zoning.py` | `FOUR` / `FIVE` / `CURRENT` + `bind()` |
+| `agent/planner.py` | Import + dawn replan; commitment stamp; `track_shed` |
+| `agent/dp_catalog.py` | WIS catalog; `fits()` uses first harvest age |
+| `scripts/smoke_test.sh` | Local smoke; PLACE/BUILD check = “≥1 build if any PLACE” |
+| `data/two_lands.md` | Draft two-land notes — **not wired yet** |
 
 ## Immediate next steps
 
-- Smoke / validate FIVE layout (ops caps, hire timing, empty fallback)
-- Watch whether additive opponent term is the intended catalog vs earlier multiply form
-- **Later:** watering guardrails (no snake detours); two-land from `data/two_lands.md`
+- Stabilize FIVE score (64k vs one-off 98k — variance / seed / opponent)
+- Late-day replan still sometimes INFEASIBLE under cash/ops — optional per-worker sequential fallback
+- **Later:** watering guardrails; two-land from `data/two_lands.md`
 - Do not revive WSP

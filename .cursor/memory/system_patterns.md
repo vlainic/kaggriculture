@@ -6,11 +6,12 @@
 import:
   agent/zoning.py CURRENT → bind() → WORKERS / TILES / PREAMBLE / NET_TILE_OPS / HIRE_DAILY_COST
   data/{crop,animal}_rollouts.json + handmade_dp_candidates.json
-  stamp chains (no_fert weights) → CP-SAT count[zone][chain]
+  stamp chains (no_fert weights) → CP-SAT count[zone][chain]  (track_shed=True)
   decode: animals (earliest start_day) → IDLE → crops → TILE_QUEUES
 
 obs → executor.step
-  ├─ hour0: reset routes; replan if day > 0; HIRE / BUY
+  ├─ hour0: reset routes; dawn replan if 0 < day < SEASON_LAST; HIRE / BUY
+  │         replan: lock commitments → CP-SAT empties only (track_shed=False)
   ├─ market: dump SELL (all shed fert); buy animals even if tile still empty
   └─ snake: preamble → tile ops (WATER then optional FERTILIZE) → shed
 ```
@@ -32,12 +33,12 @@ obs → executor.step
 - **Yields:** zip `harvest_ages` → `yield_per_harvest`. Never stamp `yield_per_harvest[0]` on every HARVEST.
 - **FEED:** inventory consumption (open wheat buy at I0), **not** a $10 seed cost in `timeline_values`. PLANT / BUILD stay as setup costs.
 - **Ops (OneLand / planner):** stamped tile actions + per-chain pickups (animal place, wheat-on-FEED, fert). Hire preamble = zone-day 0/1: `preamble <=> animal_count >= 1` via `preamble <= animal_count` and `animal_count <= preamble * zsize`. Farmer zone: no preamble. Do **not** use 654-term `OnlyEnforceIf` over tiles.
-- **Cash / W/F:** daily `balance` chain (domain 0–200k), inventory levels, buy shortfall at I0 ($25 wheat / $100 fert), **minus `HIRE_DAILY_COST`/day** (layout-dependent fib sum). Objective = chain value − wheat/fert buys (hires cash-only).
+- **Cash / W/F (day-0):** daily `balance` chain (domain 0–200k), wheat/fert shed ledgers + buys at I0 ($25/$100), **minus `HIRE_DAILY_COST`/day**. Objective = chain value − wheat/fert buys.
+- **Cash (replan):** same ops caps + locked load + cash ≥ 0 + live `starting_money`; **`track_shed=False`** — no W/F ledger / buy vars / hire daily in model (executor/market buy at runtime). Ablation: shed ledgers caused mass INFEASIBLE in ~0.001s.
+- **Dawn replan triage:** `_replan_eligible` empties only (not `qi==0` with queue waiting PLACE). Non-eligible → `_stamp_tile_commitment` (board + queue suffix) → `locked_by_worker`. INFEASIBLE → **preserve** queues (never IDLE wipe).
 - **Decode:** fill `WORKER_TILES[zone]` in route order. Sort slots: animal chains by earliest `start_day` in the full chain, then IDLE (`[]`), then crop-only. Log `t{idx+1}` (t1 = index 0).
-- **IDLE:** legal count filler (empty queue for the horizon). Do not replan it on day 0 — looks like “queue exhausted.”
-- **OneLand notebook:** CP-SAT OPTIMAL ~66s, obj 83620. Optional `OBJECTIVE_GOOD_ENOUGH`.
-- **Mockup notebook:** SCIP sibling, no preamble. SCIP is **not** faster than CP-SAT.
-- **Live planner:** `OBJECTIVE_GOOD_ENOUGH = 80_000`, `num_workers=8`, import 20s / replan 5s (Kaggle 60s turn). Obj scale ~49k so 80k callback often never hits.
+- **IDLE:** legal count filler. Do not replan it on day 0.
+- **Live planner:** `OBJECTIVE_GOOD_ENOUGH = 80_000`, `num_workers=8`, import **20s** / replan **15s**. Day-0 obj ~49–53k.
 
 ### Planner catalog prices (`effective_price`)
 
@@ -81,6 +82,9 @@ obs → executor.step
 13. **Opponent factor on day-0 catalog** — no opp farm yet; replan-only.
 14. **Replace FOUR when adding FIVE** — keep both; switch with `CURRENT`.
 15. **Zone geometry as JSON** — author as Python `Layout`; dump later if needed.
+16. **IDLE-wipe on replan INFEASIBLE** — destroyed day-0 suffixes (~37k). Preserve queues.
+17. **Replan with wheat/fert shed ledger** — over-constrained mid-season; use `track_shed=False` on replan.
+18. **Smoke `PLACE ≤ BUILD+1`** — false fail; empty pasture persists and PLACE reuses it.
 
 ---
 

@@ -14,15 +14,15 @@ Heuristic/rule-based Python agent (no ML/RL pipeline) that wins on the ladder.
 
 ## Current implementation (Aug 26, 2026)
 
-**Active stack:** one-land **handmade-chain assignment** + snake executor + **layout catalog**.
+**Active stack:** one-land **handmade-chain assignment** + snake executor + **layout catalog** + **dawn replan overhaul**.
 
-- Zoning (`agent/zoning.py`): `FOUR` / `FIVE` layouts; `CURRENT = FIVE`; `bind()` feeds planner/executor/market.
-- Planner (`agent/planner.py`): CP-SAT at **import** (20s) + dawn **replan from day 1** (5s). Catalog = handmade chains + IDLE. Decode: animals (earliest start) → IDLE → crops. Replan catalog prices: live market × `max(0.1, 1 + demand − opp_tiles/10)`.
-- Executor: snake + stay-until-fed; runtime fert (collect animals, FERTILIZE after WATER). No shed fert pickup. No replan on day 0.
+- Zoning (`agent/zoning.py`): `FOUR` / `FIVE`; **`CURRENT = FIVE`**; `bind()` feeds planner/executor/market.
+- Planner (`agent/planner.py`): CP-SAT at **import** (20s, `track_shed=True`) + dawn **replan from day 1** (15s, `track_shed=False`). Lock committed tiles (board + queue suffix); variables = empty/WEED replan-eligible only. INFEASIBLE preserves queues. Catalog prices on replan: live × `max(0.1, 1 + demand − opp_tiles/10)`.
+- Executor: snake + stay-until-fed; runtime fert; no d=0 replan.
 - Market: 50% floor + premium sell DP; wheat dawn buy / no early wheat sells; hire `min(2,…)` on h=0 and h=1.
-- Hook: `script.TILE_QUEUES = get_tile_queues(_build_tile_queues)` — FOUR handmade fallback only if `CURRENT is FOUR`.
+- Smoke: `PLACE` may reuse empty pasture (no new BUILD required beyond first).
 
-**Not this:** season-long weighted set packing (WSP). That was abandoned Aug 12 — see `docs/weighted_set_packing_failer.md`. Do not revive WSP.
+**Not this:** season-long weighted set packing (WSP). Abandoned Aug 12 — see `docs/weighted_set_packing_failer.md`.
 
 ## Deliverable
 

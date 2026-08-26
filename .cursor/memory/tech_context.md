@@ -22,7 +22,7 @@ env = make("kaggriculture", configuration={"episodeSteps": 720}, debug=True)
 env.run(["main.py", "random"])
 ```
 
-Vs `random` smoke (Aug 19 fert + skip d=0 replan): planner import ~2–4s, reward ~**58k**. Vs greedy opponent: melon glut still expected with dump sells.
+Vs `random` smoke (Aug 26 FIVE + replan `track_shed=False`): day-0 ~1–2s; peak ~**98k** once, later ~**64k**. FOUR same replan ~**71–74k**. Do not bank peak.
 
 ## Kaggle submit
 
@@ -34,8 +34,9 @@ Agents never submit without explicit user request (`kaggle-submission.mdc`).
 | Knob | Value | Notes |
 | --- | --- | --- |
 | `num_workers` | 8 | Kaggle import timed out with `os.cpu_count()` / 1 worker ~61s |
-| `max_time_in_seconds` | 20 import / 5 replan | Split; do not blanket-cap all solves at 10s |
-| `OBJECTIVE_GOOD_ENOUGH` | 80_000 | Keep; live obj ~49k so callback often misses |
+| `max_time_in_seconds` | 20 import / **15 replan** | Replan is not timeout-bound when INFEASIBLE (~0.001s) |
+| `track_shed` | True day-0 / **False replan** | W/F ledger off for dawn; day-0 unchanged |
+| `OBJECTIVE_GOOD_ENOUGH` | 80_000 | Keep; live day-0 obj ~49–53k so callback often misses |
 | `NET_TILE_OPS` | from `zoning` | FOUR: 14/12/12/10; FIVE: 18/13/14/14/15 |
 | `HIRE_DAILY_COST` | from `zoning` | fib sum of hands: FOUR=4, FIVE=7 |
 | Balance domain | 0–200_000 | not ±1e6 |
