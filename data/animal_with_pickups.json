@@ -2,7 +2,7 @@
   "meta": {
       "version": 1,
       "age_definition": "obs_day - placed_day",
-      "actions_are_tile_only": true,
+      "actions_are_tile_only": false,
       "build_day_offset": -1,
       "market_setup_per_placement": [
           "BUY_ANIMAL"
