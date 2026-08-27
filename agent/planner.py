@@ -197,7 +197,6 @@ def _stamp_profile_segment(
     feed_by_age, fert_use_by_age, collect_by_age, wheat_gain_by_age = _parse_age_maps(
         profile, label, kind
     )
-    build_day_offset = animals_data["meta"].get("build_day_offset", -1)
 
     out = _zero_daily(horizon)
     cash_by_day = [0] * horizon
@@ -241,12 +240,6 @@ def _stamp_profile_segment(
             out["daily_wheat"][rel] += wheat_gain_by_age.get(age, 0)
         if not occupied:
             return None
-        if min_age == 0:
-            build_day = rel_start + build_day_offset
-            if build_day < 0:
-                build_day = rel_start
-            if build_day < horizon:
-                out["daily_tile_ops"][build_day] += 1
 
     cash_by_day = _build_cash_by_day(
         rel_start,
@@ -557,21 +550,11 @@ def _solve_assignment(
             terms = []
             for ci, chain in enumerate(chains):
                 var = count[worker][ci]
-                for key in (
-                    "daily_tile_ops",
-                    "daily_wheat_pickup",
-                    "daily_animal_place",
-                    "daily_fert_pickup",
-                ):
-                    n = chain[key][day]
-                    if n:
-                        terms.append(var * n)
-            locked_ops = (
-                locked["daily_tile_ops"][day]
-                + locked["daily_wheat_pickup"][day]
-                + locked["daily_animal_place"][day]
-                + locked["daily_fert_pickup"][day]
-            )
+                n = chain["daily_tile_ops"][day]
+                if n:
+                    terms.append(var * n)
+            # Pickups JSON already includes PICKUP/BUILD/PLACE in daily_tile_ops.
+            locked_ops = locked["daily_tile_ops"][day]
             if worker in HAND_WORKERS:
                 animal_terms = [
                     count[worker][ci]

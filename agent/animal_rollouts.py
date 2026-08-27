@@ -9,7 +9,6 @@ from pathlib import Path
 ANIMAL_NAMES = ("GOOSE", "COW", "SHEEP")
 ANIMAL_PRODUCTS = ("EGG", "MILK", "WOOL")
 WHEAT_PRICE = 25
-ANIMAL_SETUP_OPS = 1  # PICKUP on placement day (PLACE is in JSON age-0 actions)
 BUILD_DAY_OFFSET = -1
 
 _DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "animal_rollouts.json"
@@ -116,25 +115,15 @@ def executor_ops_by_day(
     profile: str = "no_care",
     min_day: int = 0,
 ) -> dict[int, int]:
-    """All farmer turns per calendar day (tile ops + feed/build pickups)."""
+    """All farmer turns per calendar day (pickups JSON already includes shed trips)."""
     out: dict[int, int] = {}
     for day in _profile_data(animal, profile)["days"]:
         cal = place_day + day["age"]
+        if cal < min_day:
+            continue
         if cal >= horizon:
             break
-        actions = day["actions"]
-        n_ops = len(actions)
-        if "FEED" in actions:
-            n_ops += 1  # PICKUP WHEAT from shed
-        if day["age"] == 0:
-            n_ops += ANIMAL_SETUP_OPS  # PICKUP animal from shed
-        out[cal] = n_ops
-
-    build_day = place_day + BUILD_DAY_OFFSET
-    if build_day < 0:
-        build_day = place_day
-    if build_day >= min_day and build_day < horizon:
-        out[build_day] = out.get(build_day, 0) + 1
+        out[cal] = len(day["actions"])
     return out
 
 
