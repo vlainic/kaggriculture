@@ -1,113 +1,59 @@
 # Active Context
 
-## Current focus (Aug 26, 2026)
+## Current focus (Aug 27, 2026)
 
-**Dawn replan overhaul is live** in `agent/planner.py`, on top of the layout catalog (`CURRENT = FIVE`).
+**DP catalog + pickups-honest ops** on top of dawn replan / FIVE layout.
 
-### Replan model (what changed)
+### Just shipped (this session)
 
-1. **Tile triage at dawn**
-   - **Variable:** `_replan_eligible` — empty/WEED, not `pending_dig`, and **not** (`qi==0` and queue non-empty). That last guard stops sheep/cow tiles waiting for PLACE from being reassigned every dawn.
-   - **Locked:** everything else → `_stamp_tile_commitment` (board segment + remaining queue suffix) into `locked_by_worker`. Constraints see the full farm; only empties are decision vars.
+1. **Zonewise notebooks**
+   - [`experiments/OneL-Zonewise-CPSAT-Handmade-Catalog.ipynb`](../../experiments/OneL-Zonewise-CPSAT-Handmade-Catalog.ipynb) — FIVE LandOne cascade; **conservative money coupling**: next zone opens at prev start − prev loss (setups + W/F buys + hire; **no sells**). Full day `closing` still logged.
+   - [`experiments/OneL-Zonewise-CPSAT-DP-Catalog.ipynb`](../../experiments/OneL-Zonewise-CPSAT-DP-Catalog.ipynb) — same MIP, chains from `agent.dp_catalog.build_catalog` via `DP_LAGS`.
 
-2. **Commitment stamp**
-   - `_queue_suffix_to_chain` walks lag/gap calendar (mirrors `sell_dp._simulate_queue_harvests`).
-   - `_stamp_tile_commitment` stamps occupied board via `_stamp_locked_tile` then suffixes via `_stamp_chain`.
+2. **`agent/dp_catalog.py`**
+   - `build_catalog(horizon, price_of, lags=…, tolerance=…, max_variants=…)`
+   - Insert diversity: near-best landing days (`INSERT_TOLERANCE=0.05`, `INSERT_MAX_VARIANTS=4`) with **best-chain pinned** before day-stride thin (stride alone dropped argmax → MIP regression).
+   - **Greedy inserts:** no forced wheat/carrot prefix; extras = mono-greedy of that crop (1, 2, … while fits) + mix WIS suffix; animals = single placement (dedupes with animal-only).
+   - Day-0 / replan both call this (not handmade JSON).
 
-3. **INFEASIBLE = preserve** — never wipe queues to IDLE (that caused ~37k). Log `status` + elapsed on failure.
+3. **Animals = pickups JSON**
+   - Agent loads `data/animal_with_pickups.json` (`animal_rollouts.py` + `planner.py`); smoke bundle copies it (not `animal_rollouts.json`).
+   - Tile-only `animal_rollouts.json` remains for older notebooks.
 
-4. **`track_shed=False` on replan only** — wheat/fert shed ledger + hire daily cash **off** for dawn replan; day-0 `_build_from_solver` still uses `track_shed=True`. Ablation showed shed W/F was the main batch INFEASIBLE cause (presolve ~0.001s, not timeout). Replan `max_time=15s`; day-0 still 20s.
+4. **Ops cap = `daily_tile_ops` only**
+   - Pickups JSON already has PICKUP/BUILD/PLACE in `len(actions)`.
+   - Removed double-counts: cap no longer adds `daily_wheat_pickup` / `daily_animal_place` / `daily_fert_pickup`; no extra `build_day += 1` stamp; `animal_rollouts.executor_ops_by_day` is `len(actions)` only.
+   - Hire preamble (1 op if any animal active) still charged for hands.
 
-### Smoke scoreboard (this arc)
+### Pricing (agent)
 
-| Layout + config | Reward | Notes |
-| --- | --- | --- |
-| FIVE, empty replan + IDLE wipe | ~37k | Bad |
-| FIVE, qi guard + INFEASIBLE preserve + shed on | ~51k | Replan never assigned |
-| FIVE, + `track_shed=False` | **~98.8k** | Replan assign works (COW/STRAWBERRY); some late days still INFEASIBLE |
-| FOUR, same replan | ~71–74k | Smoke PLACE≫BUILD false positive fixed |
-| FIVE (current) | **~63.7k** | Smoke passed after PLACE check fix |
+| When | `price_of` |
+| --- | --- |
+| Day-0 | i0 `base_price` |
+| Replan | live quote × `max(0.1, 1 + shop_demand − opp_tiles/10)` |
 
-Do not treat 98k as bank — single local vs `random`; FIVE after switch was ~64k.
+Same callable feeds catalog WIS **and** chain stamp cash.
+
+### Replan (unchanged shape)
+
+- Horizon = `NUM_DAYS - day` (remaining season).
+- Vars = `_replan_eligible` empties only; rest locked (board + queue suffix).
+- `track_shed=False`; INFEASIBLE → preserve queues.
 
 ### Layout
 
 ```python
-CURRENT = FIVE   # flip to FOUR to restore classic 3-hand
+CURRENT = FIVE   # zoning still 18/13/14/14/15; zonewise notebooks use two_lands 18/17/16/14/13
 ```
 
-Still live: opponent price factor on replan; feed-stay; fert after WATER; no d=0 replan; sell 50% floor + premium DP.
+## Smoke / score notes
 
-## FIVE geometry (active)
-
-Doc: `data/five_zone_plan.md`. Tile 1 = shed `(4,4)`. Columns south→north (`4xN`):
-
-| Zone | tiles (0-based) | ops | start_hour | preamble |
-| --- | --- | --- | --- | --- |
-| farmer | 0–4 | 18 | 0 | empty |
-| hire1 | 5–9 | 13 | 1 | W, pickups, 4×W |
-| hire2 | 10–14 | 14 | 1 | N, pickups, 3×W |
-| hire3 | 15–19 | 14 | 2 | W, pickups, 2×W |
-| hire4 | 20–24 | 15 | 2 | N, pickups, 1×W |
-
-## Smoke check: PLACE vs BUILD
-
-`scripts/smoke_test.sh` used to require `PLACE <= BUILD + 1` on hand2. **Wrong** after replan: empty pasture/coop **persists**; later PLACE reuses structure without BUILD. Now: fail only if `PLACE > 0 and BUILD == 0`. Same-day FEED after PLACE kept.
-
-## Known issue: weeds from unwatering
-
-Sometimes crops turn to weeds because the snake runs out of hours before tail tiles get WATER. Guardrail experiments (route detour, defer CARE/FERT) reverted — do not repeat without user ask.
-
-## What fertilizer actually does now
-
-Planner stays `no_fert`. Collect from animal tape; FERTILIZE after WATER if inv has fert + zone has animal. No shed fert pickup. Market sells all shed fert.
-
-## Decode + replan eligibility
-
-- Decode sort: animals by earliest `start_day` → IDLE → crop-only.
-- **No replan on day 0.**
-- Replan variables: empty/WEED with segment done (`qi > 0` or empty queue), not waiting first PLACE.
-
-## Solver knobs (live)
-
-| Knob | Day-0 | Replan |
-| --- | --- | --- |
-| `max_time` | 20s | 15s |
-| `track_shed` | True | **False** |
-| `charge_hire_daily` | True | False (and shed-gated) |
-| Constraints kept | zone counts, ops caps, locked load, cash ≥ 0 | same minus W/F ledger |
-
-`OBJECTIVE_GOOD_ENOUGH=80_000`. FIVE hire cash **$7/day**.
-
-## Failures to remember
-
-| Run / mode | What happened |
-| --- | --- |
-| Empty-only replan + IDLE wipe | ~37k — destroyed day-0 suffixes |
-| Batch replan with W/F shed | Always INFEASIBLE (~0.001s) despite locking |
-| `track_shed=False` | Unlocks replan; ~98k FIVE smoke once |
-| Smoke PLACE≤BUILD+1 | False fail on FOUR/FIVE when pasture reused |
-
-## User prefs (this arc)
-
-- Replan: lock committed horizon; variables = empty only; keep cash ≥ 0; shed W/F off for replan ablation (commented, not deleted)
-- Layouts as Python `Layout` catalog — keep FOUR when adding FIVE; switch via `CURRENT`
-- Agents never Kaggle-submit without explicit ask
-- Do not commit `.cursor/`
-
-## Key files
-
-| File | Role |
-| --- | --- |
-| `agent/zoning.py` | `FOUR` / `FIVE` / `CURRENT` + `bind()` |
-| `agent/planner.py` | Import + dawn replan; commitment stamp; `track_shed` |
-| `agent/dp_catalog.py` | WIS catalog; `fits()` uses first harvest age |
-| `scripts/smoke_test.sh` | Local smoke; PLACE/BUILD check = “≥1 build if any PLACE” |
-| `data/two_lands.md` | Draft two-land notes — **not wired yet** |
+- Switching to pickups **without** stripping side-channel ops tanked smoke (~90k → sub-50k) — over-counted animal days.
+- After single-term ops: expect animals to fit again; re-smoke to confirm (not banked yet this session).
 
 ## Immediate next steps
 
-- Stabilize FIVE score (64k vs one-off 98k — variance / seed / opponent)
-- Late-day replan still sometimes INFEASIBLE under cash/ops — optional per-worker sequential fallback
-- **Later:** watering guardrails; two-land from `data/two_lands.md`
-- Do not revive WSP
+- Smoke vs random after pickups + ops fix; compare to prior ~64–98k FIVE band
+- Optional: align live `zoning.FIVE` ops to `data/two_lands.md` (18/17/16/14/13) if notebooks stay authoritative
+- Late-day replan INFEASIBLE still possible under cash/ops
+- Do not revive WSP; agents never submit without ask

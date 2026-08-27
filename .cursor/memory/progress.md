@@ -1,13 +1,15 @@
 # Progress
 
-## Strategic status (Aug 26, 2026)
+## Strategic status (Aug 27, 2026)
 
 | Track | Status |
 | --- | --- |
 | **WSP / season set packing** | Abandoned Aug 12 — `docs/weighted_set_packing_failer.md` |
-| **Handmade-chain assignment** | **Live** — zone-count CP-SAT at import → `TILE_QUEUES` |
+| **Chain assignment** | **Live** — day-0 + replan via **`dp_catalog.build_catalog`** (not handmade JSON) |
 | **Dawn replan overhaul** | **Live** — lock commitments; empty-only vars; `track_shed=False`; preserve on INFEASIBLE |
 | **Layout catalog** | **Live** — `FOUR` + `FIVE`; **`CURRENT = FIVE`** |
+| **Animal rollouts** | **Live** — `animal_with_pickups.json`; ops cap = `daily_tile_ops` only |
+| **Zonewise notebooks** | **Live** — handmade + DP; conservative cash cascade |
 | **Runtime fertilizer** | **Live** — collect from animals, FERTILIZE after WATER |
 | **Snake executor** | Working; same-day BUILD/PLACE; skip d=0 replan |
 | **Sell policy** | 50% floor; premium sell DP; wheat feed reserve; no SELL WHEAT h 0–4 |
@@ -18,44 +20,45 @@
 | Item | Notes |
 | --- | --- |
 | Zone-count master | Counts per zone/chain; IDLE fills leftover slots |
-| Decode sort | Animals by earliest start_day → IDLE → crops |
+| DP catalog | Lags + near-best insert variants (best pinned); greedy multi-extra prefix; no forced W/C prefix |
 | Replan triage | Variable = `_replan_eligible`; else `_stamp_tile_commitment` → locked |
-| Replan shed off | `track_shed=False` on dawn only — batch assign succeeds |
+| Replan shed off | `track_shed=False` on dawn only |
 | INFEASIBLE preserve | Keep old queues; never IDLE wipe |
-| Smoke vs random (FIVE + shed-off, peak) | ~**98.8k** once |
-| Smoke vs random (FIVE current) | ~**63.7k** |
-| Smoke vs random (FOUR + shed-off) | ~**71–74k** |
+| Pickups + single ops | Cap uses `daily_tile_ops` (+ hire preamble); no wheat/animal/fert side counters |
 | Smoke PLACE/BUILD | Require `BUILD≥1` if any PLACE (pasture reuse OK) |
+| Zonewise money | Conservative: prev start − loss (no sells between zones) |
 | Fallback `_build_tile_queues()` | FOUR handmade only if `CURRENT is FOUR` |
 
 ## Known issues
 
 | Issue | Notes |
 | --- | --- |
-| Late-day replan INFEASIBLE | Some dawns still fail under cash/ops even with shed off; queues preserved |
-| Score variance FIVE | 98k then ~64k after layout flip round-trip — do not bank 98k |
+| Pickups smoke dip | Pre-fix: double-count → sub-50k; post-fix needs fresh smoke |
+| Late-day replan INFEASIBLE | Some dawns still fail under cash/ops; queues preserved |
+| Score variance FIVE | Historical 98k then ~64k — do not bank peaks |
+| Zoning vs two_lands ops | Live FIVE still 18/13/14/14/15; notebooks often 18/17/16/14/13 |
 | **Weeds from missed watering** | Occasional; guardrail experiments reverted |
 | **I0 vs dump sells** | Melon plan at $250; glut dumps still hurt |
-| **80k callback vs ~49–53k day-0 obj** | Import often FEASIBLE before OPTIMAL |
 | `.cursor/` gitignore | Do not stage |
 
-## Replan archaeology (Aug 25–26)
+## Session archaeology (Aug 27)
 
 | Change | Effect |
 | --- | --- |
-| Empty-only + IDLE on INFEASIBLE | ~37k — wiped suffixes |
-| `qi==0 and queue` not eligible | Stops daily sheep/cow churn |
-| Lock board only (no suffix) | Still INFEASIBLE with shed on |
-| Full commitment lock + shed on | Still INFEASIBLE (~0.001s) |
-| Drop W/F shed + hire from replan (`track_shed=False`) | Replan assigns; ~98k FIVE |
-| Smoke `PLACE ≤ BUILD+1` | False fail when structure reused — fixed |
+| Conservative zone cash cascade (notebook) | Next zone can't spend unbanked mid-day sells |
+| DP notebook ← `dp_catalog` | `lags=` knob; ~45–70+ chains depending on insert knobs |
+| Insert thin without best-pin | Dropped argmax chains → worse MIP ceiling |
+| Best-pin + multi-extra mono | 2× MELON/TOMATO when they fit |
+| Agent ← `animal_with_pickups.json` | Honest PICKUP/BUILD/PLACE in tapes |
+| Cap still summed pickups side-channels | ~90k → sub-50k |
+| Cap = `daily_tile_ops` only | Removes double-count |
 
 ## What's left
 
-1. Understand FIVE score gap (98k vs 64k) — seed/opponent/replay
-2. Optional: per-worker sequential replan when batch INFEASIBLE
-3. Optional: export assignment JSON so Kaggle import skips CP-SAT
-4. **Later:** watering guardrails; two-land from `data/two_lands.md`
+1. Re-smoke FIVE after pickups + ops fix; record new baseline
+2. Optional: sync `zoning.FIVE` ops to `two_lands.md`
+3. Optional: per-worker sequential replan when batch INFEASIBLE
+4. **Later:** watering guardrails; two-land
 5. Do not revive WSP
 
 ## Do not do unless asked
@@ -65,7 +68,9 @@
 - Replan on day 0
 - Kaggle submit
 - IDLE-wipe on replan INFEASIBLE
-- Re-enable replan W/F shed without ablation (`track_shed=True` on replan was the blocker)
+- Re-enable replan W/F shed without ablation
+- Re-add pickup/place/fert side terms to ops cap while using pickups JSON
 - Treat 80k/98k/83620 as achieved bank
 - Delete `FOUR` when adding layouts — flip `CURRENT`
 - Author zone geometry as JSON
+- Commit `.cursor/`

@@ -1,12 +1,12 @@
 # System Patterns
 
-## Current: handmade-chain assignment + snake executor (Aug 26)
+## Current: DP-catalog assignment + snake executor (Aug 27)
 
 ```
 import:
   agent/zoning.py CURRENT → bind() → WORKERS / TILES / PREAMBLE / NET_TILE_OPS / HIRE_DAILY_COST
-  data/{crop,animal}_rollouts.json + handmade_dp_candidates.json
-  stamp chains (no_fert weights) → CP-SAT count[zone][chain]  (track_shed=True)
+  data/crop_rollouts.json + data/animal_with_pickups.json
+  dp_catalog.build_catalog(horizon, price_of) → stamp chains → CP-SAT count[zone][chain]
   decode: animals (earliest start_day) → IDLE → crops → TILE_QUEUES
 
 obs → executor.step
@@ -22,75 +22,67 @@ obs → executor.step
 
 - **`Layout` / `Zone` dataclasses** — coords, visit order (= route), preamble, `start_hour`, `net_tile_ops`, `is_hand`.
 - **Catalog:** `FOUR` (classic 3-hand snake) + `FIVE` (5 columns, 4 hands). **`CURRENT = FIVE`**. Do not delete old layouts — flip `CURRENT`.
-- **`bind(layout)`** fills module aliases. `workers.py` re-exports; `planner.py` imports from `zoning`.
-- **Hire cash:** `_fib_hire_cost(NUM_HIRES)` → FOUR=$4/day, FIVE=$7/day. Market reserve uses that; h=0 and h=1 each hire `min(2, remaining)`.
-- **Fallback queues:** FOUR handmade only if `CURRENT is FOUR`; else empty. Prefer Python catalog over zone JSON.
-- Spec notes: `data/five_zone_plan.md` (FIVE); `data/two_lands.md` (draft, unwired).
+- Live FIVE ops still **18/13/14/14/15**; zonewise notebooks often use `two_lands.md` **18/17/16/14/13**.
+- **`bind(layout)`** fills module aliases. Hire cash: fib sum of hands (FIVE=$7/day).
+- Spec notes: `data/five_zone_plan.md` (FIVE); `data/two_lands.md` (draft / notebook geometry).
+
+### DP catalog (`agent/dp_catalog.py`)
+
+- **Families:** mono WHEAT/CARROT, mix WIS, insert_crop (extra mono-greedy × lag + mix suffix), insert_animal (single place), animal-only starts, IDLE.
+- **`lags`:** `None` → module `LAGS=(0,1,2)`; int or tuple OK.
+- **Insert thinning:** keep near-best by value band; **always pin argmax**; then day-stride sample (`INSERT_MAX_VARIANTS`).
+- **No forced wheat/carrot prefix** before extras/animals (greedy early high-value).
+- **Multi-extra:** `_mono_greedy_from` repeats MELON/TOMATO/STRAWBERRY while they fit (handmade-style 2× melon).
+- Prices for WIS come from caller `price_of` (day-0 i0; replan effective live).
 
 ### Assignment master (planner + notebooks)
 
-- **Vars:** `count[zone][chain]` IntVar `0..zone_size`, `sum == zone_size`. Not `x[tile][chain]` — tiles in a zone are interchangeable; per-tile binaries explode permutation symmetry (183s–40min OPTIMAL proofs).
-- **Yields:** zip `harvest_ages` → `yield_per_harvest`. Never stamp `yield_per_harvest[0]` on every HARVEST.
-- **FEED:** inventory consumption (open wheat buy at I0), **not** a $10 seed cost in `timeline_values`. PLANT / BUILD stay as setup costs.
-- **Ops (OneLand / planner):** stamped tile actions + per-chain pickups (animal place, wheat-on-FEED, fert). Hire preamble = zone-day 0/1: `preamble <=> animal_count >= 1` via `preamble <= animal_count` and `animal_count <= preamble * zsize`. Farmer zone: no preamble. Do **not** use 654-term `OnlyEnforceIf` over tiles.
-- **Cash / W/F (day-0):** daily `balance` chain (domain 0–200k), wheat/fert shed ledgers + buys at I0 ($25/$100), **minus `HIRE_DAILY_COST`/day**. Objective = chain value − wheat/fert buys.
-- **Cash (replan):** same ops caps + locked load + cash ≥ 0 + live `starting_money`; **`track_shed=False`** — no W/F ledger / buy vars / hire daily in model (executor/market buy at runtime). Ablation: shed ledgers caused mass INFEASIBLE in ~0.001s.
-- **Dawn replan triage:** `_replan_eligible` empties only (not `qi==0` with queue waiting PLACE). Non-eligible → `_stamp_tile_commitment` (board + queue suffix) → `locked_by_worker`. INFEASIBLE → **preserve** queues (never IDLE wipe).
-- **Decode:** fill `WORKER_TILES[zone]` in route order. Sort slots: animal chains by earliest `start_day` in the full chain, then IDLE (`[]`), then crop-only. Log `t{idx+1}` (t1 = index 0).
-- **IDLE:** legal count filler. Do not replan it on day 0.
-- **Live planner:** `OBJECTIVE_GOOD_ENOUGH = 80_000`, `num_workers=8`, import **20s** / replan **15s**. Day-0 obj ~49–53k.
+- **Vars:** `count[zone][chain]` IntVar `0..zone_size`, `sum == zone_size`.
+- **Yields:** zip `harvest_ages` → `yield_per_harvest`.
+- **Ops (with pickups JSON):** **`daily_tile_ops` only** (+ hire preamble if any animal active). Do **not** add `daily_wheat_pickup` / `daily_animal_place` / `daily_fert_pickup` or extra `build_day += 1` — those double-count PICKUP/BUILD already in the tape.
+- **Cash / W/F (day-0):** balance chain, shed ledgers, hire daily. Replan: `track_shed=False`.
+- **Dawn replan triage:** `_replan_eligible` empties only; locked = board + queue suffix; horizon = remaining days. INFEASIBLE → preserve.
+- **Zonewise notebooks:** sequential zone solves; **conservative money** = prev start − loss (setups + buys + hire; no sells).
 
 ### Planner catalog prices (`effective_price`)
 
-- **Day 0 `_build_from_solver`:** i0 quoted, empty shops, **no** opponent counts.
-- **Dawn `replan`:** live market prices × `max(0.1, 1 + shop_demand − opp_tiles/10)`.
-- Opponent tiles: `PLANT.crop` or live `COOP`/`PASTURE` animal → `animal_rollouts.product_for`. Empty/WEED/empty structure ignored.
-- Floor **0.1** is on the whole `price_factor`, not a separate multiply.
+- **Day 0:** i0 quoted, empty shops, no opponent.
+- **Dawn replan:** live × `max(0.1, 1 + shop_demand − opp_tiles/10)`.
+- Same `price_of` for catalog generation and stamp cash.
 
 ### Executor + fert + feed (runtime, not CP-SAT)
 
-- Snake routes, `SHED_DOOR = (4,4)` for wheat/animal PICKUP — **never** shed fert
-- BUILD pasture/coop only if animal already in worker inv; PLACE same day **and** `inv.WHEAT >= 1`
-- Unfed animal (`tile_needs_feed`): `tile_needs_work` stays true even if `_animal_action` is None; **do not** `route_idx += 1`; PASS or PICKUP wheat
-- FERTILIZE after WATER on that tile if bag > 0 + zone has a live animal + `with_fert` age; then HARVEST from tape
-- Skip `COLLECT_FERTILIZER` only on **non-at-risk** tiles; never skip HARVEST / CARE / FERTILIZE for route slack
-- Market: h=0 `BUY_PRODUCT WHEAT` if shed < live animals + placing today; skip `SELL WHEAT` when `hour < 5`; sell DP + 50% floor for other goods; wheat feed reserve
+- Snake routes; BUILD only if animal in inv; PLACE same day needs wheat.
+- FERTILIZE after WATER; stay on unfed pastures.
+- Market: wheat dawn buy; skip early SELL WHEAT; sell DP + 50% floor.
 
 ### Engine facts
 
-- Turn order: farmer/hands → market → farm update → day rollover
-- h=0: seeds from market are not in `private["seeds"]` during same-hour farmer action → PASS (`market-hour`)
-- SELL from shed; harvest goes to worker inv; eod dump inv→shed
+- Farmer/hands → market → farm update → day rollover
+- h=0: seeds not in `private["seeds"]` same hour → PASS (`market-hour`)
 - Daily re-hire
 
 ---
 
 ## Anti-patterns
 
-1. **Per-tile assignment binaries** when constraints are zone-shared — permutation symmetry, not model size.
-2. **Reified OR via two `OnlyEnforceIf` linear sums** for preamble — use count + linear 0/1.
-3. **Season-long WSP** (abandoned Aug 12) — tile ops ≠ executor turns; candidate explosion.
-4. **Trusting solver obj as bank** — I0 prices; dump sells crash melon.
-5. **Replan on day 0** — IDLE empty queues get a new (often animal) chain on t9.
-6. **Committing `.cursor/`** — gitignored; Cursor will refuse the commit.
-7. **`yield_per_harvest[0]` on every HARVEST** — later harvests have different units; zip `harvest_ages`.
-8. **FEED as seed purchase** — feed is W inventory + `buy_w` at $25.
-9. **Switching mockup SCIP → CP-SAT for speed** — same model; SCIP is slower. User kept SCIP.
-10. **FERTILIZE before WATER** — steals watering; tomato age 10 also needs HARVEST after fert.
-11. **BUILD pasture without animal in inv** — pasture sits empty for days (buy was gated on existing pasture).
-12. **Treat FEED-with-no-wheat as no work** — executor advances; sheep die in ~2 days; hire3 PLACE ≫ BUILD.
-13. **Opponent factor on day-0 catalog** — no opp farm yet; replan-only.
-14. **Replace FOUR when adding FIVE** — keep both; switch with `CURRENT`.
-15. **Zone geometry as JSON** — author as Python `Layout`; dump later if needed.
-16. **IDLE-wipe on replan INFEASIBLE** — destroyed day-0 suffixes (~37k). Preserve queues.
-17. **Replan with wheat/fert shed ledger** — over-constrained mid-season; use `track_shed=False` on replan.
-18. **Smoke `PLACE ≤ BUILD+1`** — false fail; empty pasture persists and PLACE reuses it.
-
----
-
-## Legacy WSP (do not extend)
-
-See `docs/weighted_set_packing_failer.md`. Old day-0 ~8.7k set-packing candidates. Current `planner.py` is **not** that code.
+1. **Per-tile assignment binaries** when constraints are zone-shared.
+2. **Ops cap summing pickups side-channels while using `animal_with_pickups.json`** — double-count; smoke collapses.
+3. **Season-long WSP** — abandoned.
+4. **Trusting solver obj as bank** — I0 / dump sells.
+5. **Replan on day 0.**
+6. **Committing `.cursor/`.**
+7. **`yield_per_harvest[0]` on every HARVEST.**
+8. **FEED as seed purchase.**
+9. **FERTILIZE before WATER.**
+10. **BUILD pasture without animal in inv.**
+11. **Opponent factor on day-0 catalog.**
+12. **Replace FOUR when adding FIVE.**
+13. **IDLE-wipe on replan INFEASIBLE.**
+14. **Replan with wheat/fert shed ledger** without ablation.
+15. **Day-stride thin without pinning best insert** — drops argmax chains.
+16. **Forced wheat/carrot prefix before high-value insert** — fights greedy early animal/extra.
+17. **Smoke `PLACE ≤ BUILD+1`.**
 
 ---
 
@@ -99,13 +91,14 @@ See `docs/weighted_set_packing_failer.md`. Old day-0 ~8.7k set-packing candidate
 ```
 main.py → agent/executor.py → script.TILE_QUEUES
 agent/zoning.py           # FOUR / FIVE / CURRENT + bind()
-agent/planner.py          # zone-count CP-SAT at import (reads zoning)
+agent/planner.py          # zone-count CP-SAT + replan
+agent/dp_catalog.py       # runtime WIS catalog (lags, inserts)
 agent/{script,workers,tile_ops,market,rollouts,animal_rollouts}.py
-data/{crop_rollouts,animal_rollouts,handmade_dp_candidates}.json
-data/five_zone_plan.md    # FIVE design
-data/two_lands.md         # two-land draft (unwired)
-experiments/OneLand-Assignement-Handmade-Candidates.ipynb   # CP-SAT source
-experiments/Assignement-Master-Mockup.ipynb               # SCIP sibling, no preamble
-data/animal_with_pickups.json                             # mockup animal days
+data/crop_rollouts.json
+data/animal_with_pickups.json   # agent animal tapes (PICKUP/BUILD/PLACE in actions)
+data/animal_rollouts.json       # tile-only; notebooks / legacy
+data/handmade_dp_candidates.json  # notebooks / FOUR fallback
+data/two_lands.md
+experiments/OneL-Zonewise-CPSAT-{Handmade,DP}-Catalog.ipynb
 scripts/{smoke_test,smoke_and_submit,vendor_ortools}.sh
 ```

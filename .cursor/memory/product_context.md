@@ -12,24 +12,23 @@ Compete on Kaggriculture with an autonomous agent that beats typical heuristic/L
 - **Farmer acts before market in the same hour** — h=0 seed/hire timing
 - Daily re-hire of farm hands
 - Shed cap 100 (excluding seeds)
+- Animal care needs honest shed trips (PICKUP wheat/animal) — undercounting ops lied about score; overcounting (pickups JSON + side counters) crushed animals
 
 ## How the current agent is supposed to work
 
-1. **Import:** bind `zoning.CURRENT` (default **FIVE**); stamp `no_fert` handmade chains; CP-SAT zone counts with shed W/F + hire cash (20s).
+1. **Import:** bind `zoning.CURRENT` (**FIVE**); `dp_catalog.build_catalog` at i0; stamp with `animal_with_pickups`; CP-SAT zone counts with shed W/F + hire cash (20s). Ops = `daily_tile_ops` (+ hire preamble).
 2. **Decode:** animals on route-first tiles, IDLE middle, crops last.
-3. **Dawn replan (day ≥ 1):** lock non-empty / waiting-PLACE tiles for the remaining horizon; assign catalog chains only to empty replan-eligible tiles; **no W/F shed ledger** in the MIP (`track_shed=False`); cash ≥ 0 + ops caps kept. On INFEASIBLE, keep old queues.
+3. **Dawn replan (day ≥ 1):** remaining horizon; lock non-empty / waiting-PLACE; assign DP chains to empty tiles; live prices × demand/opp; **no W/F shed ledger**; cash ≥ 0 + ops. INFEASIBLE → keep queues.
 4. **Runtime:** snake; fert after WATER; stay on unfed pastures. Market: 50% floor + premium DP; wheat reserved; 2+2 hire on FIVE.
 
 ## Known product gap
 
-Day-0 catalog still uses **i0**. Replans use live quotes × opponent factor. Shed-off replan unlocked mid-season diversity (COW/STRAWBERRY); some late dawns still INFEASIBLE. Local FIVE smoke peaked ~98k once, later ~64k — **do not bank**. Occasional weeds from missed WATER remain.
+Day-0 catalog still i0. Replans use live × opponent factor. Late dawns can still go INFEASIBLE. Score variance historically large — **do not bank** peaks. Occasional weeds from missed WATER. After pickups switch, smoke must be re-validated with de-duplicated ops.
 
 ## User workflow preferences
 
 - Plain `.py` in submission; notebooks OK in `experiments/` only
 - Plan/Act via `core-plan-act` skill
 - Agents: `smoke_test.sh` only; never submit without explicit ask
-- CP-SAT `num_workers = 1` when the user has other jobs on the machine
-- Mockup `Assignement-Master-Mockup.ipynb` stays on SCIP; do not add hire preamble or extra PICKUPs unless asked
+- Zonewise experiments OK for MIP/catalog A/B before wiring agent
 - Do not commit `.cursor/` (gitignore); do not stage `logs.txt`
-- `live_analysis.ipynb` for post-run diagnosis from Kaggle logs
