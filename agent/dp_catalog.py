@@ -13,6 +13,9 @@ ANIMAL_PROFILE = "with_care"
 BASE_CROPS = ("WHEAT", "CARROT")
 EXTRA_CROPS = ("MELON", "TOMATO", "STRAWBERRY")
 ANIMALS = ("GOOSE", "COW", "SHEEP")
+# Near-best insert diversity (see .cursor/logs.txt)
+INSERT_TOLERANCE = 0.05
+INSERT_MAX_VARIANTS = 4
 
 
 @dataclass(frozen=True)
@@ -160,12 +163,18 @@ def chain_value(chain: list[list], templates: dict[str, Template], horizon: int)
     return sum(templates[name].placement_value(start, horizon) for name, start in chain)
 
 
-def _mono_greedy(template: Template, lag: int, horizon: int) -> list[list]:
-    chain, start = [], 0
+def _mono_greedy_from(
+    template: Template, lag: int, horizon: int, start: int = 0
+) -> list[list]:
+    chain: list[list] = []
     while template.fits(start, horizon):
         chain.append([template.name, start])
         start = start + template.tile_free_age + lag
     return chain
+
+
+def _mono_greedy(template: Template, lag: int, horizon: int) -> list[list]:
+    return _mono_greedy_from(template, lag, horizon, 0)
 
 
 def _base_templates(templates: dict[str, Template], base: str) -> list[Template]:
@@ -191,15 +200,65 @@ def _pack_window(
     return placements_to_chain(selected)
 
 
+def _thin_near_best(
+    scored: list[tuple[int, list[list]]],
+    *,
+    tolerance: float,
+    max_variants: int,
+    sort_start: Callable[[list[list]], int],
+) -> list[list[list]]:
+    if not scored:
+        return []
+    best_val = max(v for v, _ in scored)
+    best_chain = next(c for v, c in scored if v == best_val)
+
+    threshold = best_val - abs(best_val) * tolerance
+    kept = [c for v, c in scored if v >= threshold]
+    seen: set[tuple] = set()
+    unique: list[list[list]] = []
+    for c in kept:
+        key = tuple((name, start) for name, start in c)
+        if key not in seen:
+            seen.add(key)
+            unique.append(c)
+    unique.sort(key=sort_start)
+
+    step = max(1, len(unique) // max_variants)
+    thinned = unique[::step][:max_variants]
+
+    best_key = tuple((name, start) for name, start in best_chain)
+    if not any(tuple((n, s) for n, s in c) == best_key for c in thinned):
+        thinned = [best_chain] + thinned[: max_variants - 1]
+    return thinned
+
+
+def _merge_variant_sets(*sets: list[list[list]]) -> list[list[list]]:
+    seen: set[tuple] = set()
+    out: list[list[list]] = []
+    for group in sets:
+        for c in group:
+            key = tuple((name, start) for name, start in c)
+            if key not in seen:
+                seen.add(key)
+                out.append(c)
+    return out
+
+
 def build_catalog(
     horizon: int,
     price_of: Callable[[str], int],
     lags: int | tuple[int, ...] | None = None,
+    *,
+    tolerance: float = INSERT_TOLERANCE,
+    max_variants: int = INSERT_MAX_VARIANTS,
 ) -> list[list]:
     """Handmade-format chains for days 0..horizon-1 relative to replan day.
 
     ``lags`` selects WIS seam gaps (and animal-only start days). ``None`` uses
     module ``LAGS``; a single int is treated as a 1-tuple.
+
+    Insert families keep near-best landing days (``tolerance`` / ``max_variants``)
+    without forcing wheat/carrot prefixes before the insert.
     """
     if horizon <= 0:
         return [[]]
@@ -212,65 +271,72 @@ def build_catalog(
         lag_set = tuple(lags)
 
     templates = _templates(price_of, horizon)
+    mix_tmps = _base_templates(templates, "mix")
     chains: list[list] = []
 
     def mono(crop: str, lag: int) -> list[list]:
         return _mono_greedy(templates[f"{crop}_{CROP_PROFILE}"], lag, horizon)
 
     def mix(lag: int) -> list[list]:
-        base_tmps = _base_templates(templates, "mix")
-        _, selected = weighted_interval_dp(generate_placements(base_tmps, horizon), lag)
+        _, selected = weighted_interval_dp(generate_placements(mix_tmps, horizon), lag)
         return placements_to_chain(selected)
 
-    def insert_crop(base: str, extra_crop: str, lag: int) -> list[list]:
+    def insert_crop(extra_crop: str, lag: int) -> list[list[list]]:
         extra = templates[f"{extra_crop}_{CROP_PROFILE}"]
-        base_tmps = _base_templates(templates, base)
-        best_chain, best_val = [], -10**18
+        scored: list[tuple[int, list[list]]] = []
         for t_extra in range(horizon):
-            if not extra.fits(t_extra, horizon):
+            prefix = _mono_greedy_from(extra, lag, horizon, t_extra)
+            if not prefix:
                 continue
-            prefix = _pack_window(templates, base_tmps, lag, horizon, 0, t_extra)
-            suffix_start = t_extra + extra.tile_free_age + lag
+            last_start = prefix[-1][1]
+            suffix_start = last_start + extra.tile_free_age + lag
             suffix = (
-                _pack_window(templates, base_tmps, lag, horizon, suffix_start, horizon)
+                _pack_window(templates, mix_tmps, lag, horizon, suffix_start, horizon)
                 if suffix_start < horizon
                 else []
             )
-            chain = prefix + [[extra.name, t_extra]] + suffix
+            chain = prefix + suffix
             val = chain_value(chain, templates, horizon)
-            if val > best_val:
-                best_val, best_chain = val, chain
-        return best_chain
+            scored.append((val, chain))
+        return _thin_near_best(
+            scored,
+            tolerance=tolerance,
+            max_variants=max_variants,
+            sort_start=lambda c: next(
+                start for name, start in c if name == extra.name
+            ),
+        )
 
-    def insert_animal(base: str, animal: str, lag: int) -> list[list]:
+    def insert_animal(animal: str, lag: int) -> list[list[list]]:
         animal_tmpl = templates[f"{animal}_{ANIMAL_PROFILE}"]
-        base_tmps = _base_templates(templates, base)
-        best_chain, best_val = [], -10**18
+        scored: list[tuple[int, list[list]]] = []
         for t in range(horizon):
             if not animal_tmpl.fits(t, horizon):
                 continue
-            prefix = _pack_window(templates, base_tmps, lag, horizon, 0, t)
-            chain = prefix + [[animal_tmpl.name, t]]
+            chain = [[animal_tmpl.name, t]]
             val = chain_value(chain, templates, horizon)
-            if val > best_val:
-                best_val, best_chain = val, chain
-        return best_chain
+            scored.append((val, chain))
+        return _thin_near_best(
+            scored,
+            tolerance=tolerance,
+            max_variants=max_variants,
+            sort_start=lambda c: c[-1][1],
+        )
 
     for lag in lag_set:
         chains.append(mono("WHEAT", lag))
         chains.append(mono("CARROT", lag))
         chains.append(mix(lag))
 
-    for base in ("WHEAT", "CARROT", "mix"):
-        for lag in lag_set:
-            for extra in EXTRA_CROPS:
-                chains.append(insert_crop(base, extra, lag))
-            for animal in ANIMALS:
-                chains.append(insert_animal(base, animal, lag))
+    for lag in lag_set:
+        for extra in EXTRA_CROPS:
+            chains.extend(insert_crop(extra, lag))
+        for animal in ANIMALS:
+            chains.extend(insert_animal(animal, lag))
 
     for animal in ANIMALS:
         for start in lag_set:
             chains.append([[f"{animal}_{ANIMAL_PROFILE}", start]])
 
     chains.append([])
-    return chains
+    return _merge_variant_sets(chains)
