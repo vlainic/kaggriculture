@@ -354,7 +354,7 @@ def _animal_action(
             continue
         if act == "HARVEST" and tile.get("yield_units", 0) <= 0:
             continue
-        if act == "PLACE":
+        if act in ("PLACE", "PICKUP", "BUILD_COOP", "BUILD_PASTURE"):
             continue
         return [act] + ([animal] if act == "PLACE" else [])
     return None

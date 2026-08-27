@@ -1,4 +1,4 @@
-"""Load animal rollout templates from data/animal_rollouts.json."""
+"""Load animal rollout templates from data/animal_with_pickups.json."""
 
 from __future__ import annotations
 
@@ -11,13 +11,17 @@ ANIMAL_PRODUCTS = ("EGG", "MILK", "WOOL")
 WHEAT_PRICE = 25
 BUILD_DAY_OFFSET = -1
 
-_DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "animal_rollouts.json"
+_DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "animal_with_pickups.json"
 
 
 @lru_cache(maxsize=1)
 def _load() -> dict:
     with _DATA_PATH.open(encoding="utf-8") as f:
         return json.load(f)
+
+
+def data() -> dict:
+    return _load()
 
 
 def animal_names() -> tuple[str, ...]:

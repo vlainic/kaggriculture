@@ -788,7 +788,7 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
     market_prices = obs.get("market", {}).get("prices", {})
 
     crops_data = _load_json("crop_rollouts.json")
-    animals_data = _load_json("animal_rollouts.json")
+    animals_data = animal_rollouts.data()
     i0 = _i0_prices(crops_data, animals_data)
     opp_farm = obs["farms"][1 - player]
     opp_counts = _opponent_product_tile_counts(opp_farm)
@@ -891,7 +891,7 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
 
 def _build_from_solver() -> dict[int, list]:
     crops_data = _load_json("crop_rollouts.json")
-    animals_data = _load_json("animal_rollouts.json")
+    animals_data = animal_rollouts.data()
     i0 = _i0_prices(crops_data, animals_data)
     price_of = make_price_of({}, [], i0)
     handmade_chains = dp_catalog.build_catalog(NUM_DAYS, price_of)
