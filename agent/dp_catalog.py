@@ -191,10 +191,25 @@ def _pack_window(
     return placements_to_chain(selected)
 
 
-def build_catalog(horizon: int, price_of: Callable[[str], int]) -> list[list]:
-    """Handmade-format chains for days 0..horizon-1 relative to replan day."""
+def build_catalog(
+    horizon: int,
+    price_of: Callable[[str], int],
+    lags: int | tuple[int, ...] | None = None,
+) -> list[list]:
+    """Handmade-format chains for days 0..horizon-1 relative to replan day.
+
+    ``lags`` selects WIS seam gaps (and animal-only start days). ``None`` uses
+    module ``LAGS``; a single int is treated as a 1-tuple.
+    """
     if horizon <= 0:
         return [[]]
+
+    if lags is None:
+        lag_set: tuple[int, ...] = LAGS
+    elif isinstance(lags, int):
+        lag_set = (lags,)
+    else:
+        lag_set = tuple(lags)
 
     templates = _templates(price_of, horizon)
     chains: list[list] = []
@@ -241,20 +256,20 @@ def build_catalog(horizon: int, price_of: Callable[[str], int]) -> list[list]:
                 best_val, best_chain = val, chain
         return best_chain
 
-    for lag in LAGS:
+    for lag in lag_set:
         chains.append(mono("WHEAT", lag))
         chains.append(mono("CARROT", lag))
         chains.append(mix(lag))
 
     for base in ("WHEAT", "CARROT", "mix"):
-        for lag in LAGS:
+        for lag in lag_set:
             for extra in EXTRA_CROPS:
                 chains.append(insert_crop(base, extra, lag))
             for animal in ANIMALS:
                 chains.append(insert_animal(base, animal, lag))
 
     for animal in ANIMALS:
-        for start in LAGS:
+        for start in lag_set:
             chains.append([[f"{animal}_{ANIMAL_PROFILE}", start]])
 
     chains.append([])
