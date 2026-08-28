@@ -3,17 +3,11 @@
 from __future__ import annotations
 
 import json
-import time
 from collections.abc import Callable
 from pathlib import Path
 
-from ortools.sat.python import cp_model
-
-from agent import animal_rollouts, dp_catalog, rollouts, script
+from agent import animal_rollouts, dp_catalog, rollouts, script, solvers
 from agent.zoning import (
-    HAND_WORKERS,
-    HIRE_DAILY_COST,
-    NET_TILE_OPS,
     NUM_TILES,
     TILE_COORDS,
     WORKER_TILES,
@@ -24,9 +18,6 @@ from agent.zoning import (
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 NUM_DAYS = 30
-WHEAT_PRICE = 25
-FERT_PRICE = 100
-MAX_BUY = NUM_TILES * NUM_DAYS
 STARTING_MONEY = 3000
 PROFILE_SUFFIXES = ("no_fert", "with_fert", "no_care", "with_care")
 ANIMAL_NAMES = frozenset(animal_rollouts.animal_names())
@@ -157,7 +148,7 @@ def _product_for_label(label: str, kind: str) -> str:
     return label
 
 
-def _build_cash_by_day(
+def _build_cash_and_spend(
     start_day: int,
     setup_cost: int,
     unit_price: int,
@@ -166,17 +157,19 @@ def _build_cash_by_day(
     *,
     min_age: int = 0,
     charge_setup: bool = True,
-) -> list[int]:
+) -> tuple[list[int], list[int]]:
     cash = [0] * horizon
+    spend = [0] * horizon
     if charge_setup and start_day < horizon:
         cash[start_day] -= setup_cost
+        spend[start_day] -= setup_cost
     for age, yld in zip(profile["harvest_ages"], profile["yield_per_harvest"]):
         if age < min_age:
             continue
         hday = start_day + (age - min_age)
         if hday < horizon:
             cash[hday] += yld * unit_price
-    return cash
+    return cash, spend
 
 
 def _stamp_profile_segment(
@@ -200,6 +193,7 @@ def _stamp_profile_segment(
 
     out = _zero_daily(horizon)
     cash_by_day = [0] * horizon
+    spend_by_day = [0] * horizon
 
     if kind == "crop":
         for day in profile["days"]:
@@ -241,7 +235,7 @@ def _stamp_profile_segment(
         if not occupied:
             return None
 
-    cash_by_day = _build_cash_by_day(
+    cash_by_day, spend_by_day = _build_cash_and_spend(
         rel_start,
         setup_cost,
         unit_price,
@@ -253,6 +247,7 @@ def _stamp_profile_segment(
     return {
         "weight": sum(cash_by_day),
         "cash_by_day": cash_by_day,
+        "spend_by_day": spend_by_day,
         **out,
     }
 
@@ -294,6 +289,7 @@ def _stamp_chain(
 ):
     out = _zero_daily(horizon)
     cash_by_day = [0] * horizon
+    spend_by_day = [0] * horizon
     skipped = []
     for profile_key, start_day in chain:
         seg = _stamp_placement(
@@ -305,12 +301,14 @@ def _stamp_chain(
         for key in ZERO_DAILY_KEYS:
             _add_daily(out[key], seg[key], horizon)
         _add_daily(cash_by_day, seg["cash_by_day"], horizon)
+        _add_daily(spend_by_day, seg["spend_by_day"], horizon)
     return {
         "id": f"C{chain_idx}" if chain_idx >= 0 else "IDLE",
         "chain_idx": chain_idx,
         "raw_chain": chain,
         "weight": sum(cash_by_day),
         "cash_by_day": cash_by_day,
+        "spend_by_day": spend_by_day,
         **out,
         "skipped": skipped,
     }
@@ -415,6 +413,7 @@ def _stamp_tile_commitment(
 
     out = _zero_daily(horizon)
     cash_by_day = [0] * horizon
+    spend_by_day = [0] * horizon
 
     if _tile_occupied_for_lock(tile):
         seg = _stamp_locked_tile(tile, day, horizon, price_of, crops_data, animals_data)
@@ -422,6 +421,7 @@ def _stamp_tile_commitment(
             for key in ZERO_DAILY_KEYS:
                 _add_daily(out[key], seg[key], horizon)
             _add_daily(cash_by_day, seg["cash_by_day"], horizon)
+            _add_daily(spend_by_day, seg["spend_by_day"], horizon)
 
     raw = _queue_suffix_to_chain(queue, qi, lag, gap, day, horizon, me, idx)
     if raw:
@@ -429,10 +429,16 @@ def _stamp_tile_commitment(
         for key in ZERO_DAILY_KEYS:
             _add_daily(out[key], suffix_seg[key], horizon)
         _add_daily(cash_by_day, suffix_seg["cash_by_day"], horizon)
+        _add_daily(spend_by_day, suffix_seg["spend_by_day"], horizon)
 
     if not any(cash_by_day) and not any(sum(out[k]) for k in ZERO_DAILY_KEYS):
         return None
-    return {"weight": sum(cash_by_day), "cash_by_day": cash_by_day, **out}
+    return {
+        "weight": sum(cash_by_day),
+        "cash_by_day": cash_by_day,
+        "spend_by_day": spend_by_day,
+        **out,
+    }
 
 
 def _stamp_locked_tile(
@@ -461,7 +467,12 @@ def _stamp_locked_tile(
         animal = tile.get("animal")
         if not animal:
             empty = _zero_daily(horizon)
-            return {"weight": 0, "cash_by_day": [0] * horizon, **empty}
+            return {
+                "weight": 0,
+                "cash_by_day": [0] * horizon,
+                "spend_by_day": [0] * horizon,
+                **empty,
+            }
         current_age = day - tile["placed_day"]
         return _stamp_profile_segment(
             animal,
@@ -475,7 +486,19 @@ def _stamp_locked_tile(
             charge_setup=False,
         )
     empty = _zero_daily(horizon)
-    return {"weight": 0, "cash_by_day": [0] * horizon, **empty}
+    return {
+        "weight": 0,
+        "cash_by_day": [0] * horizon,
+        "spend_by_day": [0] * horizon,
+        **empty,
+    }
+
+
+def _empty_locked(horizon: int) -> dict:
+    return _zero_daily(horizon) | {
+        "cash_by_day": [0] * horizon,
+        "spend_by_day": [0] * horizon,
+    }
 
 
 def _aggregate_locked(
@@ -487,210 +510,7 @@ def _aggregate_locked(
     for key in ZERO_DAILY_KEYS:
         _add_daily(locked_by_worker[worker][key], seg[key], horizon)
     _add_daily(locked_by_worker[worker]["cash_by_day"], seg["cash_by_day"], horizon)
-
-
-OBJECTIVE_GOOD_ENOUGH = 80_000
-
-
-class _GoodEnoughCallback(cp_model.CpSolverSolutionCallback):
-    def __init__(self, threshold: int):
-        super().__init__()
-        self.threshold = threshold
-        self.hit = False
-
-    def on_solution_callback(self):
-        if self.ObjectiveValue() >= self.threshold:
-            self.hit = True
-            self.StopSearch()
-
-
-def _earliest_animal_day(raw_chain: list) -> int:
-    best = 10**9
-    for profile_key, start_day in raw_chain:
-        label, _ = _parse_profile_key(profile_key)
-        if label in ANIMAL_NAMES:
-            best = min(best, int(start_day))
-    return best
-
-
-def _decode_sort_key(raw_chain: list) -> tuple:
-    animal_day = _earliest_animal_day(raw_chain)
-    if animal_day < 10**9:
-        return (0, animal_day)
-    if not raw_chain:
-        return (1, 0)
-    return (2, 0)
-
-
-def _solve_assignment(
-    chains,
-    *,
-    horizon: int,
-    empty_tiles: list[int],
-    empty_counts: dict[str, int],
-    locked_by_worker: dict[str, dict],
-    starting_money: int,
-    max_time: float = 20.0,
-    charge_hire_daily: bool = True,
-    track_shed: bool = True,
-):
-    model = cp_model.CpModel()
-    count = {}
-    for worker in WORKERS:
-        zempty = empty_counts[worker]
-        count[worker] = [
-            model.NewIntVar(0, zempty, f"n_{worker}_{c['id']}") for c in chains
-        ]
-        model.Add(sum(count[worker]) == zempty)
-
-    for worker in WORKERS:
-        cap = NET_TILE_OPS[worker]
-        locked = locked_by_worker[worker]
-        for day in range(horizon):
-            terms = []
-            for ci, chain in enumerate(chains):
-                var = count[worker][ci]
-                n = chain["daily_tile_ops"][day]
-                if n:
-                    terms.append(var * n)
-            # Pickups JSON already includes PICKUP/BUILD/PLACE in daily_tile_ops.
-            locked_ops = locked["daily_tile_ops"][day]
-            if worker in HAND_WORKERS:
-                animal_terms = [
-                    count[worker][ci]
-                    for ci, chain in enumerate(chains)
-                    if chain["daily_animal_active"][day]
-                ]
-                if animal_terms:
-                    preamble = model.NewBoolVar(f"preamble_{worker}_{day}")
-                    animal_count = sum(animal_terms)
-                    model.Add(preamble <= animal_count)
-                    model.Add(animal_count <= preamble * max(1, empty_counts[worker]))
-                    terms.append(preamble)
-                elif locked["daily_animal_active"][day] > 0:
-                    locked_ops += 1
-
-            if terms or locked_ops:
-                model.Add(sum(terms) + locked_ops <= cap)
-
-    buy_w: list = []
-    buy_f: list = []
-    buy_w_cost: list = []
-    buy_f_cost: list = []
-
-    if track_shed:
-        W = [model.NewIntVar(0, MAX_BUY, f"W_{d}") for d in range(horizon + 1)]
-        F = [model.NewIntVar(0, MAX_BUY, f"F_{d}") for d in range(horizon + 1)]
-        model.Add(W[0] == 0)
-        model.Add(F[0] == 0)
-
-        for d in range(horizon):
-            feed_d = sum(
-                locked_by_worker[w]["daily_feed"][d]
-                + sum(count[w][ci] * chains[ci]["daily_feed"][d] for ci in range(len(chains)))
-                for w in WORKERS
-            )
-            fert_d = sum(
-                locked_by_worker[w]["daily_fert"][d]
-                + sum(count[w][ci] * chains[ci]["daily_fert"][d] for ci in range(len(chains)))
-                for w in WORKERS
-            )
-            collect_d = sum(
-                locked_by_worker[w]["daily_collect"][d]
-                + sum(count[w][ci] * chains[ci]["daily_collect"][d] for ci in range(len(chains)))
-                for w in WORKERS
-            )
-            wheat_d = sum(
-                locked_by_worker[w]["daily_wheat"][d]
-                + sum(count[w][ci] * chains[ci]["daily_wheat"][d] for ci in range(len(chains)))
-                for w in WORKERS
-            )
-            bw = model.NewIntVar(0, MAX_BUY, f"buy_w_{d}")
-            bf = model.NewIntVar(0, MAX_BUY, f"buy_f_{d}")
-            buy_w.append(bw)
-            buy_f.append(bf)
-            buy_w_cost.append(WHEAT_PRICE * bw)
-            buy_f_cost.append(FERT_PRICE * bf)
-            model.Add(W[d] >= feed_d)
-            model.Add(F[d] >= fert_d)
-            model.Add(W[d + 1] == W[d] - feed_d + wheat_d + bw)
-            model.Add(F[d + 1] == F[d] - fert_d + collect_d + bf)
-    # else: replan ablation — wheat/fert shed ledger off; executor buys at runtime
-    #   W[d] >= feed_d, F[d] >= fert_d, W/F balance, buy_w/buy_f in cash objective
-
-    balance_vars = []
-    for d in range(horizon):
-        day_terms = []
-        for w in WORKERS:
-            day_terms.append(locked_by_worker[w]["cash_by_day"][d])
-            for ci, chain in enumerate(chains):
-                cash = chain["cash_by_day"][d]
-                if cash:
-                    day_terms.append(count[w][ci] * cash)
-        if track_shed:
-            day_terms.append(-WHEAT_PRICE * buy_w[d])
-            day_terms.append(-FERT_PRICE * buy_f[d])
-        # if charge_hire_daily:
-        #     day_terms.append(-HIRE_DAILY_COST)
-        if charge_hire_daily and track_shed:
-            day_terms.append(-HIRE_DAILY_COST)
-        bal = model.NewIntVar(0, 200_000, f"balance_{d}")
-        prev = starting_money if d == 0 else balance_vars[-1]
-        model.Add(bal == prev + (sum(day_terms) if day_terms else 0))
-        balance_vars.append(bal)
-
-    obj_terms = [
-        chains[ci]["weight"] * count[w][ci]
-        for w in WORKERS
-        for ci in range(len(chains))
-    ]
-    if track_shed:
-        obj_terms.extend([-c for c in buy_w_cost])
-        obj_terms.extend([-c for c in buy_f_cost])
-    model.Maximize(sum(obj_terms))
-
-    solver = cp_model.CpSolver()
-    solver.parameters.num_workers = 8
-    solver.parameters.max_time_in_seconds = max_time
-    threshold = max(1000, int(OBJECTIVE_GOOD_ENOUGH * horizon / NUM_DAYS))
-    callback = _GoodEnoughCallback(threshold)
-    t0 = time.perf_counter()
-    status = solver.Solve(model, callback)
-    elapsed = time.perf_counter() - t0
-    status_name = solver.StatusName(status)
-
-    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        print(
-            f"[planner] status={status_name} good_enough={callback.hit} "
-            f"time={elapsed:.3f}s horizon={horizon} "
-            f"empty={sum(empty_counts.values())}",
-            flush=True,
-        )
-        raise RuntimeError(f"planner infeasible: {status_name}")
-
-    empty_set = set(empty_tiles)
-    assigned = {tile: [] for tile in range(NUM_TILES)}
-    for worker in WORKERS:
-        remaining = [idx for idx in WORKER_TILES[worker] if idx in empty_set]
-        if not remaining:
-            continue
-        slots = []
-        for ci, chain in enumerate(chains):
-            n = int(solver.Value(count[worker][ci]))
-            for _ in range(n):
-                slots.append(chain["raw_chain"])
-        slots.sort(key=_decode_sort_key)
-        for i, idx in enumerate(remaining):
-            assigned[idx] = slots[i]
-
-    obj = solver.ObjectiveValue()
-    print(
-        f"[planner] status={solver.StatusName(status)} good_enough={callback.hit} "
-        f"obj={obj:.0f} time={elapsed:.3f}s horizon={horizon} "
-        f"empty={sum(empty_counts.values())}",
-        flush=True,
-    )
-    return assigned
+    _add_daily(locked_by_worker[worker]["spend_by_day"], seg["spend_by_day"], horizon)
 
 
 def _occupancy_end(profile_key: str, start_day: int, horizon: int) -> int:
@@ -800,7 +620,7 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
     replan_tiles = []
     locked_tiles = 0
     empty_counts = {w: 0 for w in WORKERS}
-    locked_by_worker = {w: _zero_daily(horizon) | {"cash_by_day": [0] * horizon} for w in WORKERS}
+    locked_by_worker = {w: _empty_locked(horizon) for w in WORKERS}
 
     for idx in range(NUM_TILES):
         tile = _tile_at(me, idx)
@@ -827,47 +647,44 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
 
     assert sum(empty_counts.values()) == len(replan_tiles)
 
-    assigned: dict[int, list] = {}
-    try:
-        assigned = _solve_assignment(
-            chains,
-            horizon=horizon,
-            empty_tiles=replan_tiles,
-            empty_counts=empty_counts,
-            locked_by_worker=locked_by_worker,
-            starting_money=int(me["money"]),
-            max_time=15.0,
-            charge_hire_daily=False,
-            track_shed=False,
-        )
-    except RuntimeError as exc:
-        if "infeasible" not in str(exc).lower():
-            raise
+    result = solvers.solve(
+        chains,
+        horizon=horizon,
+        empty_tiles=replan_tiles,
+        empty_counts=empty_counts,
+        locked_by_worker=locked_by_worker,
+        starting_money=int(me["money"]),
+        max_time=15.0,
+        charge_hire_daily=False,
+        track_shed=False,
+    )
+
+    if not result.complete and (
+        not result.solved_workers or result.solved_workers[0] != WORKERS[0]
+    ):
         print(
-            f"[planner] replan d={day} INFEASIBLE keep={len(replan_tiles)}",
+            f"[planner] replan d={day} INFEASIBLE keep={len(replan_tiles)} "
+            f"active={','.join(result.solved_workers) or 'none'}",
             flush=True,
         )
         return
 
-    for idx in replan_tiles:
-        chain = assigned.get(idx, [])
-        tile_queues[idx] = chain_to_queue_items(chain, horizon)
-        if tile_state is not None:
-            queue = tile_queues[idx]
-            first_lag = queue[0].start_lag if queue else 0
-            tile_state[idx] = {
-                "queue_idx": 0,
-                "lag": first_lag,
-                "gap": 0,
-                "pending_dig": False,
-                "dig_plant_ok": False,
-                "active": False,
-            }
+    n_written = solvers.apply_replan(
+        result,
+        replan_tiles,
+        tile_queues,
+        tile_state,
+        horizon,
+        chain_to_queue_items,
+    )
 
     if replan_tiles:
         samples = []
         for idx in replan_tiles[:5]:
-            chain = assigned.get(idx, [])
+            chain = result.assigned.get(idx)
+            if chain is None:
+                samples.append(f"t{idx + 1}:keep")
+                continue
             if not chain:
                 samples.append(f"t{idx + 1}:IDLE")
                 continue
@@ -875,15 +692,16 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
                 f"{_parse_profile_key(k)[0]}@{s}" for k, s in chain
             )
             samples.append(f"t{idx + 1}:{pl}")
-        print(f"[planner] replan assign {', '.join(samples)}", flush=True)
+        suffix = "" if result.complete else f" partial={len(result.solved_workers)}"
+        print(f"[planner] replan assign {', '.join(samples)}{suffix}", flush=True)
 
     opp_log = " ".join(
         f"opp_{p}={n}" for p, n in sorted(opp_counts.items()) if n > 0
     )
-    n_assigned = len(replan_tiles)
     print(
-        f"[planner] replan d={day} shops={len(shops)} "
-        f"catalog={len(handmade_chains)} assign={n_assigned} locked={locked_tiles}"
+        f"[planner] replan d={day} solver={solvers.CURRENT_SOLVER} "
+        f"shops={len(shops)} catalog={len(handmade_chains)} "
+        f"assign={n_written} locked={locked_tiles}"
         + (f" {opp_log}" if opp_log else ""),
         flush=True,
     )
@@ -897,8 +715,8 @@ def _build_from_solver() -> dict[int, list]:
     handmade_chains = dp_catalog.build_catalog(NUM_DAYS, price_of)
     chains = _build_chains(crops_data, animals_data, handmade_chains, NUM_DAYS, price_of)
     empty_counts = {w: len(WORKER_TILES[w]) for w in WORKERS}
-    locked_by_worker = {w: _zero_daily(NUM_DAYS) | {"cash_by_day": [0] * NUM_DAYS} for w in WORKERS}
-    assigned = _solve_assignment(
+    locked_by_worker = {w: _empty_locked(NUM_DAYS) for w in WORKERS}
+    result = solvers.solve(
         chains,
         horizon=NUM_DAYS,
         empty_tiles=list(range(NUM_TILES)),
@@ -907,8 +725,13 @@ def _build_from_solver() -> dict[int, list]:
         starting_money=STARTING_MONEY,
         max_time=20.0,
     )
+    if not result.complete:
+        active = ",".join(result.solved_workers) or "none"
+        raise RuntimeError(
+            f"day-0 {solvers.CURRENT_SOLVER} incomplete: active={active}"
+        )
     return {
-        tile: chain_to_queue_items(assigned.get(tile, []), NUM_DAYS)
+        tile: chain_to_queue_items(result.assigned.get(tile, []), NUM_DAYS)
         for tile in range(NUM_TILES)
     }
 

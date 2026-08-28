@@ -188,6 +188,7 @@ WORKER_ROUTES: dict[str, list[int]] = {}
 PREAMBLE: dict[str, list[str]] = {}
 HAND_START_HOUR: dict[str, int] = {}
 NET_TILE_OPS: dict[str, int] = {}
+HAND_DAILY_COST: dict[str, int] = {}
 HIRE_DAILY_COST = 0
 
 
@@ -196,7 +197,7 @@ def bind(layout: Layout) -> None:
     global TILE_COORDS, NUM_TILES, SHED_DOOR, SHED_ADJACENT
     global WORKERS, HAND_WORKERS, NUM_HIRES
     global WORKER_TILES, WORKER_ROUTES, PREAMBLE, HAND_START_HOUR, NET_TILE_OPS
-    global HIRE_DAILY_COST
+    global HAND_DAILY_COST, HIRE_DAILY_COST
 
     TILE_COORDS = layout.coords
     NUM_TILES = len(layout.coords)
@@ -212,7 +213,15 @@ def bind(layout: Layout) -> None:
     PREAMBLE = {z.name: list(z.preamble) for z in layout.zones}
     HAND_START_HOUR = {z.name: z.start_hour for z in layout.zones if z.is_hand}
     NET_TILE_OPS = {z.name: z.net_tile_ops for z in layout.zones}
-    HIRE_DAILY_COST = _fib_hire_cost(NUM_HIRES)
+
+    hand_costs: dict[str, int] = {}
+    a, b = 1, 1
+    for z in layout.zones:
+        if z.is_hand:
+            hand_costs[z.name] = a
+            a, b = b, a + b
+    HAND_DAILY_COST = hand_costs
+    HIRE_DAILY_COST = sum(hand_costs.values())
 
 
 def worker_for_tile(idx: int) -> str:
