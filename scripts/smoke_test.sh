@@ -107,7 +107,21 @@ if early_wheat_sells:
         print(f'  {line}', file=sys.stderr)
     raise SystemExit(1)
 
-print(f'Smoke checks passed: hand2 BUILD={build} PLACE={place}, no early SELL WHEAT')
+day0_buy_seed = any(
+    ' market ' in line and 'BUY_SEED' in line
+    for line in lines
+    if line.startswith('[exec] d=0 ')
+)
+day0_plant = any(
+    (' farmer PLANT' in line or ' hand' in line and ' PLANT' in line)
+    for line in lines
+    if line.startswith('[exec] d=0 ')
+)
+if not day0_buy_seed and not day0_plant:
+    print('FAIL: day-0 had zero BUY_SEED and zero PLANT', file=sys.stderr)
+    raise SystemExit(1)
+
+print(f'Smoke checks passed: hand2 BUILD={build} PLACE={place}, no early SELL WHEAT, day-0 productive')
 print('Smoke test passed.')
 "
 

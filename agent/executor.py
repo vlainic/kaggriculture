@@ -61,6 +61,7 @@ class Executor:
         self._endgame_done = {w: set() for w in workers.WORKERS}
         self._tile_state: dict[int, dict] = {}
         self._empty_at_dawn: set[int] = set()
+        self._day0_productive = False
         for idx in range(workers.NUM_TILES):
             queue = script.TILE_QUEUES.get(idx, [])
             first_lag = queue[0].start_lag if queue else 0
@@ -82,6 +83,8 @@ class Executor:
 
         if hour == 0:
             self._on_new_day(me, day)
+            if day == 1 and not self._day0_productive:
+                _log("[exec] WARN day-0 had zero BUY_SEED and zero PLANT")
             if day <= script.SEASON_LAST_DAY:
                 if 0 < day < script.SEASON_LAST_DAY:
                     try:
@@ -121,6 +124,14 @@ class Executor:
 
         if orders:
             _log(f"[exec] d={day} h={hour} market {' '.join(_fmt(o) for o in orders)}")
+        if day == 0:
+            if any(o and o[0] == "BUY_SEED" for o in orders):
+                self._day0_productive = True
+            if farmer and farmer[0] == "PLANT":
+                self._day0_productive = True
+            for act in hands:
+                if act and act[0] == "PLANT":
+                    self._day0_productive = True
         _log(f"[exec] d={day} h={hour} farmer {_fmt(farmer)}" + (f" {note}" if note else ""))
         for i, act in enumerate(hands):
             _log(f"[exec] d={day} h={hour} hand{i} {_fmt(act)}")

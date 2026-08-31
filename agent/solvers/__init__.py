@@ -34,6 +34,10 @@ def solve(
     max_time: float = 20.0,
     charge_hire_daily: bool = True,
     track_shed: bool = True,
+    w_open0: int = 0,
+    f_open0: int = 0,
+    cascade_reserve: bool = False,
+    min_balance: int = 0,
 ) -> SolveResult:
     return _backend().solve(
         chains,
@@ -45,6 +49,10 @@ def solve(
         max_time=max_time,
         charge_hire_daily=charge_hire_daily,
         track_shed=track_shed,
+        w_open0=w_open0,
+        f_open0=f_open0,
+        cascade_reserve=cascade_reserve,
+        min_balance=min_balance,
     )
 
 

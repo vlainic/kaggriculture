@@ -20,6 +20,22 @@ from agent.zoning import (
 WHEAT_PRICE = 25
 FERT_PRICE = 100
 MAX_BUY = NUM_TILES * 30
+ZONE_PLACEMENT_BUFFER = 150
+
+
+def _downstream_cash_reserve(
+    remaining_workers: tuple[str, ...],
+    horizon: int,
+    *,
+    charge_hire_daily: bool,
+) -> int:
+    reserve = 0
+    hire_days = min(horizon, 7)
+    for w in remaining_workers:
+        if charge_hire_daily and w in HAND_WORKERS:
+            reserve += HAND_DAILY_COST.get(w, 0) * hire_days
+        reserve += ZONE_PLACEMENT_BUFFER
+    return reserve
 
 
 def _locked_conservative_handoff(
@@ -60,12 +76,23 @@ def _solve_zone(
     max_time: float,
     charge_hire_daily: bool,
     track_shed: bool,
+    force_all_idle: bool = False,
+    min_close0: int = 0,
+    min_balance: int = 0,
 ):
     model = cp_model.CpModel()
     count = [
         model.NewIntVar(0, n_empty, f"n_{worker}_{c['id']}") for c in chains
     ]
     model.Add(sum(count) == n_empty)
+    if force_all_idle:
+        idle_ci = next(
+            i
+            for i, c in enumerate(chains)
+            if c.get("id") == "IDLE" or not c.get("raw_chain")
+        )
+        for ci, var in enumerate(count):
+            model.Add(var == (n_empty if ci == idle_ci else 0))
 
     cap = NET_TILE_OPS[worker]
     for day in range(horizon):
@@ -157,7 +184,8 @@ def _solve_zone(
         else:
             prev = opening_balances[d] + (balance_vars[d - 1] - opening_balances[0])
 
-        bal = model.NewIntVar(0, 200_000, f"balance_{worker}_{d}")
+        bal_floor = min_balance if min_balance > 0 else 0
+        bal = model.NewIntVar(bal_floor, 200_000, f"balance_{worker}_{d}")
         model.Add(bal == prev + (sum(day_terms) if day_terms else 0))
         balance_vars.append(bal)
 
@@ -172,6 +200,9 @@ def _solve_zone(
         cons = model.NewIntVar(-200_000, 200_000, f"cons_{worker}_{d}")
         model.Add(cons == start_d + (sum(spend_terms) if spend_terms else 0))
         conservative_vars.append(cons)
+
+    if min_close0 > 0:
+        model.Add(balance_vars[0] >= min_close0)
 
     obj_terms = [chains[ci]["weight"] * count[ci] for ci in range(len(chains))]
     if track_shed:
@@ -189,7 +220,8 @@ def _solve_zone(
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         print(
             f"[planner] zone={worker} status={solver.StatusName(status)} "
-            f"time={elapsed:.3f}s empty={n_empty}",
+            f"time={elapsed:.3f}s empty={n_empty} "
+            f"open0={opening_balances[0] if opening_balances else 'N/A'}",
             flush=True,
         )
         return None
@@ -204,10 +236,13 @@ def _solve_zone(
         f"[planner] zone={worker} {solver.StatusName(status)} "
         f"obj={solver.ObjectiveValue():.0f} time={elapsed:.3f}s "
         f"close0={int(solver.Value(balance_vars[0]))} "
-        f"cons0={int(solver.Value(conservative_vars[0]))} empty={n_empty}",
+        f"cons0={int(solver.Value(conservative_vars[0]))} "
+        f"open0={opening_balances[0] if opening_balances else 'N/A'} "
+        f"empty={n_empty}",
         flush=True,
     )
     return {
+        "balance": [int(solver.Value(b)) for b in balance_vars],
         "conservative": [int(solver.Value(c)) for c in conservative_vars],
         "w_levels": w_levels,
         "f_levels": f_levels,
@@ -227,6 +262,10 @@ def solve(
     max_time: float = 20.0,
     charge_hire_daily: bool = True,
     track_shed: bool = True,
+    w_open0: int = 0,
+    f_open0: int = 0,
+    cascade_reserve: bool = False,
+    min_balance: int = 0,
 ) -> SolveResult:
     empty_set = set(empty_tiles)
     per_zone_time = max_time / max(1, len(WORKERS))
@@ -250,8 +289,24 @@ def solve(
             solved_workers.append(worker)
             continue
 
-        w_open = w_levels[1] if worker != WORKERS[0] and track_shed else 0
-        f_open = f_levels[1] if worker != WORKERS[0] and track_shed else 0
+        if worker == WORKERS[0] and track_shed:
+            w_open = w_open0
+            f_open = f_open0
+        elif worker != WORKERS[0] and track_shed:
+            w_open = w_levels[1]
+            f_open = f_levels[1]
+        else:
+            w_open = 0
+            f_open = 0
+        wi = WORKERS.index(worker)
+        remaining = WORKERS[wi + 1 :]
+        min_close0 = (
+            _downstream_cash_reserve(
+                remaining, horizon, charge_hire_daily=charge_hire_daily
+            )
+            if cascade_reserve and remaining
+            else 0
+        )
         res = _solve_zone(
             worker,
             chains,
@@ -264,6 +319,8 @@ def solve(
             max_time=per_zone_time,
             charge_hire_daily=charge_hire_daily,
             track_shed=track_shed,
+            min_close0=min_close0,
+            min_balance=min_balance,
         )
         if res is None:
             break
@@ -274,7 +331,14 @@ def solve(
                 worker, chains, res["solver"], res["count"], zone_empty
             )
         )
-        opening = res["conservative"]
+        opening = res["balance"]
+        if opening[0] < 0:
+            print(
+                f"[planner] zone={worker} handoff open0={opening[0]} < 0, stop cascade",
+                flush=True,
+            )
+            solved_workers.append(worker)
+            break
         if track_shed:
             w_levels = res["w_levels"]
             f_levels = res["f_levels"]
@@ -295,20 +359,29 @@ def apply_replan(
     horizon: int,
     chain_to_queue_items,
 ) -> int:
-    if not result.complete:
+    if not result.solved_workers or result.solved_workers[0] != WORKERS[0]:
         return 0
-    for idx in replan_tiles:
-        chain = result.assigned.get(idx, [])
-        tile_queues[idx] = chain_to_queue_items(chain, horizon)
-        if tile_state is not None:
-            queue = tile_queues[idx]
-            first_lag = queue[0].start_lag if queue else 0
-            tile_state[idx] = {
-                "queue_idx": 0,
-                "lag": first_lag,
-                "gap": 0,
-                "pending_dig": False,
-                "dig_plant_ok": False,
-                "active": False,
-            }
-    return len(replan_tiles)
+
+    written = 0
+    replan_set = set(replan_tiles)
+    for worker in result.solved_workers:
+        for idx in WORKER_TILES[worker]:
+            if idx not in replan_set:
+                continue
+            chain = result.assigned.get(idx, [])
+            if not chain and tile_queues.get(idx):
+                continue
+            tile_queues[idx] = chain_to_queue_items(chain, horizon)
+            written += 1
+            if tile_state is not None and chain:
+                queue = tile_queues[idx]
+                first_lag = queue[0].start_lag if queue else 0
+                tile_state[idx] = {
+                    "queue_idx": 0,
+                    "lag": first_lag,
+                    "gap": 0,
+                    "pending_dig": False,
+                    "dig_plant_ok": False,
+                    "active": False,
+                }
+    return written

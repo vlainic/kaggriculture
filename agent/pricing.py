@@ -153,9 +153,14 @@ def allowed_sell_qty(
     if abs_day >= liquidate_from_day:
         if mode == "dump":
             return stock
-        return max(dp_quota, min(stock, max_sell_per_day))
+        cap = max_sell_per_day
+        if product == "WOOL":
+            cap = min(cap, max(4, MARKET_PARAMS["WOOL"].T // 8))
+        return max(dp_quota, min(stock, cap))
 
     cap = max_sell_per_day if mode == "drip" else stock
+    if product == "WOOL":
+        cap = min(cap, max(4, MARKET_PARAMS["WOOL"].T // 8))
     headroom = max_units_above_floor(product, market_inv, min(stock, cap), floor_ratio)
     if headroom <= 0:
         return 0

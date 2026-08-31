@@ -248,8 +248,14 @@ def _floor_active(abs_day: int) -> bool:
     return abs_day < LIQUIDATE_FROM_DAY
 
 
+def _premium_daily_cap(product: str) -> int:
+    if product == "WOOL":
+        return max(4, pricing.MARKET_PARAMS["WOOL"].T // 8)
+    return MAX_SELL_PER_DAY
+
+
 def _max_sell_for_day(product: str, inv: int, stock: int, abs_day: int) -> int:
-    max_sell = min(stock, MAX_SELL_PER_DAY)
+    max_sell = min(stock, _premium_daily_cap(product))
     if _floor_active(abs_day):
         max_sell = min(
             max_sell,

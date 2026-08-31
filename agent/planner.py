@@ -6,7 +6,7 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
-from agent import animal_rollouts, dp_catalog, rollouts, script, solvers
+from agent import animal_rollouts, dp_catalog, rollouts, solvers, zoning
 from agent.zoning import (
     NUM_TILES,
     TILE_COORDS,
@@ -18,6 +18,7 @@ from agent.zoning import (
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 NUM_DAYS = 30
+SEASON_LAST_DAY = 29
 STARTING_MONEY = 3000
 PROFILE_SUFFIXES = ("no_fert", "with_fert", "no_care", "with_care")
 ANIMAL_NAMES = frozenset(animal_rollouts.animal_names())
@@ -588,7 +589,7 @@ def chain_to_queue_items(chain: list, horizon: int = NUM_DAYS) -> list:
 
 def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None:
     day = obs["day"]
-    if day == 0 or day >= script.SEASON_LAST_DAY:
+    if day == 0 or day >= SEASON_LAST_DAY:
         return
     horizon = NUM_DAYS - day
     if horizon <= 0:
@@ -647,6 +648,18 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
 
     assert sum(empty_counts.values()) == len(replan_tiles)
 
+    shed = obs["private"]["shed"]
+    w_open0 = int(shed.get("WHEAT", 0))
+    f_open0 = int(shed.get("FERTILIZER", 0))
+
+    from agent import script
+
+    wheat_feed = script.total_wheat_feed_need(me, tile_state or {}, obs["private"])
+    wheat_price = int(obs["market"]["prices"].get("WHEAT", 0) or 25)
+    hire_reserve = zoning.HIRE_DAILY_COST * max(0, zoning.NUM_HIRES - len(me["hands"]))
+    feed_reserve = wheat_feed * wheat_price
+    liquidity_floor = hire_reserve + feed_reserve * 3
+
     result = solvers.solve(
         chains,
         horizon=horizon,
@@ -655,8 +668,9 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
         locked_by_worker=locked_by_worker,
         starting_money=int(me["money"]),
         max_time=15.0,
-        charge_hire_daily=False,
-        track_shed=False,
+        w_open0=w_open0,
+        f_open0=f_open0,
+        min_balance=liquidity_floor,
     )
 
     if not result.complete and (
@@ -724,16 +738,24 @@ def _build_from_solver() -> dict[int, list]:
         locked_by_worker=locked_by_worker,
         starting_money=STARTING_MONEY,
         max_time=20.0,
+        cascade_reserve=True,
     )
-    if not result.complete:
+    if not result.solved_workers or result.solved_workers[0] != WORKERS[0]:
         active = ",".join(result.solved_workers) or "none"
         raise RuntimeError(
-            f"day-0 {solvers.CURRENT_SOLVER} incomplete: active={active}"
+            f"day-0 {solvers.CURRENT_SOLVER} farmer failed: active={active}"
         )
-    return {
-        tile: chain_to_queue_items(result.assigned.get(tile, []), NUM_DAYS)
-        for tile in range(NUM_TILES)
-    }
+
+    queues = {idx: [] for idx in range(NUM_TILES)}
+    for worker in result.solved_workers:
+        for idx in WORKER_TILES[worker]:
+            chain = result.assigned.get(idx, [])
+            queues[idx] = chain_to_queue_items(chain, NUM_DAYS)
+
+    if not result.complete:
+        active = ",".join(result.solved_workers)
+        print(f"[planner] day-0 partial active={active}", flush=True)
+    return queues
 
 
 def get_tile_queues(fallback: Callable[[], dict]) -> dict:
@@ -742,6 +764,10 @@ def get_tile_queues(fallback: Callable[[], dict]) -> dict:
         try:
             _cached_queues = _build_from_solver()
         except (RuntimeError, OSError, ValueError, KeyError, TypeError) as exc:
+            if zoning.CURRENT is zoning.FIVE:
+                raise RuntimeError(
+                    f"day-0 solver failed on FIVE layout (no empty fallback): {exc}"
+                ) from exc
             print(f"[planner] fallback to script queues: {exc}", flush=True)
             _cached_queues = fallback()
     return _cached_queues

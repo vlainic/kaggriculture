@@ -122,7 +122,7 @@ FIVE = Layout(
                 "WEST",
             ),
             start_hour=1,
-            net_tile_ops=13,
+            net_tile_ops=17,
             is_hand=True,
         ),
         Zone(
@@ -137,7 +137,7 @@ FIVE = Layout(
                 "WEST",
             ),
             start_hour=1,
-            net_tile_ops=14,
+            net_tile_ops=16,
             is_hand=True,
         ),
         Zone(
@@ -153,7 +153,7 @@ FIVE = Layout(
             tiles=(20, 21, 22, 23, 24),
             preamble=("NORTH", "PICKUP_WHEAT", "PICKUP_ANIMALS", "WEST"),
             start_hour=2,
-            net_tile_ops=15,
+            net_tile_ops=13,
             is_hand=True,
         ),
     ),

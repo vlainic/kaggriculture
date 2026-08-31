@@ -47,6 +47,10 @@ def solve(
     max_time: float = 20.0,
     charge_hire_daily: bool = True,
     track_shed: bool = True,
+    w_open0: int = 0,
+    f_open0: int = 0,
+    cascade_reserve: bool = False,
+    min_balance: int = 0,
 ) -> SolveResult:
     model = cp_model.CpModel()
     count = {}
@@ -94,8 +98,8 @@ def solve(
     if track_shed:
         W = [model.NewIntVar(0, MAX_BUY, f"W_{d}") for d in range(horizon + 1)]
         F = [model.NewIntVar(0, MAX_BUY, f"F_{d}") for d in range(horizon + 1)]
-        model.Add(W[0] == 0)
-        model.Add(F[0] == 0)
+        model.Add(W[0] == w_open0)
+        model.Add(F[0] == f_open0)
 
         for d in range(horizon):
             feed_d = sum(
