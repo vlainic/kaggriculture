@@ -295,29 +295,20 @@ def apply_replan(
     horizon: int,
     chain_to_queue_items,
 ) -> int:
-    if not result.solved_workers or result.solved_workers[0] != WORKERS[0]:
+    if not result.complete:
         return 0
-
-    written = 0
-    replan_set = set(replan_tiles)
-    for worker in result.solved_workers:
-        for idx in WORKER_TILES[worker]:
-            if idx not in replan_set:
-                continue
-            chain = result.assigned.get(idx, [])
-            if not chain and tile_queues.get(idx):
-                continue
-            tile_queues[idx] = chain_to_queue_items(chain, horizon)
-            written += 1
-            if tile_state is not None and chain:
-                queue = tile_queues[idx]
-                first_lag = queue[0].start_lag if queue else 0
-                tile_state[idx] = {
-                    "queue_idx": 0,
-                    "lag": first_lag,
-                    "gap": 0,
-                    "pending_dig": False,
-                    "dig_plant_ok": False,
-                    "active": False,
-                }
-    return written
+    for idx in replan_tiles:
+        chain = result.assigned.get(idx, [])
+        tile_queues[idx] = chain_to_queue_items(chain, horizon)
+        if tile_state is not None:
+            queue = tile_queues[idx]
+            first_lag = queue[0].start_lag if queue else 0
+            tile_state[idx] = {
+                "queue_idx": 0,
+                "lag": first_lag,
+                "gap": 0,
+                "pending_dig": False,
+                "dig_plant_ok": False,
+                "active": False,
+            }
+    return len(replan_tiles)

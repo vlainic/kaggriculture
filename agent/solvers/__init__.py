@@ -5,7 +5,7 @@ from __future__ import annotations
 from agent.solvers import monolithic, zonewise
 from agent.solvers.types import SolveResult
 
-CURRENT_SOLVER = "monolithic"  # or "zonewise"
+CURRENT_SOLVER = "zonewise" # "monolithic"  or "zonewise"
 
 _BACKENDS = {
     "monolithic": monolithic,
