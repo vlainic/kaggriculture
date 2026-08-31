@@ -1,29 +1,38 @@
 # Active Context
 
-## Current focus (Aug 27, 2026)
+## Current focus (Aug 31, 2026)
 
-**DP catalog + pickups-honest ops** on top of dawn replan / FIVE layout.
+**Zonewise CP-SAT agent** on FIVE layout — solver cascade + replan cash accounting + sell pacing. `CURRENT_SOLVER = "zonewise"` in `agent/solvers/__init__.py`.
 
-### Just shipped (this session)
+### Just shipped (Aug 31 session)
 
-1. **Zonewise notebooks**
-   - [`experiments/OneL-Zonewise-CPSAT-Handmade-Catalog.ipynb`](../../experiments/OneL-Zonewise-CPSAT-Handmade-Catalog.ipynb) — FIVE LandOne cascade; **conservative money coupling**: next zone opens at prev start − prev loss (setups + W/F buys + hire; **no sells**). Full day `closing` still logged.
-   - [`experiments/OneL-Zonewise-CPSAT-DP-Catalog.ipynb`](../../experiments/OneL-Zonewise-CPSAT-DP-Catalog.ipynb) — same MIP, chains from `agent.dp_catalog.build_catalog` via `DP_LAGS`.
+1. **Zonewise = drop-in solver** ([`agent/solvers/zonewise.py`](../../agent/solvers/zonewise.py))
+   - Same `solve()` / `apply_replan()` interface as monolithic; zone cascade is internal only.
+   - `apply_replan`: zone-prefix partial write (farmer first); skip empty assignment if tile already has queue.
+   - Handoff uses **close balance** (`res["balance"]`), not conservative spend floor.
+   - Stop cascade if `open0 < 0` after zone solve; log `open0=` on INFEASIBLE.
 
-2. **`agent/dp_catalog.py`**
-   - `build_catalog(horizon, price_of, lags=…, tolerance=…, max_variants=…)`
-   - Insert diversity: near-best landing days (`INSERT_TOLERANCE=0.05`, `INSERT_MAX_VARIANTS=4`) with **best-chain pinned** before day-stride thin (stride alone dropped argmax → MIP regression).
-   - **Greedy inserts:** no forced wheat/carrot prefix; extras = mono-greedy of that crop (1, 2, … while fits) + mix WIS suffix; animals = single placement (dedupes with animal-only).
-   - Day-0 / replan both call this (not handmade JSON).
+2. **Replan cost-aware** ([`agent/planner.py`](../../agent/planner.py))
+   - Replan uses default `charge_hire_daily=True`, `track_shed=True` (no longer cash-blind).
+   - Seeds W/F from `obs["private"]["shed"]` via `w_open0` / `f_open0`.
+   - **Liquidity floor** on replan: `min_balance = hire_reserve + feed_reserve × 3` (mirrors market reserves).
 
-3. **Animals = pickups JSON**
-   - Agent loads `data/animal_with_pickups.json` (`animal_rollouts.py` + `planner.py`); smoke bundle copies it (not `animal_rollouts.json`).
-   - Tile-only `animal_rollouts.json` remains for older notebooks.
+3. **Day-0 floor**
+   - `_build_from_solver`: partial apply on incomplete (farmer prefix OK); `cascade_reserve=True`.
+   - FIVE: no empty script fallback on solver fail — re-raise.
+   - Smoke + executor: day-0 must have `BUY_SEED` or `PLANT`.
 
-4. **Ops cap = `daily_tile_ops` only**
-   - Pickups JSON already has PICKUP/BUILD/PLACE in `len(actions)`.
-   - Removed double-counts: cap no longer adds `daily_wheat_pickup` / `daily_animal_place` / `daily_fert_pickup`; no extra `build_day += 1` stamp; `animal_rollouts.executor_ops_by_day` is `len(actions)` only.
-   - Hire preamble (1 op if any animal active) still charged for hands.
+4. **Day-0 cascade reserve** (Fix 1)
+   - `_downstream_cash_reserve()` → `min_close0` on zone day-0 close balance.
+   - All 5 zones OPTIMAL on day-0 in smoke (farmer `close0≈2895`, not ~2820).
+
+5. **Wool sell pacing** (Fix 3)
+   - WOOL daily cap `max(4, T//8)` = 13 in `sell_dp` + `pricing.allowed_sell_qty`.
+   - Season drip mostly 1 wool/hour; total ~231/game in smoke (was 185–210 at burst rates).
+
+6. **Layout ops** — FIVE `net_tile_ops` aligned to `data/two_lands.md`: **18/17/16/14/13**.
+
+7. **Diagnostics** — `experiments/hire1_idle_repro.py` (all-IDLE fixed test; run via submission bundle env).
 
 ### Pricing (agent)
 
@@ -32,28 +41,28 @@
 | Day-0 | i0 `base_price` |
 | Replan | live quote × `max(0.1, 1 + shop_demand − opp_tiles/10)` |
 
-Same callable feeds catalog WIS **and** chain stamp cash.
+### Replan
 
-### Replan (unchanged shape)
-
-- Horizon = `NUM_DAYS - day` (remaining season).
-- Vars = `_replan_eligible` empties only; rest locked (board + queue suffix).
-- `track_shed=False`; INFEASIBLE → preserve queues.
+- Horizon = `NUM_DAYS - day`.
+- Vars = `_replan_eligible` empties; rest locked (board + queue suffix).
+- **`track_shed=True`** + shed W/F seeding + liquidity floor.
+- INFEASIBLE with farmer prefix → partial apply; `active=none` only if farmer fails.
 
 ### Layout
 
 ```python
-CURRENT = FIVE   # zoning still 18/13/14/14/15; zonewise notebooks use two_lands 18/17/16/14/13
+CURRENT = FIVE   # ops 18/17/16/14/13 (two_lands LandOne)
 ```
 
-## Smoke / score notes
+## Smoke / score notes (Aug 31)
 
-- Switching to pickups **without** stripping side-channel ops tanked smoke (~90k → sub-50k) — over-counted animal days.
-- After single-term ops: expect animals to fit again; re-smoke to confirm (not banked yet this session).
+- Post all fixes: **~91–107k** vs random (720 steps); day-0 productive (PLANT/BUY_SEED).
+- `active=none` replan days: **2** in latest smoke (d=11, d=12) vs ~6–8 in losing Kaggle episodes.
+- d=3 bank can still hit **$1** — liquidity floor helps solver but market execution still drains cash.
 
 ## Immediate next steps
 
-- Smoke vs random after pickups + ops fix; compare to prior ~64–98k FIVE band
-- Optional: align live `zoning.FIVE` ops to `data/two_lands.md` (18/17/16/14/13) if notebooks stay authoritative
-- Late-day replan INFEASIBLE still possible under cash/ops
-- Do not revive WSP; agents never submit without ask
+- Kaggle A/B: Fix 1 vs Fix 1+2 separately on episode logs (metrics: `active=none` days, d=3 bank, d=12 empty tiles, wool revenue).
+- If d=3 still ~$0: raise `LIQUIDITY_DAYS` or tighten `min_balance` after Kaggle data.
+- Optional: per-zone hire targeting (`busy_hand_zones`) if empty tiles persist at d=12.
+- Do not revive WSP; agents never submit without ask.

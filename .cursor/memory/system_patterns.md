@@ -11,7 +11,7 @@ import:
 
 obs → executor.step
   ├─ hour0: reset routes; dawn replan if 0 < day < SEASON_LAST; HIRE / BUY
-  │         replan: lock commitments → CP-SAT empties only (track_shed=False)
+  │         replan: lock commitments → CP-SAT empties only (track_shed=True, liquidity floor)
   ├─ market: dump SELL (all shed fert); buy animals even if tile still empty
   └─ snake: preamble → tile ops (WATER then optional FERTILIZE) → shed
 ```
@@ -22,7 +22,7 @@ obs → executor.step
 
 - **`Layout` / `Zone` dataclasses** — coords, visit order (= route), preamble, `start_hour`, `net_tile_ops`, `is_hand`.
 - **Catalog:** `FOUR` (classic 3-hand snake) + `FIVE` (5 columns, 4 hands). **`CURRENT = FIVE`**. Do not delete old layouts — flip `CURRENT`.
-- Live FIVE ops still **18/13/14/14/15**; zonewise notebooks often use `two_lands.md` **18/17/16/14/13**.
+- Live FIVE ops **18/17/16/14/13** (synced to `two_lands.md` Aug 31).
 - **`bind(layout)`** fills module aliases. Hire cash: fib sum of hands (FIVE=$7/day).
 - Spec notes: `data/five_zone_plan.md` (FIVE); `data/two_lands.md` (draft / notebook geometry).
 
@@ -40,9 +40,10 @@ obs → executor.step
 - **Vars:** `count[zone][chain]` IntVar `0..zone_size`, `sum == zone_size`.
 - **Yields:** zip `harvest_ages` → `yield_per_harvest`.
 - **Ops (with pickups JSON):** **`daily_tile_ops` only** (+ hire preamble if any animal active). Do **not** add `daily_wheat_pickup` / `daily_animal_place` / `daily_fert_pickup` or extra `build_day += 1` — those double-count PICKUP/BUILD already in the tape.
-- **Cash / W/F (day-0):** balance chain, shed ledgers, hire daily. Replan: `track_shed=False`.
-- **Dawn replan triage:** `_replan_eligible` empties only; locked = board + queue suffix; horizon = remaining days. INFEASIBLE → preserve.
-- **Zonewise notebooks:** sequential zone solves; **conservative money** = prev start − loss (setups + buys + hire; no sells).
+- **Cash / W/F (day-0):** balance chain, shed ledgers, hire daily; **`cascade_reserve`** enforces `min_close0` for downstream zones.
+- **Replan:** `track_shed=True`; shed W/F seeded from obs; **`min_balance`** liquidity floor (hire + 3× feed).
+- **Dawn replan triage:** `_replan_eligible` empties only; locked = board + queue suffix; horizon = remaining days. INFEASIBLE → preserve (farmer-prefix partial apply for zonewise).
+- **Zonewise solver:** sequential zone solves; handoff = **close balance** (not conservative); stop cascade if `open0 < 0`.
 
 ### Planner catalog prices (`effective_price`)
 
@@ -54,7 +55,7 @@ obs → executor.step
 
 - Snake routes; BUILD only if animal in inv; PLACE same day needs wheat.
 - FERTILIZE after WATER; stay on unfed pastures.
-- Market: wheat dawn buy; skip early SELL WHEAT; sell DP + 50% floor.
+- Market: wheat dawn buy; skip early SELL WHEAT; sell DP + 50% floor; **WOOL daily cap** `max(4, T//8)`.
 
 ### Engine facts
 
@@ -91,7 +92,8 @@ obs → executor.step
 ```
 main.py → agent/executor.py → script.TILE_QUEUES
 agent/zoning.py           # FOUR / FIVE / CURRENT + bind()
-agent/planner.py          # zone-count CP-SAT + replan
+agent/planner.py          # zone-count CP-SAT + replan (cascade_reserve, liquidity floor)
+agent/solvers/            # monolithic + zonewise backends; CURRENT_SOLVER dispatch
 agent/dp_catalog.py       # runtime WIS catalog (lags, inserts)
 agent/{script,workers,tile_ops,market,rollouts,animal_rollouts}.py
 data/crop_rollouts.json
