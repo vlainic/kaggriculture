@@ -42,8 +42,9 @@ obs → executor.step
 - **Ops (with pickups JSON):** **`daily_tile_ops` only** (+ hire preamble if any animal active). Do **not** add `daily_wheat_pickup` / `daily_animal_place` / `daily_fert_pickup` or extra `build_day += 1` — those double-count PICKUP/BUILD already in the tape.
 - **Cash / W/F (day-0):** balance chain, shed ledgers, hire daily; **`cascade_reserve`** enforces `min_close0` for downstream zones.
 - **Replan:** `track_shed=True`; shed W/F seeded from obs; **`min_balance`** liquidity floor (hire + 3× feed).
-- **Dawn replan triage:** `_replan_eligible` empties only; locked = board + queue suffix; horizon = remaining days. INFEASIBLE → preserve (farmer-prefix partial apply for zonewise).
-- **Zonewise solver:** sequential zone solves; handoff = **close balance** (not conservative); stop cascade if `open0 < 0`.
+- **Dawn replan triage:** `_replan_eligible` empties + WEED only; locked = board + queue suffix; horizon = remaining days. INFEASIBLE → preserve (farmer-prefix partial apply).
+- **Zonewise solver:** sequential zone solves; handoff = **close balance**; `track_shed=True`; liquidity floor; stop cascade if farmer fails.
+- **WSP solver (`zonewise_wsp.py`):** atomic patterns; day-0 from `wsp_prestart.json`; replan from d≥3; handoff = **conservative** (start − spend, no harvest credit); `track_shed=False`; `min_balance=0`; break cascade on INFEASIBLE. **Not** full live bank per zone; **not** ops/78 slice on replan.
 
 ### Planner catalog prices (`effective_price`)
 
@@ -54,8 +55,9 @@ obs → executor.step
 ### Executor + fert + feed (runtime, not CP-SAT)
 
 - Snake routes; BUILD only if animal in inv; PLACE same day needs wheat.
-- FERTILIZE after WATER; stay on unfed pastures.
-- Market: wheat dawn buy; skip early SELL WHEAT; sell DP + 50% floor; **WOOL daily cap** `max(4, T//8)`.
+- FERTILIZE via `_may_fertilize_today` after WATER; skip tape FERT; `fert_today` + zone ops cap.
+- Wheat: dawn `feed_need + 1`; shed-adjacent pickup before route (if shed has stock); feed-wait pickup at tile.
+- Market: sell DP + 50% floor; **WOOL daily cap** `max(4, T//8)`.
 
 ### Engine facts
 
@@ -69,7 +71,7 @@ obs → executor.step
 
 1. **Per-tile assignment binaries** when constraints are zone-shared.
 2. **Ops cap summing pickups side-channels while using `animal_with_pickups.json`** — double-count; smoke collapses.
-3. **Season-long WSP** — abandoned.
+3. **Season-long WSP as sole backend** — abandoned Aug 12 for set-packing; **revived** as `zonewise_wsp.py` with atomic patterns + conservative cascade (Sep 2026).
 4. **Trusting solver obj as bank** — I0 / dump sells.
 5. **Replan on day 0.**
 6. **Committing `.cursor/`.**
@@ -93,7 +95,7 @@ obs → executor.step
 main.py → agent/executor.py → script.TILE_QUEUES
 agent/zoning.py           # FOUR / FIVE / CURRENT + bind()
 agent/planner.py          # zone-count CP-SAT + replan (cascade_reserve, liquidity floor)
-agent/solvers/            # monolithic + zonewise backends; CURRENT_SOLVER dispatch
+agent/solvers/            # monolithic + zonewise + zonewise_wsp; CURRENT_SOLVER dispatch
 agent/dp_catalog.py       # runtime WIS catalog (lags, inserts)
 agent/{script,workers,tile_ops,market,rollouts,animal_rollouts}.py
 data/crop_rollouts.json
