@@ -194,10 +194,9 @@ def build_orders(
 
     if hour == 0 and day < script.SEASON_LAST_DAY:
         wheat_in_shed = shed.get("WHEAT", 0)
-        placing_today = _count_animals_placing_today(me, day, tile_state)
-        dawn_wheat_need = live_animals + placing_today
-        if wheat_in_shed < dawn_wheat_need:
-            deficit = dawn_wheat_need - wheat_in_shed
+        dawn_wheat_need = wheat_feed_need
+        if wheat_in_shed < dawn_wheat_need + 1:
+            deficit = dawn_wheat_need + 1 - wheat_in_shed
             cost = wheat_price
             buy = min(deficit, money // cost, MAX_ORDERS - len(orders)) if cost else 0
             if buy > 0:

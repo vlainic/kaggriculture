@@ -57,6 +57,27 @@ def crop_needs_fertilize_by_age(tile: dict, day: int) -> bool:
     return tile.get("fertilized_until_day", -1) < day
 
 
+def _may_fertilize_today(
+    tile: dict,
+    day: int,
+    me: dict,
+    tile_idx: int,
+    private: dict,
+    inv_idx: int,
+    *,
+    fert_today: bool,
+    zone_ops_remaining: int,
+) -> bool:
+    if fert_today or zone_ops_remaining <= 0:
+        return False
+    inv = _inv_at(private, inv_idx)
+    if inv.get("FERTILIZER", 0) <= 0:
+        return False
+    if not zone_has_animal(me, tile_idx):
+        return False
+    return crop_needs_fertilize_by_age(tile, day)
+
+
 def current_queue_item(idx: int, queue_idx: int) -> QueueItem | None:
     queue = TILE_QUEUES.get(idx, [])
     if queue_idx >= len(queue):
@@ -186,6 +207,8 @@ def next_tile_action(
     harvest_only: bool,
     empty_at_dawn: set[int] | None = None,
     dig_plant_ok: bool = False,
+    fert_today: bool = False,
+    zone_ops_remaining: int = 999,
 ) -> list | None:
     tile = _tile_at(me, idx)
     dawn = empty_at_dawn if empty_at_dawn is not None else set()
@@ -224,6 +247,8 @@ def next_tile_action(
                 me=me,
                 private=private,
                 inv_idx=inv_idx,
+                fert_today=fert_today,
+                zone_ops_remaining=zone_ops_remaining,
             )
             if act:
                 return act
@@ -277,6 +302,8 @@ def _crop_action(
     me: dict | None = None,
     private: dict | None = None,
     inv_idx: int = 0,
+    fert_today: bool = False,
+    zone_ops_remaining: int = 999,
 ) -> list | None:
     crop = tile["crop"]
     profile = item.profile if item.kind == "crop" else script.CROP_PROFILE
@@ -290,11 +317,15 @@ def _crop_action(
         if "WATER" in actions and not tile.get("watered_today"):
             return ["WATER"]
         if me is not None and private is not None and tile_idx >= 0:
-            inv = _inv_at(private, inv_idx)
-            if (
-                inv.get("FERTILIZER", 0) > 0
-                and zone_has_animal(me, tile_idx)
-                and crop_needs_fertilize_by_age(tile, day)
+            if _may_fertilize_today(
+                tile,
+                day,
+                me,
+                tile_idx,
+                private,
+                inv_idx,
+                fert_today=fert_today,
+                zone_ops_remaining=zone_ops_remaining,
             ):
                 return ["FERTILIZE"]
 
@@ -308,6 +339,8 @@ def _crop_action(
         if act == "WATER" and tile.get("watered_today"):
             continue
         if act == "PLANT":
+            continue
+        if act == "FERTILIZE":
             continue
         if act == "HARVEST" and tile.get("yield_units", 0) <= 0:
             continue

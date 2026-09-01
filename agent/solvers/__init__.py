@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-from agent.solvers import monolithic, zonewise
+from collections.abc import Callable
+
+from agent.solvers import monolithic, zonewise, zonewise_wsp
 from agent.solvers.types import SolveResult
 
-CURRENT_SOLVER = "zonewise" # "monolithic"  or "zonewise"
+CURRENT_SOLVER = "zonewise_wsp"  # "monolithic" | "zonewise" | "zonewise_wsp"
 
 _BACKENDS = {
     "monolithic": monolithic,
     "zonewise": zonewise,
+    "zonewise_wsp": zonewise_wsp,
 }
 
 
@@ -38,22 +41,25 @@ def solve(
     f_open0: int = 0,
     cascade_reserve: bool = False,
     min_balance: int = 0,
+    price_of: Callable[[str], int] | None = None,
 ) -> SolveResult:
-    return _backend().solve(
-        chains,
-        horizon=horizon,
-        empty_tiles=empty_tiles,
-        empty_counts=empty_counts,
-        locked_by_worker=locked_by_worker,
-        starting_money=starting_money,
-        max_time=max_time,
-        charge_hire_daily=charge_hire_daily,
-        track_shed=track_shed,
-        w_open0=w_open0,
-        f_open0=f_open0,
-        cascade_reserve=cascade_reserve,
-        min_balance=min_balance,
-    )
+    kwargs = {
+        "horizon": horizon,
+        "empty_tiles": empty_tiles,
+        "empty_counts": empty_counts,
+        "locked_by_worker": locked_by_worker,
+        "starting_money": starting_money,
+        "max_time": max_time,
+        "charge_hire_daily": charge_hire_daily,
+        "track_shed": track_shed,
+        "w_open0": w_open0,
+        "f_open0": f_open0,
+        "cascade_reserve": cascade_reserve,
+        "min_balance": min_balance,
+    }
+    if price_of is not None:
+        kwargs["price_of"] = price_of
+    return _backend().solve(chains, **kwargs)
 
 
 def apply_replan(

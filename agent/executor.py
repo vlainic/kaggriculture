@@ -3,8 +3,14 @@
 from __future__ import annotations
 
 from agent import market, planner, rollouts, script, sell_dp, tile_ops, workers
+from agent.zoning import NET_TILE_OPS
 
 _EXECUTOR: "Executor | None" = None
+
+_TILE_OP_VERBS = frozenset({
+    "PLANT", "WATER", "FERTILIZE", "HARVEST", "FEED", "CARE", "DIG", "PLACE",
+    "BUILD_COOP", "BUILD_PASTURE", "COLLECT_FERTILIZER", "PICKUP", "DROP",
+})
 
 
 def _log(msg: str) -> None:
@@ -62,6 +68,7 @@ class Executor:
         self._tile_state: dict[int, dict] = {}
         self._empty_at_dawn: set[int] = set()
         self._day0_productive = False
+        self._tile_ops_today = {w: 0 for w in workers.WORKERS}
         for idx in range(workers.NUM_TILES):
             queue = script.TILE_QUEUES.get(idx, [])
             first_lag = queue[0].start_lag if queue else 0
@@ -72,6 +79,7 @@ class Executor:
                 "pending_dig": False,
                 "dig_plant_ok": False,
                 "active": False,
+                "fert_today": False,
             }
 
     def step(self, obs: dict) -> dict:
@@ -142,10 +150,12 @@ class Executor:
         for w in workers.WORKERS:
             self._route_idx[w] = 0
             self._preamble_idx[w] = 0
+            self._tile_ops_today[w] = 0
 
         for idx in range(workers.NUM_TILES):
             st = self._tile_state[idx]
             st["dig_plant_ok"] = False
+            st["fert_today"] = False
             if day > 0:
                 if st["lag"] > 0:
                     st["lag"] -= 1
@@ -198,6 +208,27 @@ class Executor:
     def _inv_idx(self, worker: str) -> int:
         return workers.inventory_index(worker)
 
+    def _zone_ops_remaining(self, worker: str) -> int:
+        cap = NET_TILE_OPS.get(worker, 0)
+        return max(0, cap - self._tile_ops_today.get(worker, 0))
+
+    def _bump_tile_op(self, worker: str, action: list) -> None:
+        if action and action[0] in _TILE_OP_VERBS:
+            self._tile_ops_today[worker] = self._tile_ops_today.get(worker, 0) + 1
+
+    def _emit_action(
+        self,
+        worker: str,
+        action: list,
+        note: str,
+        *,
+        tile_idx: int | None = None,
+    ) -> tuple[list, str]:
+        if tile_idx is not None and action and action[0] == "FERTILIZE":
+            self._tile_state[tile_idx]["fert_today"] = True
+        self._bump_tile_op(worker, action)
+        return action, note
+
     def _worker_action(
         self,
         worker: str,
@@ -224,7 +255,24 @@ class Executor:
         if worker != "farmer":
             pre = self._preamble_action(worker, me, private, fx, fy)
             if pre:
-                return pre
+                act, note = pre
+                return self._emit_action(worker, act, note)
+
+        if not harvest_only:
+            inv = (
+                private["inventories"][inv_idx]
+                if inv_idx < len(private["inventories"])
+                else {}
+            )
+            if (fx, fy) in workers.SHED_ADJACENT and inv.get("WHEAT", 0) <= 0:
+                need = script.wheat_pickup_needed(
+                    me, worker, self._tile_state, inv
+                )
+                if need > 0 and int(private["shed"].get("WHEAT", 0)) > 0:
+                    n = min(need, int(private["shed"].get("WHEAT", 0)))
+                    return self._emit_action(
+                        worker, ["PICKUP", "WHEAT", n], f"{worker} wheat"
+                    )
 
         route = workers.WORKER_ROUTES[worker]
         if self._route_idx[worker] >= len(route):
@@ -250,6 +298,8 @@ class Executor:
                 harvest_only=harvest_only,
                 empty_at_dawn=self._empty_at_dawn,
                 dig_plant_ok=st["dig_plant_ok"],
+                fert_today=st.get("fert_today", False),
+                zone_ops_remaining=self._zone_ops_remaining(worker),
             )
             if action:
                 if action[0] in ("PLANT", "PLACE", "BUILD_COOP", "BUILD_PASTURE"):
@@ -268,7 +318,9 @@ class Executor:
                     and day - _tile_at(me, idx)["planted_day"] == tile_ops.STRAWBERRY_LAST_AGE
                 ):
                     st["pending_dig"] = True
-                return action, f"{worker} t{idx + 1}"
+                return self._emit_action(
+                    worker, action, f"{worker} t{idx + 1}", tile_idx=idx
+                )
 
             tile = _tile_at(me, idx)
             if tile_ops.tile_needs_feed(tile, day):
@@ -286,7 +338,9 @@ class Executor:
                             private["shed"].get("WHEAT", 0),
                         )
                         if n > 0:
-                            return ["PICKUP", "WHEAT", n], f"{worker} feed-wait"
+                            return self._emit_action(
+                                worker, ["PICKUP", "WHEAT", n], f"{worker} feed-wait"
+                            )
                     return ["PASS"], f"{worker} feed-wait"
                 return ["PASS"], f"{worker} feed-wait"
 

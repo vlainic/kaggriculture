@@ -3,6 +3,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SMOKE_LOG="$SCRIPT_DIR/smoke.txt"
 cd "$ROOT"
 
 SUBMISSION="submission.tar.gz"
@@ -34,6 +36,8 @@ tar -czf "$SUBMISSION" -C "$BUILD" .
 ls -lh "$SUBMISSION"
 
 echo "==> Smoke test: main.py vs random (720 steps) [local env]"
+{
+echo "==> Log: ${SMOKE_LOG}"
 python3 -c "
 import io
 import re
@@ -79,7 +83,10 @@ for line in lines:
         act = line.split(' hand2 ', 1)[1].split(' farmer')[0].strip()
         by_day_hand2[day].append((hour, act))
 
-build = sum(1 for acts in by_day_hand2.values() for _, a in acts if a == 'BUILD_PASTURE')
+build = sum(
+    1 for acts in by_day_hand2.values() for _, a in acts
+    if a.startswith('BUILD_COOP') or a.startswith('BUILD_PASTURE')
+)
 place = sum(
     1 for acts in by_day_hand2.values() for _, a in acts
     if a.startswith('PLACE')
@@ -87,7 +94,7 @@ place = sum(
 # Empty pasture/coop persists after harvest; replan PLACE reuses structure (no new BUILD).
 if place > 0 and build == 0:
     print(
-        f'FAIL: hand2 PLACE={place} with BUILD_PASTURE=0 (need at least one build)',
+        f'FAIL: hand2 PLACE={place} with BUILD_COOP/BUILD_PASTURE=0 (need at least one build)',
         file=sys.stderr,
     )
     raise SystemExit(1)
@@ -121,8 +128,9 @@ if not day0_buy_seed and not day0_plant:
     print('FAIL: day-0 had zero BUY_SEED and zero PLANT', file=sys.stderr)
     raise SystemExit(1)
 
-print(f'Smoke checks passed: hand2 BUILD={build} PLACE={place}, no early SELL WHEAT, day-0 productive')
+print(f'Smoke checks passed: hand2 BUILD_COOP/BUILD_PASTURE={build} PLACE={place}, no early SELL WHEAT, day-0 productive')
 print('Smoke test passed.')
 "
+} 2>&1 | tee "$SMOKE_LOG"
 
 echo "==> Done (no Kaggle upload). To submit: scripts/smoke_and_submit.sh --submit \"message\""

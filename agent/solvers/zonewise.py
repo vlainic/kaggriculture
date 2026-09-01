@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 
 from ortools.sat.python import cp_model
 
@@ -266,7 +267,9 @@ def solve(
     f_open0: int = 0,
     cascade_reserve: bool = False,
     min_balance: int = 0,
+    price_of: Callable[[str], int] | None = None,
 ) -> SolveResult:
+    del price_of  # chains already stamped by planner
     empty_set = set(empty_tiles)
     per_zone_time = max_time / max(1, len(WORKERS))
     opening = [starting_money] * horizon

@@ -591,6 +591,8 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
     day = obs["day"]
     if day == 0 or day >= SEASON_LAST_DAY:
         return
+    if solvers.CURRENT_SOLVER == "zonewise_wsp" and day < 3:
+        return
     horizon = NUM_DAYS - day
     if horizon <= 0:
         return
@@ -615,8 +617,13 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
     opp_counts = _opponent_product_tile_counts(opp_farm)
     price_of = make_price_of(market_prices, shops, i0, opp_counts)
 
-    handmade_chains = dp_catalog.build_catalog(horizon, price_of)
-    chains = _build_chains(crops_data, animals_data, handmade_chains, horizon, price_of)
+    if solvers.CURRENT_SOLVER == "zonewise_wsp":
+        chains = []
+        catalog_n = 0
+    else:
+        handmade_chains = dp_catalog.build_catalog(horizon, price_of)
+        chains = _build_chains(crops_data, animals_data, handmade_chains, horizon, price_of)
+        catalog_n = len(handmade_chains)
 
     replan_tiles = []
     locked_tiles = 0
@@ -659,6 +666,9 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
     hire_reserve = zoning.HIRE_DAILY_COST * max(0, zoning.NUM_HIRES - len(me["hands"]))
     feed_reserve = wheat_feed * wheat_price
     liquidity_floor = hire_reserve + feed_reserve * 3
+    replan_min_balance = (
+        0 if solvers.CURRENT_SOLVER == "zonewise_wsp" else liquidity_floor
+    )
 
     result = solvers.solve(
         chains,
@@ -670,7 +680,9 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
         max_time=15.0,
         w_open0=w_open0,
         f_open0=f_open0,
-        min_balance=liquidity_floor,
+        min_balance=replan_min_balance,
+        track_shed=solvers.CURRENT_SOLVER != "zonewise_wsp",
+        price_of=price_of,
     )
 
     if not result.complete and (
@@ -714,7 +726,7 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
     )
     print(
         f"[planner] replan d={day} solver={solvers.CURRENT_SOLVER} "
-        f"shops={len(shops)} catalog={len(handmade_chains)} "
+        f"shops={len(shops)} catalog={catalog_n} "
         f"assign={n_written} locked={locked_tiles}"
         + (f" {opp_log}" if opp_log else ""),
         flush=True,
@@ -722,14 +734,19 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
 
 
 def _build_from_solver() -> dict[int, list]:
-    crops_data = _load_json("crop_rollouts.json")
-    animals_data = animal_rollouts.data()
-    i0 = _i0_prices(crops_data, animals_data)
-    price_of = make_price_of({}, [], i0)
-    handmade_chains = dp_catalog.build_catalog(NUM_DAYS, price_of)
-    chains = _build_chains(crops_data, animals_data, handmade_chains, NUM_DAYS, price_of)
     empty_counts = {w: len(WORKER_TILES[w]) for w in WORKERS}
     locked_by_worker = {w: _empty_locked(NUM_DAYS) for w in WORKERS}
+    if solvers.CURRENT_SOLVER == "zonewise_wsp":
+        chains = []
+        cascade_reserve = False
+    else:
+        crops_data = _load_json("crop_rollouts.json")
+        animals_data = animal_rollouts.data()
+        i0 = _i0_prices(crops_data, animals_data)
+        price_of = make_price_of({}, [], i0)
+        handmade_chains = dp_catalog.build_catalog(NUM_DAYS, price_of)
+        chains = _build_chains(crops_data, animals_data, handmade_chains, NUM_DAYS, price_of)
+        cascade_reserve = True
     result = solvers.solve(
         chains,
         horizon=NUM_DAYS,
@@ -738,7 +755,7 @@ def _build_from_solver() -> dict[int, list]:
         locked_by_worker=locked_by_worker,
         starting_money=STARTING_MONEY,
         max_time=20.0,
-        cascade_reserve=True,
+        cascade_reserve=cascade_reserve,
     )
     if not result.solved_workers or result.solved_workers[0] != WORKERS[0]:
         active = ",".join(result.solved_workers) or "none"

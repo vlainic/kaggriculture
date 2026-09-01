@@ -250,7 +250,7 @@ def _floor_active(abs_day: int) -> bool:
 
 def _premium_daily_cap(product: str) -> int:
     if product == "WOOL":
-        return max(4, pricing.MARKET_PARAMS["WOOL"].T // 8)
+        return max(4, pricing.MARKET_PARAMS["WOOL"].t // 8)
     return MAX_SELL_PER_DAY
 
 
