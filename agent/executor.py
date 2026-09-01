@@ -5,7 +5,7 @@ from __future__ import annotations
 from agent import market, planner, rollouts, script, sell_dp, tile_ops, workers
 from agent.zoning import NET_TILE_OPS
 
-_EXECUTOR: "Executor | None" = None
+_EXECUTOR: Executor | None = None
 
 _TILE_OP_VERBS = frozenset({
     "PLANT", "WATER", "FERTILIZE", "HARVEST", "FEED", "CARE", "DIG", "PLACE",

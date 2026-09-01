@@ -19,8 +19,8 @@ from agent.zoning import (
     HAND_WORKERS,
     NET_TILE_OPS,
     NUM_TILES,
-    WORKERS,
     WORKER_TILES,
+    WORKERS,
 )
 
 NUM_DAYS = 30
