@@ -361,7 +361,7 @@
 [exec] d=2 h=23 hand2 PASS
 [exec] d=2 h=23 hand3 PASS
 [sell_dp] d=3 ms=0 quota=MELON=0 STRAWBERRY=0 MILK=0 WOOL=0 inv_melon=9994
-[snap] d=3 h=0 money=1006 farmer_empty=0 hire1_empty=0 hire2_empty=0 hire3_empty=0 hire4_empty=0 shops=1 demand_CARROT=0 demand_EGG=0 demand_MELON=0 demand_MILK=1 demand_STRAWBERRY=1 demand_TOMATO=0 demand_WHEAT=0 demand_WOOL=0 CARROT=37 EGG=50 FERTILIZER=100 MELON=267 MILK=181 STRAWBERRY=141 TOMATO=61 WHEAT=29 WOOL=217
+[snap] d=3 h=0 money=1006 farmer_empty=0 hire1_empty=0 hire2_empty=0 hire3_empty=0 hire4_empty=0 shops=1 demand_CARROT=0 demand_EGG=1 demand_MELON=0 demand_MILK=0 demand_STRAWBERRY=0 demand_TOMATO=0 demand_WHEAT=1 demand_WOOL=0 CARROT=37 EGG=50 FERTILIZER=100 MELON=267 MILK=181 STRAWBERRY=141 TOMATO=61 WHEAT=29 WOOL=217
 [exec] d=3 h=0 market HIRE HIRE BUY_PRODUCT WHEAT 1
 [exec] d=3 h=0 farmer PASS market-hour
 [exec] d=3 h=1 market HIRE HIRE
@@ -480,15 +480,13 @@
 [exec] d=3 h=23 hand1 PASS
 [exec] d=3 h=23 hand2 PASS
 [exec] d=3 h=23 hand3 PASS
-[planner] wsp zone=farmer FEASIBLE obj=6700 time=0.020s bank=880 empty=1 picks=2
-[planner] wsp zone=hire2 FEASIBLE obj=4936 time=0.246s bank=880 empty=2 picks=4
-[planner] wsp zone=hire3 OPTIMAL obj=3200 time=0.009s bank=880 empty=1 picks=3
-[planner] wsp zone=hire4 OPTIMAL obj=2456 time=0.008s bank=880 empty=1 picks=3
-[planner] replan assign t4:WHEAT@0,COW@8, t12:STRAWBERRY@0,WHEAT@21, t14:STRAWBERRY@1,WHEAT@19, t18:CARROT@0,MELON@4,MELON@15, t22:CARROT@0,MELON@4,MELON@15
-[planner] replan d=4 solver=zonewise_wsp shops=1 catalog=0 assign=5 locked=20 opp_WHEAT=1
+[planner] wsp zone=farmer OPTIMAL obj=4166 time=0.062s close0=1118 cons0=870 open0=880 empty=1 picks=3
+[planner] wsp zone=hire2 status=INFEASIBLE time=0.111s empty=2 open0=869
+[planner] replan assign t4:WHEAT@0,WHEAT@5,SHEEP@10, t12:keep, t14:keep, t18:keep, t22:keep partial=2
+[planner] replan d=4 solver=zonewise_wsp shops=1 catalog=0 assign=1 locked=20
 [sell_dp] d=4 ms=0 quota=MELON=0 STRAWBERRY=0 MILK=0 WOOL=0 inv_melon=9992
-[snap] d=4 h=0 money=880 farmer_empty=1 hire1_empty=0 hire2_empty=2 hire3_empty=1 hire4_empty=1 shops=1 demand_CARROT=0 demand_EGG=0 demand_MELON=0 demand_MILK=1 demand_STRAWBERRY=1 demand_TOMATO=0 demand_WHEAT=0 demand_WOOL=0 CARROT=38 EGG=50 FERTILIZER=100 MELON=269 MILK=193 STRAWBERRY=151 TOMATO=61 WHEAT=30 WOOL=219
-[exec] d=4 h=0 market HIRE HIRE BUY_PRODUCT WHEAT 1 BUY_SEED WHEAT 1 BUY_SEED STRAWBERRY 1 BUY_SEED CARROT 2 SELL CARROT 17 SELL FERTILIZER 1
+[snap] d=4 h=0 money=880 farmer_empty=1 hire1_empty=0 hire2_empty=2 hire3_empty=1 hire4_empty=1 shops=1 demand_CARROT=0 demand_EGG=1 demand_MELON=0 demand_MILK=0 demand_STRAWBERRY=0 demand_TOMATO=0 demand_WHEAT=1 demand_WOOL=0 CARROT=38 EGG=51 FERTILIZER=100 MELON=269 MILK=185 STRAWBERRY=144 TOMATO=61 WHEAT=31 WOOL=219
+[exec] d=4 h=0 market HIRE HIRE BUY_PRODUCT WHEAT 1 BUY_SEED WHEAT 1 SELL CARROT 17 SELL FERTILIZER 1
 [exec] d=4 h=0 farmer PASS market-hour
 [exec] d=4 h=1 market HIRE HIRE
 [exec] d=4 h=1 farmer WATER farmer t1
@@ -535,7 +533,7 @@
 [exec] d=4 h=9 hand0 COLLECT_FERTILIZER
 [exec] d=4 h=9 hand1 COLLECT_FERTILIZER
 [exec] d=4 h=9 hand2 COLLECT_FERTILIZER
-[exec] d=4 h=9 hand3 PLANT CARROT
+[exec] d=4 h=9 hand3 NORTH
 [exec] d=4 h=10 farmer NORTH farmer next
 [exec] d=4 h=10 hand0 NORTH
 [exec] d=4 h=10 hand1 NORTH
@@ -543,7 +541,7 @@
 [exec] d=4 h=10 hand3 WATER
 [exec] d=4 h=11 farmer WATER farmer t5
 [exec] d=4 h=11 hand0 WATER
-[exec] d=4 h=11 hand1 PLANT STRAWBERRY
+[exec] d=4 h=11 hand1 NORTH
 [exec] d=4 h=11 hand2 WATER
 [exec] d=4 h=11 hand3 NORTH
 [exec] d=4 h=12 farmer PASS farmer tile-done
@@ -555,41 +553,41 @@
 [exec] d=4 h=13 hand0 NORTH
 [exec] d=4 h=13 hand1 NORTH
 [exec] d=4 h=13 hand2 NORTH
-[exec] d=4 h=13 hand3 NORTH
+[exec] d=4 h=13 hand3 HARVEST
 [exec] d=4 h=14 farmer PASS farmer done
 [exec] d=4 h=14 hand0 WATER
-[exec] d=4 h=14 hand1 WATER
-[exec] d=4 h=14 hand2 PLANT CARROT
-[exec] d=4 h=14 hand3 WATER
+[exec] d=4 h=14 hand1 NORTH
+[exec] d=4 h=14 hand2 NORTH
+[exec] d=4 h=14 hand3 NORTH
 [exec] d=4 h=15 farmer PASS farmer done
 [exec] d=4 h=15 hand0 HARVEST
-[exec] d=4 h=15 hand1 NORTH
+[exec] d=4 h=15 hand1 WATER
 [exec] d=4 h=15 hand2 WATER
-[exec] d=4 h=15 hand3 HARVEST
+[exec] d=4 h=15 hand3 WATER
 [exec] d=4 h=16 farmer PASS farmer done
 [exec] d=4 h=16 hand0 NORTH
-[exec] d=4 h=16 hand1 NORTH
+[exec] d=4 h=16 hand1 HARVEST
 [exec] d=4 h=16 hand2 NORTH
-[exec] d=4 h=16 hand3 NORTH
+[exec] d=4 h=16 hand3 FERTILIZE
 [exec] d=4 h=17 farmer PASS farmer done
 [exec] d=4 h=17 hand0 WATER
-[exec] d=4 h=17 hand1 WATER
+[exec] d=4 h=17 hand1 PASS
 [exec] d=4 h=17 hand2 WATER
-[exec] d=4 h=17 hand3 WATER
+[exec] d=4 h=17 hand3 PASS
 [exec] d=4 h=18 farmer PASS farmer done
 [exec] d=4 h=18 hand0 NORTH
-[exec] d=4 h=18 hand1 HARVEST
-[exec] d=4 h=18 hand2 NORTH
-[exec] d=4 h=18 hand3 FERTILIZE
+[exec] d=4 h=18 hand1 PASS
+[exec] d=4 h=18 hand2 HARVEST
+[exec] d=4 h=18 hand3 PASS
 [exec] d=4 h=19 farmer PASS farmer done
 [exec] d=4 h=19 hand0 WATER
 [exec] d=4 h=19 hand1 PASS
-[exec] d=4 h=19 hand2 WATER
+[exec] d=4 h=19 hand2 PASS
 [exec] d=4 h=19 hand3 PASS
 [exec] d=4 h=20 farmer PASS farmer done
 [exec] d=4 h=20 hand0 HARVEST
 [exec] d=4 h=20 hand1 PASS
-[exec] d=4 h=20 hand2 HARVEST
+[exec] d=4 h=20 hand2 PASS
 [exec] d=4 h=20 hand3 PASS
 [exec] d=4 h=21 farmer PASS farmer done
 [exec] d=4 h=21 hand0 PASS
@@ -606,111 +604,111 @@
 [exec] d=4 h=23 hand1 PASS
 [exec] d=4 h=23 hand2 PASS
 [exec] d=4 h=23 hand3 PASS
-[planner] wsp zone=farmer FEASIBLE obj=4748 time=0.018s bank=1294 empty=1 picks=4
-[planner] wsp zone=hire1 FEASIBLE obj=4888 time=0.205s bank=1294 empty=2 picks=2
-[planner] wsp zone=hire2 OPTIMAL obj=5246 time=0.027s bank=1294 empty=1 picks=1
-[planner] wsp zone=hire3 OPTIMAL obj=3092 time=0.009s bank=1294 empty=1 picks=2
-[planner] wsp zone=hire4 OPTIMAL obj=2336 time=0.008s bank=1294 empty=1 picks=2
-[planner] replan assign t1:CARROT@0,CARROT@4,CARROT@8,COW@12, t8:STRAWBERRY@3, t10:STRAWBERRY@3, t15:SHEEP@3, t20:MELON@0,MELON@14
-[planner] replan d=5 solver=zonewise_wsp shops=1 catalog=0 assign=6 locked=19 opp_TOMATO=1 opp_WHEAT=1
+[planner] wsp zone=farmer FEASIBLE obj=6130 time=0.086s close0=930 cons0=930 open0=1430 empty=1 picks=1
+[planner] wsp zone=hire1 FEASIBLE obj=5579 time=0.091s close0=1175 cons0=919 open0=930 empty=2 picks=4
+[planner] wsp zone=hire2 FEASIBLE obj=4686 time=0.498s close0=1358 cons0=898 open0=919 empty=3 picks=8
+[planner] wsp zone=hire3 OPTIMAL obj=2742 time=0.031s close0=1336 cons0=876 open0=898 empty=2 picks=5
+[planner] wsp zone=hire4 status=INFEASIBLE time=0.058s empty=2 open0=876
+[planner] replan assign t1:SHEEP@0, t8:COW@1, t10:WHEAT@0,WHEAT@8,TOMATO@13, t12:WHEAT@0,GOOSE@5, t14:MELON@2,TOMATO@13 partial=4
+[planner] replan d=5 solver=zonewise_wsp shops=1 catalog=0 assign=8 locked=15
 [sell_dp] d=5 ms=1 quota=MELON=0 STRAWBERRY=0 MILK=0 WOOL=0 inv_melon=9990
-[snap] d=5 h=0 money=1294 farmer_empty=1 hire1_empty=2 hire2_empty=2 hire3_empty=1 hire4_empty=1 shops=1 demand_CARROT=0 demand_EGG=0 demand_MELON=0 demand_MILK=1 demand_STRAWBERRY=1 demand_TOMATO=0 demand_WHEAT=0 demand_WOOL=0 CARROT=32 EGG=51 FERTILIZER=99 MELON=271 MILK=201 STRAWBERRY=159 TOMATO=61 WHEAT=31 WOOL=221
-[exec] d=5 h=0 market HIRE HIRE BUY_SEED CARROT 1 BUY_SEED STRAWBERRY 1 BUY_SEED MELON 2 SELL EGG 8 SELL FERTILIZER 1
+[snap] d=5 h=0 money=1430 farmer_empty=1 hire1_empty=2 hire2_empty=3 hire3_empty=2 hire4_empty=2 shops=1 demand_CARROT=0 demand_EGG=1 demand_MELON=0 demand_MILK=0 demand_STRAWBERRY=0 demand_TOMATO=0 demand_WHEAT=1 demand_WOOL=0 CARROT=32 EGG=51 FERTILIZER=99 MELON=271 MILK=187 STRAWBERRY=147 TOMATO=61 WHEAT=32 WOOL=221
+[exec] d=5 h=0 market HIRE HIRE BUY_SEED WHEAT 4 BUY_SEED CARROT 1 BUY_ANIMAL SHEEP 1 SELL EGG 8 SELL FERTILIZER 1
 [exec] d=5 h=0 farmer PASS market-hour
 [exec] d=5 h=1 market HIRE HIRE
-[exec] d=5 h=1 farmer PLANT CARROT farmer t1
+[exec] d=5 h=1 farmer PICKUP WHEAT 1 farmer wheat
 [exec] d=5 h=1 hand0 WEST
 [exec] d=5 h=1 hand1 NORTH
-[exec] d=5 h=2 farmer WATER farmer t1
+[exec] d=5 h=2 farmer PICKUP SHEEP 1 animal
 [exec] d=5 h=2 hand0 PICKUP WHEAT 1
 [exec] d=5 h=2 hand1 PICKUP WHEAT 1
 [exec] d=5 h=2 hand2 WEST
 [exec] d=5 h=2 hand3 NORTH
-[exec] d=5 h=3 farmer NORTH farmer next
+[exec] d=5 h=3 farmer BUILD_PASTURE farmer t1
 [exec] d=5 h=3 hand0 WEST
 [exec] d=5 h=3 hand1 WEST
 [exec] d=5 h=3 hand2 PICKUP WHEAT 1
 [exec] d=5 h=3 hand3 PICKUP WHEAT 1
-[exec] d=5 h=4 farmer WATER farmer t2
+[exec] d=5 h=4 farmer PLACE SHEEP farmer t1
 [exec] d=5 h=4 hand0 WEST
 [exec] d=5 h=4 hand1 WEST
 [exec] d=5 h=4 hand2 WEST
 [exec] d=5 h=4 hand3 WEST
-[exec] d=5 h=5 market SELL WHEAT 22
-[exec] d=5 h=5 farmer NORTH farmer next
+[exec] d=5 h=5 market SELL WHEAT 20
+[exec] d=5 h=5 farmer FEED farmer t1
 [exec] d=5 h=5 hand0 WEST
 [exec] d=5 h=5 hand1 WEST
 [exec] d=5 h=5 hand2 WEST
 [exec] d=5 h=5 hand3 FEED
-[exec] d=5 h=6 farmer WATER farmer t3
+[exec] d=5 h=6 farmer PICKUP WHEAT 1 farmer wheat
 [exec] d=5 h=6 hand0 WEST
 [exec] d=5 h=6 hand1 FEED
 [exec] d=5 h=6 hand2 FEED
 [exec] d=5 h=6 hand3 CARE
-[exec] d=5 h=7 farmer NORTH farmer next
+[exec] d=5 h=7 farmer CARE farmer t1
 [exec] d=5 h=7 hand0 FEED
 [exec] d=5 h=7 hand1 CARE
 [exec] d=5 h=7 hand2 CARE
 [exec] d=5 h=7 hand3 COLLECT_FERTILIZER
-[exec] d=5 h=8 farmer WATER farmer t4
+[exec] d=5 h=8 farmer NORTH farmer next
 [exec] d=5 h=8 hand0 CARE
 [exec] d=5 h=8 hand1 HARVEST
 [exec] d=5 h=8 hand2 HARVEST
 [exec] d=5 h=8 hand3 NORTH
-[exec] d=5 h=9 farmer NORTH farmer next
+[exec] d=5 h=9 farmer WATER farmer t2
 [exec] d=5 h=9 hand0 COLLECT_FERTILIZER
 [exec] d=5 h=9 hand1 COLLECT_FERTILIZER
 [exec] d=5 h=9 hand2 COLLECT_FERTILIZER
-[exec] d=5 h=9 hand3 WATER
-[exec] d=5 h=10 farmer WATER farmer t5
+[exec] d=5 h=9 hand3 PLANT WHEAT
+[exec] d=5 h=10 farmer NORTH farmer next
 [exec] d=5 h=10 hand0 NORTH
 [exec] d=5 h=10 hand1 NORTH
 [exec] d=5 h=10 hand2 NORTH
-[exec] d=5 h=10 hand3 NORTH
-[exec] d=5 h=11 farmer PASS farmer tile-done
+[exec] d=5 h=10 hand3 WATER
+[exec] d=5 h=11 farmer WATER farmer t3
 [exec] d=5 h=11 hand0 WATER
-[exec] d=5 h=11 hand1 WATER
+[exec] d=5 h=11 hand1 PLANT WHEAT
 [exec] d=5 h=11 hand2 WATER
-[exec] d=5 h=11 hand3 WATER
-[exec] d=5 h=12 farmer PASS farmer done
+[exec] d=5 h=11 hand3 NORTH
+[exec] d=5 h=12 farmer NORTH farmer next
 [exec] d=5 h=12 hand0 NORTH
-[exec] d=5 h=12 hand1 NORTH
+[exec] d=5 h=12 hand1 WATER
 [exec] d=5 h=12 hand2 NORTH
-[exec] d=5 h=12 hand3 NORTH
-[exec] d=5 h=13 farmer PASS farmer done
+[exec] d=5 h=12 hand3 WATER
+[exec] d=5 h=13 farmer WATER farmer t4
 [exec] d=5 h=13 hand0 NORTH
-[exec] d=5 h=13 hand1 WATER
-[exec] d=5 h=13 hand2 WATER
-[exec] d=5 h=13 hand3 PLANT MELON
-[exec] d=5 h=14 farmer PASS farmer done
+[exec] d=5 h=13 hand1 NORTH
+[exec] d=5 h=13 hand2 NORTH
+[exec] d=5 h=13 hand3 NORTH
+[exec] d=5 h=14 farmer NORTH farmer next
 [exec] d=5 h=14 hand0 WATER
-[exec] d=5 h=14 hand1 HARVEST
-[exec] d=5 h=14 hand2 NORTH
-[exec] d=5 h=14 hand3 WATER
-[exec] d=5 h=15 farmer PASS farmer done
+[exec] d=5 h=14 hand1 WATER
+[exec] d=5 h=14 hand2 WATER
+[exec] d=5 h=14 hand3 NORTH
+[exec] d=5 h=15 farmer WATER farmer t5
 [exec] d=5 h=15 hand0 HARVEST
-[exec] d=5 h=15 hand1 NORTH
-[exec] d=5 h=15 hand2 WATER
-[exec] d=5 h=15 hand3 NORTH
-[exec] d=5 h=16 farmer PASS farmer done
+[exec] d=5 h=15 hand1 HARVEST
+[exec] d=5 h=15 hand2 HARVEST
+[exec] d=5 h=15 hand3 WATER
+[exec] d=5 h=16 farmer PASS farmer tile-done
 [exec] d=5 h=16 hand0 NORTH
-[exec] d=5 h=16 hand1 PLANT STRAWBERRY
-[exec] d=5 h=16 hand2 HARVEST
-[exec] d=5 h=16 hand3 WATER
+[exec] d=5 h=16 hand1 NORTH
+[exec] d=5 h=16 hand2 NORTH
+[exec] d=5 h=16 hand3 PASS
 [exec] d=5 h=17 farmer PASS farmer done
-[exec] d=5 h=17 hand0 PASS
-[exec] d=5 h=17 hand1 WATER
-[exec] d=5 h=17 hand2 NORTH
+[exec] d=5 h=17 hand0 PLANT WHEAT
+[exec] d=5 h=17 hand1 NORTH
+[exec] d=5 h=17 hand2 PLANT CARROT
 [exec] d=5 h=17 hand3 PASS
 [exec] d=5 h=18 farmer PASS farmer done
-[exec] d=5 h=18 hand0 PASS
-[exec] d=5 h=18 hand1 NORTH
-[exec] d=5 h=18 hand2 PLANT MELON
+[exec] d=5 h=18 hand0 WATER
+[exec] d=5 h=18 hand1 PLANT WHEAT
+[exec] d=5 h=18 hand2 WATER
 [exec] d=5 h=18 hand3 PASS
 [exec] d=5 h=19 farmer PASS farmer done
 [exec] d=5 h=19 hand0 PASS
-[exec] d=5 h=19 hand1 PASS
-[exec] d=5 h=19 hand2 WATER
+[exec] d=5 h=19 hand1 WATER
+[exec] d=5 h=19 hand2 PASS
 [exec] d=5 h=19 hand3 PASS
 [exec] d=5 h=20 farmer PASS farmer done
 [exec] d=5 h=20 hand0 PASS
@@ -732,36 +730,37 @@
 [exec] d=5 h=23 hand1 PASS
 [exec] d=5 h=23 hand2 PASS
 [exec] d=5 h=23 hand3 PASS
-[planner] wsp zone=hire1 OPTIMAL obj=3104 time=0.010s bank=2158 empty=1 picks=2
-[planner] wsp zone=hire2 OPTIMAL obj=2864 time=0.010s bank=2158 empty=1 picks=2
-[planner] wsp zone=hire3 OPTIMAL obj=2348 time=0.011s bank=2158 empty=1 picks=2
-[planner] replan assign t9:MELON@2,MELON@13, t13:STRAWBERRY@1,WHEAT@19, t19:MELON@2,MELON@13
-[planner] replan d=6 solver=zonewise_wsp shops=2 catalog=0 assign=3 locked=22 opp_TOMATO=1 opp_WHEAT=1
-[sell_dp] d=6 ms=1 quota=MELON=0 STRAWBERRY=0 MILK=0 WOOL=0 inv_melon=9988
-[snap] d=6 h=0 money=2158 farmer_empty=0 hire1_empty=3 hire2_empty=2 hire3_empty=1 hire4_empty=0 shops=2 demand_CARROT=0 demand_EGG=0 demand_MELON=0 demand_MILK=2 demand_STRAWBERRY=1 demand_TOMATO=1 demand_WHEAT=1 demand_WOOL=0 CARROT=32 EGG=50 FERTILIZER=99 MELON=272 MILK=208 STRAWBERRY=166 TOMATO=61 WHEAT=28 WOOL=222
-[exec] d=6 h=0 market HIRE HIRE SELL EGG 4 SELL FERTILIZER 4
+[planner] wsp zone=hire1 OPTIMAL obj=2648 time=0.006s close0=1951 cons0=1579 open0=1990 empty=1 picks=3
+[planner] wsp zone=hire2 OPTIMAL obj=2832 time=0.010s close0=1772 cons0=1568 open0=1579 empty=1 picks=2
+[planner] wsp zone=hire3 OPTIMAL obj=2732 time=0.012s close0=2062 cons0=1486 open0=1568 empty=1 picks=2
+[planner] wsp zone=hire4 OPTIMAL obj=2300 time=0.009s close0=2243 cons0=1463 open0=1486 empty=1 picks=5
+[planner] replan assign t9:WHEAT@0,MELON@5,WHEAT@16, t13:WHEAT@0,STRAWBERRY@7, t19:MELON@0,MELON@13, t24:CARROT@0,WHEAT@4,WHEAT@9,WHEAT@14,WHEAT@19
+[planner] replan d=6 solver=zonewise_wsp shops=2 catalog=0 assign=4 locked=21
+[sell_dp] d=6 ms=2 quota=MELON=0 STRAWBERRY=0 MILK=0 WOOL=0 inv_melon=9988
+[snap] d=6 h=0 money=1990 farmer_empty=0 hire1_empty=2 hire2_empty=2 hire3_empty=2 hire4_empty=1 shops=2 demand_CARROT=0 demand_EGG=1 demand_MELON=0 demand_MILK=1 demand_STRAWBERRY=1 demand_TOMATO=0 demand_WHEAT=2 demand_WOOL=0 CARROT=32 EGG=51 FERTILIZER=99 MELON=272 MILK=190 STRAWBERRY=149 TOMATO=61 WHEAT=31 WOOL=222
+[exec] d=6 h=0 market HIRE HIRE BUY_SEED WHEAT 2 BUY_SEED MELON 1 BUY_SEED CARROT 1 BUY_ANIMAL COW 1 SELL EGG 4 SELL FERTILIZER 4
 [exec] d=6 h=0 farmer PASS market-hour
 [exec] d=6 h=1 market HIRE HIRE
-[exec] d=6 h=1 farmer WATER farmer t1
+[exec] d=6 h=1 farmer PICKUP WHEAT 1 farmer wheat
 [exec] d=6 h=1 hand0 WEST
 [exec] d=6 h=1 hand1 NORTH
-[exec] d=6 h=2 farmer NORTH farmer next
-[exec] d=6 h=2 hand0 PICKUP WHEAT 1
+[exec] d=6 h=2 farmer FEED farmer t1
+[exec] d=6 h=2 hand0 PICKUP WHEAT 2
 [exec] d=6 h=2 hand1 PICKUP WHEAT 1
 [exec] d=6 h=2 hand2 WEST
 [exec] d=6 h=2 hand3 NORTH
-[exec] d=6 h=3 farmer WATER farmer t2
-[exec] d=6 h=3 hand0 WEST
+[exec] d=6 h=3 farmer PICKUP WHEAT 1 farmer wheat
+[exec] d=6 h=3 hand0 PICKUP COW 1
 [exec] d=6 h=3 hand1 WEST
 [exec] d=6 h=3 hand2 PICKUP WHEAT 1
 [exec] d=6 h=3 hand3 PICKUP WHEAT 1
-[exec] d=6 h=4 farmer NORTH farmer next
+[exec] d=6 h=4 farmer CARE farmer t1
 [exec] d=6 h=4 hand0 WEST
 [exec] d=6 h=4 hand1 WEST
 [exec] d=6 h=4 hand2 WEST
 [exec] d=6 h=4 hand3 WEST
-[exec] d=6 h=5 market SELL WHEAT 14
-[exec] d=6 h=5 farmer WATER farmer t3
+[exec] d=6 h=5 market SELL WHEAT 11
+[exec] d=6 h=5 farmer COLLECT_FERTILIZER farmer t1
 [exec] d=6 h=5 hand0 WEST
 [exec] d=6 h=5 hand1 WEST
 [exec] d=6 h=5 hand2 WEST
@@ -771,121 +770,121 @@
 [exec] d=6 h=6 hand1 FEED
 [exec] d=6 h=6 hand2 FEED
 [exec] d=6 h=6 hand3 CARE
-[exec] d=6 h=7 farmer WATER farmer t4
-[exec] d=6 h=7 hand0 FEED
+[exec] d=6 h=7 farmer WATER farmer t2
+[exec] d=6 h=7 hand0 WEST
 [exec] d=6 h=7 hand1 CARE
 [exec] d=6 h=7 hand2 CARE
 [exec] d=6 h=7 hand3 HARVEST
 [exec] d=6 h=8 farmer NORTH farmer next
-[exec] d=6 h=8 hand0 CARE
+[exec] d=6 h=8 hand0 FEED
 [exec] d=6 h=8 hand1 HARVEST
 [exec] d=6 h=8 hand2 HARVEST
 [exec] d=6 h=8 hand3 COLLECT_FERTILIZER
-[exec] d=6 h=9 farmer WATER farmer t5
-[exec] d=6 h=9 hand0 COLLECT_FERTILIZER
+[exec] d=6 h=9 farmer WATER farmer t3
+[exec] d=6 h=9 hand0 CARE
 [exec] d=6 h=9 hand1 COLLECT_FERTILIZER
 [exec] d=6 h=9 hand2 COLLECT_FERTILIZER
 [exec] d=6 h=9 hand3 NORTH
-[exec] d=6 h=10 farmer PASS farmer tile-done
-[exec] d=6 h=10 hand0 NORTH
+[exec] d=6 h=10 farmer NORTH farmer next
+[exec] d=6 h=10 hand0 COLLECT_FERTILIZER
 [exec] d=6 h=10 hand1 NORTH
 [exec] d=6 h=10 hand2 NORTH
 [exec] d=6 h=10 hand3 WATER
-[exec] d=6 h=11 farmer PASS farmer done
-[exec] d=6 h=11 hand0 WATER
+[exec] d=6 h=11 farmer WATER farmer t4
+[exec] d=6 h=11 hand0 NORTH
 [exec] d=6 h=11 hand1 WATER
 [exec] d=6 h=11 hand2 WATER
-[exec] d=6 h=11 hand3 FERTILIZE
-[exec] d=6 h=12 farmer PASS farmer done
-[exec] d=6 h=12 hand0 HARVEST
+[exec] d=6 h=11 hand3 NORTH
+[exec] d=6 h=12 farmer FERTILIZE farmer t4
+[exec] d=6 h=12 hand0 WATER
 [exec] d=6 h=12 hand1 NORTH
 [exec] d=6 h=12 hand2 HARVEST
-[exec] d=6 h=12 hand3 NORTH
-[exec] d=6 h=13 farmer PASS farmer done
-[exec] d=6 h=13 hand0 NORTH
-[exec] d=6 h=13 hand1 NORTH
+[exec] d=6 h=12 hand3 WATER
+[exec] d=6 h=13 farmer NORTH farmer next
+[exec] d=6 h=13 hand0 HARVEST
+[exec] d=6 h=13 hand1 PLANT WHEAT
 [exec] d=6 h=13 hand2 NORTH
-[exec] d=6 h=13 hand3 WATER
-[exec] d=6 h=14 farmer PASS farmer done
+[exec] d=6 h=13 hand3 NORTH
+[exec] d=6 h=14 farmer WATER farmer t5
 [exec] d=6 h=14 hand0 NORTH
 [exec] d=6 h=14 hand1 WATER
-[exec] d=6 h=14 hand2 WATER
-[exec] d=6 h=14 hand3 NORTH
-[exec] d=6 h=15 farmer PASS farmer done
-[exec] d=6 h=15 hand0 NORTH
+[exec] d=6 h=14 hand2 NORTH
+[exec] d=6 h=14 hand3 PLANT CARROT
+[exec] d=6 h=15 farmer PASS farmer tile-done
+[exec] d=6 h=15 hand0 BUILD_PASTURE
 [exec] d=6 h=15 hand1 NORTH
-[exec] d=6 h=15 hand2 FERTILIZE
+[exec] d=6 h=15 hand2 PLANT MELON
 [exec] d=6 h=15 hand3 WATER
 [exec] d=6 h=16 farmer PASS farmer done
-[exec] d=6 h=16 hand0 PASS
-[exec] d=6 h=16 hand1 PASS
-[exec] d=6 h=16 hand2 NORTH
+[exec] d=6 h=16 hand0 PLACE COW
+[exec] d=6 h=16 hand1 NORTH
+[exec] d=6 h=16 hand2 WATER
 [exec] d=6 h=16 hand3 NORTH
 [exec] d=6 h=17 farmer PASS farmer done
-[exec] d=6 h=17 hand0 PASS
-[exec] d=6 h=17 hand1 PASS
+[exec] d=6 h=17 hand0 FEED
+[exec] d=6 h=17 hand1 WATER
 [exec] d=6 h=17 hand2 NORTH
 [exec] d=6 h=17 hand3 WATER
 [exec] d=6 h=18 farmer PASS farmer done
-[exec] d=6 h=18 hand0 PASS
+[exec] d=6 h=18 hand0 CARE
 [exec] d=6 h=18 hand1 PASS
 [exec] d=6 h=18 hand2 WATER
 [exec] d=6 h=18 hand3 HARVEST
 [exec] d=6 h=19 farmer PASS farmer done
-[exec] d=6 h=19 hand0 PASS
+[exec] d=6 h=19 hand0 NORTH
 [exec] d=6 h=19 hand1 PASS
 [exec] d=6 h=19 hand2 PASS
 [exec] d=6 h=19 hand3 PASS
 [exec] d=6 h=20 farmer PASS farmer done
-[exec] d=6 h=20 hand0 PASS
+[exec] d=6 h=20 hand0 PLANT WHEAT
 [exec] d=6 h=20 hand1 PASS
 [exec] d=6 h=20 hand2 PASS
 [exec] d=6 h=20 hand3 PASS
 [exec] d=6 h=21 farmer PASS farmer done
-[exec] d=6 h=21 hand0 PASS
+[exec] d=6 h=21 hand0 WATER
 [exec] d=6 h=21 hand1 PASS
 [exec] d=6 h=21 hand2 PASS
 [exec] d=6 h=21 hand3 PASS
 [exec] d=6 h=22 farmer PASS farmer done
-[exec] d=6 h=22 hand0 PASS
+[exec] d=6 h=22 hand0 NORTH
 [exec] d=6 h=22 hand1 PASS
 [exec] d=6 h=22 hand2 PASS
 [exec] d=6 h=22 hand3 PASS
 [exec] d=6 h=23 farmer PASS farmer done
-[exec] d=6 h=23 hand0 PASS
+[exec] d=6 h=23 hand0 WATER
 [exec] d=6 h=23 hand1 PASS
 [exec] d=6 h=23 hand2 PASS
 [exec] d=6 h=23 hand3 PASS
-[planner] wsp zone=hire1 OPTIMAL obj=17258 time=0.024s bank=3133 empty=1 picks=1
-[planner] wsp zone=hire3 OPTIMAL obj=3128 time=0.010s bank=3133 empty=1 picks=2
-[planner] wsp zone=hire4 OPTIMAL obj=2966 time=0.008s bank=3133 empty=1 picks=2
-[planner] replan assign t7:COW@0, t17:MELON@0,MELON@12, t25:WHEAT@0,STRAWBERRY@6
+[planner] wsp zone=hire1 OPTIMAL obj=3128 time=0.011s close0=2318 cons0=2318 open0=2399 empty=1 picks=2
+[planner] wsp zone=hire3 OPTIMAL obj=2976 time=0.009s close0=2343 cons0=2135 open0=2237 empty=1 picks=2
+[planner] wsp zone=hire4 OPTIMAL obj=2372 time=0.007s close0=2260 cons0=2052 open0=2135 empty=1 picks=2
+[planner] replan assign t7:MELON@0,MELON@12, t17:STRAWBERRY@0,WHEAT@18, t25:MELON@0,MELON@12
 [planner] replan d=7 solver=zonewise_wsp shops=2 catalog=0 assign=3 locked=22
 [sell_dp] d=7 ms=2 quota=MELON=0 STRAWBERRY=0 MILK=0 WOOL=0 inv_melon=9986
-[snap] d=7 h=0 money=3133 farmer_empty=0 hire1_empty=4 hire2_empty=2 hire3_empty=2 hire4_empty=1 shops=2 demand_CARROT=0 demand_EGG=0 demand_MELON=0 demand_MILK=2 demand_STRAWBERRY=1 demand_TOMATO=1 demand_WHEAT=1 demand_WOOL=0 CARROT=33 EGG=50 FERTILIZER=98 MELON=274 MILK=218 STRAWBERRY=172 TOMATO=62 WHEAT=27 WOOL=223
-[exec] d=7 h=0 market HIRE HIRE BUY_SEED STRAWBERRY 1 BUY_SEED MELON 1 BUY_SEED WHEAT 1 BUY_ANIMAL COW 1 SELL EGG 8 SELL FERTILIZER 2
+[snap] d=7 h=0 money=2399 farmer_empty=0 hire1_empty=1 hire2_empty=1 hire3_empty=2 hire4_empty=1 shops=2 demand_CARROT=0 demand_EGG=1 demand_MELON=0 demand_MILK=1 demand_STRAWBERRY=1 demand_TOMATO=0 demand_WHEAT=2 demand_WOOL=0 CARROT=33 EGG=52 FERTILIZER=98 MELON=274 MILK=199 STRAWBERRY=158 TOMATO=62 WHEAT=31 WOOL=223
+[exec] d=7 h=0 market HIRE HIRE BUY_SEED MELON 3 BUY_SEED STRAWBERRY 1 SELL EGG 8 SELL FERTILIZER 4
 [exec] d=7 h=0 farmer PASS market-hour
 [exec] d=7 h=1 market HIRE HIRE
-[exec] d=7 h=1 farmer WATER farmer t1
+[exec] d=7 h=1 farmer PICKUP WHEAT 1 farmer wheat
 [exec] d=7 h=1 hand0 WEST
 [exec] d=7 h=1 hand1 NORTH
-[exec] d=7 h=2 farmer NORTH farmer next
+[exec] d=7 h=2 farmer FEED farmer t1
 [exec] d=7 h=2 hand0 PICKUP WHEAT 2
 [exec] d=7 h=2 hand1 PICKUP WHEAT 1
 [exec] d=7 h=2 hand2 WEST
 [exec] d=7 h=2 hand3 NORTH
-[exec] d=7 h=3 farmer WATER farmer t2
-[exec] d=7 h=3 hand0 PICKUP COW 1
+[exec] d=7 h=3 farmer PICKUP WHEAT 1 farmer wheat
+[exec] d=7 h=3 hand0 WEST
 [exec] d=7 h=3 hand1 WEST
 [exec] d=7 h=3 hand2 PICKUP WHEAT 1
 [exec] d=7 h=3 hand3 PICKUP WHEAT 1
-[exec] d=7 h=4 farmer NORTH farmer next
+[exec] d=7 h=4 farmer CARE farmer t1
 [exec] d=7 h=4 hand0 WEST
 [exec] d=7 h=4 hand1 WEST
 [exec] d=7 h=4 hand2 WEST
 [exec] d=7 h=4 hand3 WEST
-[exec] d=7 h=5 market SELL WHEAT 13
-[exec] d=7 h=5 farmer WATER farmer t3
+[exec] d=7 h=5 market SELL WHEAT 11
+[exec] d=7 h=5 farmer COLLECT_FERTILIZER farmer t1
 [exec] d=7 h=5 hand0 WEST
 [exec] d=7 h=5 hand1 WEST
 [exec] d=7 h=5 hand2 WEST
@@ -895,79 +894,78 @@
 [exec] d=7 h=6 hand1 FEED
 [exec] d=7 h=6 hand2 FEED
 [exec] d=7 h=6 hand3 CARE
-[exec] d=7 h=7 farmer WATER farmer t4
-[exec] d=7 h=7 hand0 WEST
+[exec] d=7 h=7 farmer WATER farmer t2
+[exec] d=7 h=7 hand0 FEED
 [exec] d=7 h=7 hand1 CARE
 [exec] d=7 h=7 hand2 CARE
 [exec] d=7 h=7 hand3 HARVEST
 [exec] d=7 h=8 farmer NORTH farmer next
-[exec] d=7 h=8 hand0 FEED
+[exec] d=7 h=8 hand0 CARE
 [exec] d=7 h=8 hand1 HARVEST
 [exec] d=7 h=8 hand2 HARVEST
 [exec] d=7 h=8 hand3 COLLECT_FERTILIZER
-[exec] d=7 h=9 farmer WATER farmer t5
-[exec] d=7 h=9 hand0 CARE
+[exec] d=7 h=9 farmer WATER farmer t3
+[exec] d=7 h=9 hand0 COLLECT_FERTILIZER
 [exec] d=7 h=9 hand1 COLLECT_FERTILIZER
 [exec] d=7 h=9 hand2 COLLECT_FERTILIZER
 [exec] d=7 h=9 hand3 NORTH
-[exec] d=7 h=10 farmer PASS farmer tile-done
-[exec] d=7 h=10 hand0 COLLECT_FERTILIZER
+[exec] d=7 h=10 farmer NORTH farmer next
+[exec] d=7 h=10 hand0 NORTH
 [exec] d=7 h=10 hand1 NORTH
 [exec] d=7 h=10 hand2 NORTH
 [exec] d=7 h=10 hand3 WATER
-[exec] d=7 h=11 farmer PASS farmer done
-[exec] d=7 h=11 hand0 NORTH
+[exec] d=7 h=11 farmer WATER farmer t4
+[exec] d=7 h=11 hand0 PLANT MELON
 [exec] d=7 h=11 hand1 WATER
-[exec] d=7 h=11 hand2 PLANT MELON
-[exec] d=7 h=11 hand3 HARVEST
-[exec] d=7 h=12 farmer PASS farmer done
-[exec] d=7 h=12 hand0 BUILD_PASTURE
-[exec] d=7 h=12 hand1 NORTH
+[exec] d=7 h=11 hand2 PLANT STRAWBERRY
+[exec] d=7 h=11 hand3 FERTILIZE
+[exec] d=7 h=12 farmer NORTH farmer next
+[exec] d=7 h=12 hand0 WATER
+[exec] d=7 h=12 hand1 FERTILIZE
 [exec] d=7 h=12 hand2 WATER
 [exec] d=7 h=12 hand3 NORTH
-[exec] d=7 h=13 farmer PASS farmer done
-[exec] d=7 h=13 hand0 PLACE COW
-[exec] d=7 h=13 hand1 PLANT STRAWBERRY
+[exec] d=7 h=13 farmer WATER farmer t5
+[exec] d=7 h=13 hand0 NORTH
+[exec] d=7 h=13 hand1 NORTH
 [exec] d=7 h=13 hand2 NORTH
 [exec] d=7 h=13 hand3 WATER
-[exec] d=7 h=14 farmer PASS farmer done
+[exec] d=7 h=14 farmer PASS farmer tile-done
 [exec] d=7 h=14 hand0 FEED
 [exec] d=7 h=14 hand1 WATER
-[exec] d=7 h=14 hand2 WATER
-[exec] d=7 h=14 hand3 FERTILIZE
-[exec] d=7 h=15 market BUY_PRODUCT WHEAT 1
+[exec] d=7 h=14 hand2 NORTH
+[exec] d=7 h=14 hand3 NORTH
 [exec] d=7 h=15 farmer PASS farmer done
 [exec] d=7 h=15 hand0 CARE
 [exec] d=7 h=15 hand1 NORTH
-[exec] d=7 h=15 hand2 HARVEST
-[exec] d=7 h=15 hand3 NORTH
+[exec] d=7 h=15 hand2 WATER
+[exec] d=7 h=15 hand3 WATER
 [exec] d=7 h=16 farmer PASS farmer done
-[exec] d=7 h=16 hand0 NORTH
-[exec] d=7 h=16 hand1 WATER
+[exec] d=7 h=16 hand0 COLLECT_FERTILIZER
+[exec] d=7 h=16 hand1 PLANT MELON
 [exec] d=7 h=16 hand2 NORTH
-[exec] d=7 h=16 hand3 WATER
+[exec] d=7 h=16 hand3 NORTH
 [exec] d=7 h=17 farmer PASS farmer done
 [exec] d=7 h=17 hand0 NORTH
-[exec] d=7 h=17 hand1 NORTH
-[exec] d=7 h=17 hand2 NORTH
-[exec] d=7 h=17 hand3 NORTH
+[exec] d=7 h=17 hand1 WATER
+[exec] d=7 h=17 hand2 WATER
+[exec] d=7 h=17 hand3 PLANT MELON
 [exec] d=7 h=18 farmer PASS farmer done
-[exec] d=7 h=18 hand0 NORTH
-[exec] d=7 h=18 hand1 PASS
-[exec] d=7 h=18 hand2 WATER
-[exec] d=7 h=18 hand3 PLANT WHEAT
+[exec] d=7 h=18 hand0 WATER
+[exec] d=7 h=18 hand1 NORTH
+[exec] d=7 h=18 hand2 FERTILIZE
+[exec] d=7 h=18 hand3 WATER
 [exec] d=7 h=19 farmer PASS farmer done
-[exec] d=7 h=19 hand0 PASS
-[exec] d=7 h=19 hand1 PASS
+[exec] d=7 h=19 hand0 NORTH
+[exec] d=7 h=19 hand1 WATER
 [exec] d=7 h=19 hand2 PASS
-[exec] d=7 h=19 hand3 WATER
+[exec] d=7 h=19 hand3 PASS
 [exec] d=7 h=20 farmer PASS farmer done
-[exec] d=7 h=20 hand0 PASS
+[exec] d=7 h=20 hand0 WATER
 [exec] d=7 h=20 hand1 PASS
 [exec] d=7 h=20 hand2 PASS
 [exec] d=7 h=20 hand3 PASS
 [exec] d=7 h=21 farmer PASS farmer done
-[exec] d=7 h=21 hand0 PASS
+[exec] d=7 h=21 hand0 FERTILIZE
 [exec] d=7 h=21 hand1 PASS
 [exec] d=7 h=21 hand2 PASS
 [exec] d=7 h=21 hand3 PASS
@@ -981,123 +979,120 @@
 [exec] d=7 h=23 hand1 PASS
 [exec] d=7 h=23 hand2 PASS
 [exec] d=7 h=23 hand3 PASS
-[planner] wsp zone=hire3 OPTIMAL obj=3140 time=0.009s bank=3434 empty=1 picks=2
-[planner] wsp zone=hire4 OPTIMAL obj=3034 time=0.007s bank=3434 empty=1 picks=2
-[planner] replan assign t18:MELON@0,MELON@11, t22:STRAWBERRY@0,WHEAT@17
-[planner] replan d=8 solver=zonewise_wsp shops=2 catalog=0 assign=2 locked=23
-[sell_dp] d=8 ms=2 quota=MELON=0 STRAWBERRY=0 MILK=0 WOOL=0 inv_melon=9984
-[snap] d=8 h=0 money=3434 farmer_empty=0 hire1_empty=3 hire2_empty=1 hire3_empty=2 hire4_empty=1 shops=2 demand_CARROT=0 demand_EGG=0 demand_MELON=0 demand_MILK=2 demand_STRAWBERRY=1 demand_TOMATO=1 demand_WHEAT=1 demand_WOOL=0 CARROT=34 EGG=47 FERTILIZER=98 MELON=275 MILK=226 STRAWBERRY=177 TOMATO=63 WHEAT=26 WOOL=224
-[exec] d=8 h=0 market HIRE HIRE BUY_PRODUCT WHEAT 2 BUY_SEED STRAWBERRY 3 BUY_SEED MELON 3 BUY_ANIMAL SHEEP 1 BUY_PRODUCT WHEAT 1 SELL CARROT 8 SELL EGG 6 SELL FERTILIZER 3
+[sell_dp] d=8 ms=3 quota=MELON=0 STRAWBERRY=0 MILK=0 WOOL=0 inv_melon=9984
+[snap] d=8 h=0 money=3193 farmer_empty=0 hire1_empty=0 hire2_empty=0 hire3_empty=1 hire4_empty=0 shops=2 demand_CARROT=0 demand_EGG=1 demand_MELON=0 demand_MILK=1 demand_STRAWBERRY=1 demand_TOMATO=0 demand_WHEAT=2 demand_WOOL=0 CARROT=34 EGG=52 FERTILIZER=98 MELON=275 MILK=206 STRAWBERRY=164 TOMATO=62 WHEAT=31 WOOL=224
+[exec] d=8 h=0 market HIRE HIRE BUY_SEED STRAWBERRY 1 SELL EGG 6 SELL FERTILIZER 2
 [exec] d=8 h=0 farmer PASS market-hour
 [exec] d=8 h=1 market HIRE HIRE
-[exec] d=8 h=1 farmer WATER farmer t1
+[exec] d=8 h=1 farmer PICKUP WHEAT 1 farmer wheat
 [exec] d=8 h=1 hand0 WEST
 [exec] d=8 h=1 hand1 NORTH
-[exec] d=8 h=2 farmer HARVEST farmer t1
+[exec] d=8 h=2 farmer FEED farmer t1
 [exec] d=8 h=2 hand0 PICKUP WHEAT 2
-[exec] d=8 h=2 hand1 PICKUP WHEAT 2
+[exec] d=8 h=2 hand1 PICKUP WHEAT 1
 [exec] d=8 h=2 hand2 WEST
 [exec] d=8 h=2 hand3 NORTH
-[exec] d=8 h=3 farmer NORTH farmer next
+[exec] d=8 h=3 farmer PICKUP WHEAT 1 farmer wheat
 [exec] d=8 h=3 hand0 WEST
-[exec] d=8 h=3 hand1 PICKUP SHEEP 1
+[exec] d=8 h=3 hand1 WEST
 [exec] d=8 h=3 hand2 PICKUP WHEAT 1
 [exec] d=8 h=3 hand3 PICKUP WHEAT 1
-[exec] d=8 h=4 farmer WATER farmer t2
+[exec] d=8 h=4 farmer CARE farmer t1
 [exec] d=8 h=4 hand0 WEST
 [exec] d=8 h=4 hand1 WEST
 [exec] d=8 h=4 hand2 WEST
 [exec] d=8 h=4 hand3 WEST
-[exec] d=8 h=5 farmer NORTH farmer next
+[exec] d=8 h=5 farmer COLLECT_FERTILIZER farmer t1
 [exec] d=8 h=5 hand0 WEST
 [exec] d=8 h=5 hand1 WEST
 [exec] d=8 h=5 hand2 WEST
 [exec] d=8 h=5 hand3 FEED
-[exec] d=8 h=6 farmer WATER farmer t3
+[exec] d=8 h=6 market BUY_PRODUCT WHEAT 1
+[exec] d=8 h=6 farmer NORTH farmer next
 [exec] d=8 h=6 hand0 WEST
-[exec] d=8 h=6 hand1 WEST
+[exec] d=8 h=6 hand1 FEED
 [exec] d=8 h=6 hand2 FEED
 [exec] d=8 h=6 hand3 CARE
-[exec] d=8 h=7 farmer NORTH farmer next
+[exec] d=8 h=7 market BUY_PRODUCT WHEAT 2
+[exec] d=8 h=7 farmer WATER farmer t2
 [exec] d=8 h=7 hand0 FEED
-[exec] d=8 h=7 hand1 FEED
+[exec] d=8 h=7 hand1 CARE
 [exec] d=8 h=7 hand2 CARE
 [exec] d=8 h=7 hand3 HARVEST
-[exec] d=8 h=8 market BUY_PRODUCT WHEAT 2
-[exec] d=8 h=8 farmer WATER farmer t4
+[exec] d=8 h=8 market BUY_PRODUCT WHEAT 1
+[exec] d=8 h=8 farmer NORTH farmer next
 [exec] d=8 h=8 hand0 CARE
-[exec] d=8 h=8 hand1 CARE
+[exec] d=8 h=8 hand1 HARVEST
 [exec] d=8 h=8 hand2 HARVEST
 [exec] d=8 h=8 hand3 COLLECT_FERTILIZER
-[exec] d=8 h=9 farmer HARVEST farmer t4
+[exec] d=8 h=9 farmer WATER farmer t3
 [exec] d=8 h=9 hand0 COLLECT_FERTILIZER
-[exec] d=8 h=9 hand1 HARVEST
+[exec] d=8 h=9 hand1 COLLECT_FERTILIZER
 [exec] d=8 h=9 hand2 COLLECT_FERTILIZER
 [exec] d=8 h=9 hand3 NORTH
 [exec] d=8 h=10 farmer NORTH farmer next
 [exec] d=8 h=10 hand0 NORTH
-[exec] d=8 h=10 hand1 COLLECT_FERTILIZER
+[exec] d=8 h=10 hand1 NORTH
 [exec] d=8 h=10 hand2 NORTH
-[exec] d=8 h=10 hand3 PLANT STRAWBERRY
-[exec] d=8 h=11 farmer WATER farmer t5
-[exec] d=8 h=11 hand0 FEED
-[exec] d=8 h=11 hand1 NORTH
+[exec] d=8 h=10 hand3 WATER
+[exec] d=8 h=11 farmer WATER farmer t4
+[exec] d=8 h=11 hand0 WATER
+[exec] d=8 h=11 hand1 WATER
 [exec] d=8 h=11 hand2 WATER
-[exec] d=8 h=11 hand3 WATER
-[exec] d=8 h=12 market BUY_PRODUCT WHEAT 1
-[exec] d=8 h=12 farmer PASS farmer tile-done
-[exec] d=8 h=12 hand0 CARE
-[exec] d=8 h=12 hand1 WATER
+[exec] d=8 h=11 hand3 NORTH
+[exec] d=8 h=12 farmer HARVEST farmer t4
+[exec] d=8 h=12 hand0 NORTH
+[exec] d=8 h=12 hand1 NORTH
 [exec] d=8 h=12 hand2 NORTH
-[exec] d=8 h=12 hand3 NORTH
-[exec] d=8 h=13 farmer PASS farmer done
-[exec] d=8 h=13 hand0 COLLECT_FERTILIZER
-[exec] d=8 h=13 hand1 NORTH
-[exec] d=8 h=13 hand2 PLANT MELON
-[exec] d=8 h=13 hand3 WATER
-[exec] d=8 h=14 farmer PASS farmer done
-[exec] d=8 h=14 hand0 NORTH
-[exec] d=8 h=14 hand1 WATER
+[exec] d=8 h=12 hand3 WATER
+[exec] d=8 h=13 farmer NORTH farmer next
+[exec] d=8 h=13 hand0 FEED
+[exec] d=8 h=13 hand1 WATER
+[exec] d=8 h=13 hand2 PLANT STRAWBERRY
+[exec] d=8 h=13 hand3 HARVEST
+[exec] d=8 h=14 market BUY_PRODUCT WHEAT 1
+[exec] d=8 h=14 farmer WATER farmer t5
+[exec] d=8 h=14 hand0 CARE
+[exec] d=8 h=14 hand1 FERTILIZE
 [exec] d=8 h=14 hand2 WATER
-[exec] d=8 h=14 hand3 HARVEST
-[exec] d=8 h=15 farmer PASS farmer done
-[exec] d=8 h=15 hand0 PLANT STRAWBERRY
+[exec] d=8 h=14 hand3 NORTH
+[exec] d=8 h=15 farmer PASS farmer tile-done
+[exec] d=8 h=15 hand0 COLLECT_FERTILIZER
 [exec] d=8 h=15 hand1 NORTH
 [exec] d=8 h=15 hand2 NORTH
-[exec] d=8 h=15 hand3 NORTH
+[exec] d=8 h=15 hand3 WATER
 [exec] d=8 h=16 farmer PASS farmer done
-[exec] d=8 h=16 hand0 WATER
+[exec] d=8 h=16 hand0 NORTH
 [exec] d=8 h=16 hand1 WATER
-[exec] d=8 h=16 hand2 PLANT MELON
-[exec] d=8 h=16 hand3 WATER
+[exec] d=8 h=16 hand2 WATER
+[exec] d=8 h=16 hand3 FERTILIZE
 [exec] d=8 h=17 farmer PASS farmer done
-[exec] d=8 h=17 hand0 NORTH
+[exec] d=8 h=17 hand0 WATER
 [exec] d=8 h=17 hand1 NORTH
-[exec] d=8 h=17 hand2 WATER
+[exec] d=8 h=17 hand2 NORTH
 [exec] d=8 h=17 hand3 NORTH
 [exec] d=8 h=18 farmer PASS farmer done
-[exec] d=8 h=18 hand0 PLANT MELON
-[exec] d=8 h=18 hand1 BUILD_PASTURE
-[exec] d=8 h=18 hand2 NORTH
+[exec] d=8 h=18 hand0 FERTILIZE
+[exec] d=8 h=18 hand1 WATER
+[exec] d=8 h=18 hand2 WATER
 [exec] d=8 h=18 hand3 WATER
 [exec] d=8 h=19 farmer PASS farmer done
-[exec] d=8 h=19 hand0 WATER
-[exec] d=8 h=19 hand1 PLACE SHEEP
-[exec] d=8 h=19 hand2 WATER
+[exec] d=8 h=19 hand0 NORTH
+[exec] d=8 h=19 hand1 PASS
+[exec] d=8 h=19 hand2 HARVEST
 [exec] d=8 h=19 hand3 PASS
 [exec] d=8 h=20 farmer PASS farmer done
-[exec] d=8 h=20 hand0 NORTH
-[exec] d=8 h=20 hand1 FEED
+[exec] d=8 h=20 hand0 WATER
+[exec] d=8 h=20 hand1 PASS
 [exec] d=8 h=20 hand2 PASS
 [exec] d=8 h=20 hand3 PASS
-[exec] d=8 h=21 market BUY_PRODUCT WHEAT 1
 [exec] d=8 h=21 farmer PASS farmer done
-[exec] d=8 h=21 hand0 PLANT STRAWBERRY
-[exec] d=8 h=21 hand1 CARE
+[exec] d=8 h=21 hand0 PASS
+[exec] d=8 h=21 hand1 PASS
 [exec] d=8 h=21 hand2 PASS
 [exec] d=8 h=21 hand3 PASS
 [exec] d=8 h=22 farmer PASS farmer done
-[exec] d=8 h=22 hand0 WATER
+[exec] d=8 h=22 hand0 PASS
 [exec] d=8 h=22 hand1 PASS
 [exec] d=8 h=22 hand2 PASS
 [exec] d=8 h=22 hand3 PASS
@@ -1106,60 +1101,59 @@
 [exec] d=8 h=23 hand1 PASS
 [exec] d=8 h=23 hand2 PASS
 [exec] d=8 h=23 hand3 PASS
-[planner] wsp zone=farmer OPTIMAL obj=32896 time=0.023s bank=3028 empty=2 picks=2
-[planner] replan assign t1:COW@0, t4:COW@0
+[planner] wsp zone=farmer FEASIBLE obj=4688 time=0.034s close0=3429 cons0=3429 open0=3429 empty=1 picks=1
+[planner] wsp zone=hire3 OPTIMAL obj=3032 time=0.008s close0=3533 cons0=3325 open0=3427 empty=1 picks=2
+[planner] replan assign t4:COW@8, t20:STRAWBERRY@0,CARROT@17
 [planner] replan d=9 solver=zonewise_wsp shops=3 catalog=0 assign=2 locked=23
 [sell_dp] d=9 ms=4 quota=MELON=0 STRAWBERRY=0 MILK=0 WOOL=0 inv_melon=9982
-[snap] d=9 h=0 money=3028 farmer_empty=2 hire1_empty=0 hire2_empty=0 hire3_empty=0 hire4_empty=0 shops=3 demand_CARROT=0 demand_EGG=0 demand_MELON=0 demand_MILK=2 demand_STRAWBERRY=1 demand_TOMATO=1 demand_WHEAT=1 demand_WOOL=2 CARROT=32 EGG=46 FERTILIZER=97 MELON=276 MILK=234 STRAWBERRY=182 TOMATO=64 WHEAT=29 WOOL=225
-[exec] d=9 h=0 market HIRE HIRE BUY_ANIMAL COW 2 SELL CARROT 3 SELL EGG 6 SELL FERTILIZER 5 SELL TOMATO 2
+[snap] d=9 h=0 money=3429 farmer_empty=1 hire1_empty=0 hire2_empty=0 hire3_empty=1 hire4_empty=0 shops=3 demand_CARROT=2 demand_EGG=1 demand_MELON=0 demand_MILK=1 demand_STRAWBERRY=1 demand_TOMATO=0 demand_WHEAT=2 demand_WOOL=0 CARROT=36 EGG=52 FERTILIZER=97 MELON=276 MILK=212 STRAWBERRY=170 TOMATO=62 WHEAT=32 WOOL=225
+[exec] d=9 h=0 market HIRE HIRE BUY_SEED STRAWBERRY 1 SELL CARROT 4 SELL EGG 6 SELL FERTILIZER 3 SELL TOMATO 1
 [exec] d=9 h=0 farmer PASS market-hour
 [exec] d=9 h=1 market HIRE HIRE
-[exec] d=9 h=1 farmer PICKUP WHEAT 2 farmer wheat
+[exec] d=9 h=1 farmer PICKUP WHEAT 1 farmer wheat
 [exec] d=9 h=1 hand0 WEST
 [exec] d=9 h=1 hand1 NORTH
-[exec] d=9 h=2 farmer PICKUP COW 1 animal
+[exec] d=9 h=2 farmer FEED farmer t1
 [exec] d=9 h=2 hand0 PICKUP WHEAT 2
-[exec] d=9 h=2 hand1 PICKUP WHEAT 2
+[exec] d=9 h=2 hand1 PICKUP WHEAT 1
 [exec] d=9 h=2 hand2 WEST
 [exec] d=9 h=2 hand3 NORTH
-[exec] d=9 h=3 farmer PICKUP COW 1 animal
+[exec] d=9 h=3 farmer PICKUP WHEAT 1 farmer wheat
 [exec] d=9 h=3 hand0 WEST
 [exec] d=9 h=3 hand1 WEST
 [exec] d=9 h=3 hand2 PICKUP WHEAT 1
 [exec] d=9 h=3 hand3 PICKUP WHEAT 1
-[exec] d=9 h=4 farmer BUILD_PASTURE farmer t1
+[exec] d=9 h=4 farmer CARE farmer t1
 [exec] d=9 h=4 hand0 WEST
 [exec] d=9 h=4 hand1 WEST
 [exec] d=9 h=4 hand2 WEST
 [exec] d=9 h=4 hand3 WEST
-[exec] d=9 h=5 farmer PLACE COW farmer t1
+[exec] d=9 h=5 farmer COLLECT_FERTILIZER farmer t1
 [exec] d=9 h=5 hand0 WEST
 [exec] d=9 h=5 hand1 WEST
 [exec] d=9 h=5 hand2 WEST
 [exec] d=9 h=5 hand3 FEED
-[exec] d=9 h=6 farmer FEED farmer t1
+[exec] d=9 h=6 farmer NORTH farmer next
 [exec] d=9 h=6 hand0 WEST
 [exec] d=9 h=6 hand1 FEED
 [exec] d=9 h=6 hand2 FEED
 [exec] d=9 h=6 hand3 CARE
-[exec] d=9 h=7 market BUY_PRODUCT WHEAT 2
-[exec] d=9 h=7 farmer PICKUP WHEAT 1 wheat
+[exec] d=9 h=7 farmer WATER farmer t2
 [exec] d=9 h=7 hand0 FEED
 [exec] d=9 h=7 hand1 CARE
 [exec] d=9 h=7 hand2 CARE
 [exec] d=9 h=7 hand3 HARVEST
-[exec] d=9 h=8 market BUY_PRODUCT WHEAT 1
-[exec] d=9 h=8 farmer CARE farmer t1
+[exec] d=9 h=8 farmer NORTH farmer next
 [exec] d=9 h=8 hand0 CARE
 [exec] d=9 h=8 hand1 HARVEST
 [exec] d=9 h=8 hand2 HARVEST
 [exec] d=9 h=8 hand3 COLLECT_FERTILIZER
-[exec] d=9 h=9 farmer NORTH farmer next
+[exec] d=9 h=9 farmer WATER farmer t3
 [exec] d=9 h=9 hand0 HARVEST
 [exec] d=9 h=9 hand1 COLLECT_FERTILIZER
 [exec] d=9 h=9 hand2 COLLECT_FERTILIZER
 [exec] d=9 h=9 hand3 NORTH
-[exec] d=9 h=10 farmer WATER farmer t2
+[exec] d=9 h=10 farmer NORTH farmer next
 [exec] d=9 h=10 hand0 COLLECT_FERTILIZER
 [exec] d=9 h=10 hand1 NORTH
 [exec] d=9 h=10 hand2 NORTH
@@ -1168,57 +1162,54 @@
 [exec] d=9 h=11 hand0 NORTH
 [exec] d=9 h=11 hand1 WATER
 [exec] d=9 h=11 hand2 WATER
-[exec] d=9 h=11 hand3 NORTH
-[exec] d=9 h=12 farmer WATER farmer t3
-[exec] d=9 h=12 hand0 FEED
-[exec] d=9 h=12 hand1 NORTH
+[exec] d=9 h=11 hand3 HARVEST
+[exec] d=9 h=12 farmer WATER farmer t5
+[exec] d=9 h=12 hand0 WATER
+[exec] d=9 h=12 hand1 HARVEST
 [exec] d=9 h=12 hand2 NORTH
-[exec] d=9 h=12 hand3 WATER
-[exec] d=9 h=13 market BUY_PRODUCT WHEAT 1
-[exec] d=9 h=13 farmer NORTH farmer next
-[exec] d=9 h=13 hand0 CARE
-[exec] d=9 h=13 hand1 WATER
+[exec] d=9 h=12 hand3 NORTH
+[exec] d=9 h=13 farmer PASS farmer tile-done
+[exec] d=9 h=13 hand0 NORTH
+[exec] d=9 h=13 hand1 NORTH
 [exec] d=9 h=13 hand2 WATER
-[exec] d=9 h=13 hand3 HARVEST
-[exec] d=9 h=14 farmer BUILD_PASTURE farmer t4
-[exec] d=9 h=14 hand0 COLLECT_FERTILIZER
-[exec] d=9 h=14 hand1 NORTH
+[exec] d=9 h=13 hand3 WATER
+[exec] d=9 h=14 farmer PASS farmer done
+[exec] d=9 h=14 hand0 FEED
+[exec] d=9 h=14 hand1 WATER
 [exec] d=9 h=14 hand2 NORTH
-[exec] d=9 h=14 hand3 NORTH
-[exec] d=9 h=15 farmer PLACE COW farmer t4
-[exec] d=9 h=15 hand0 NORTH
-[exec] d=9 h=15 hand1 WATER
+[exec] d=9 h=14 hand3 HARVEST
+[exec] d=9 h=15 farmer PASS farmer done
+[exec] d=9 h=15 hand0 CARE
+[exec] d=9 h=15 hand1 NORTH
 [exec] d=9 h=15 hand2 WATER
-[exec] d=9 h=15 hand3 WATER
-[exec] d=9 h=16 farmer FEED farmer t4
-[exec] d=9 h=16 hand0 WATER
-[exec] d=9 h=16 hand1 NORTH
+[exec] d=9 h=15 hand3 NORTH
+[exec] d=9 h=16 farmer PASS farmer done
+[exec] d=9 h=16 hand0 COLLECT_FERTILIZER
+[exec] d=9 h=16 hand1 WATER
 [exec] d=9 h=16 hand2 NORTH
-[exec] d=9 h=16 hand3 NORTH
-[exec] d=9 h=17 market BUY_PRODUCT WHEAT 1
-[exec] d=9 h=17 farmer CARE farmer t4
+[exec] d=9 h=16 hand3 WATER
+[exec] d=9 h=17 farmer PASS farmer done
 [exec] d=9 h=17 hand0 NORTH
-[exec] d=9 h=17 hand1 FEED
-[exec] d=9 h=17 hand2 WATER
-[exec] d=9 h=17 hand3 WATER
-[exec] d=9 h=18 market BUY_PRODUCT WHEAT 1
-[exec] d=9 h=18 farmer NORTH farmer next
+[exec] d=9 h=17 hand1 NORTH
+[exec] d=9 h=17 hand2 PLANT STRAWBERRY
+[exec] d=9 h=17 hand3 HARVEST
+[exec] d=9 h=18 farmer PASS farmer done
 [exec] d=9 h=18 hand0 WATER
-[exec] d=9 h=18 hand1 CARE
-[exec] d=9 h=18 hand2 PASS
-[exec] d=9 h=18 hand3 FERTILIZE
-[exec] d=9 h=19 farmer WATER farmer t5
+[exec] d=9 h=18 hand1 WATER
+[exec] d=9 h=18 hand2 WATER
+[exec] d=9 h=18 hand3 NORTH
+[exec] d=9 h=19 farmer PASS farmer done
 [exec] d=9 h=19 hand0 NORTH
-[exec] d=9 h=19 hand1 COLLECT_FERTILIZER
+[exec] d=9 h=19 hand1 HARVEST
 [exec] d=9 h=19 hand2 PASS
-[exec] d=9 h=19 hand3 PASS
-[exec] d=9 h=20 farmer PASS farmer tile-done
+[exec] d=9 h=19 hand3 WATER
+[exec] d=9 h=20 farmer PASS farmer done
 [exec] d=9 h=20 hand0 WATER
 [exec] d=9 h=20 hand1 PASS
 [exec] d=9 h=20 hand2 PASS
 [exec] d=9 h=20 hand3 PASS
 [exec] d=9 h=21 farmer PASS farmer done
-[exec] d=9 h=21 hand0 PASS
+[exec] d=9 h=21 hand0 HARVEST
 [exec] d=9 h=21 hand1 PASS
 [exec] d=9 h=21 hand2 PASS
 [exec] d=9 h=21 hand3 PASS
@@ -1232,22 +1223,27 @@
 [exec] d=9 h=23 hand1 PASS
 [exec] d=9 h=23 hand2 PASS
 [exec] d=9 h=23 hand3 PASS
-[sell_dp] d=10 ms=6 quota=MELON=0 STRAWBERRY=0 MILK=6 WOOL=0 clamped=MILK=6(from 5) inv_melon=9980
-[snap] d=10 h=0 money=3026 farmer_empty=0 hire1_empty=0 hire2_empty=0 hire3_empty=0 hire4_empty=0 shops=3 demand_CARROT=0 demand_EGG=0 demand_MELON=0 demand_MILK=2 demand_STRAWBERRY=1 demand_TOMATO=1 demand_WHEAT=1 demand_WOOL=2 CARROT=32 EGG=46 FERTILIZER=96 MELON=277 MILK=241 STRAWBERRY=186 TOMATO=65 WHEAT=30 WOOL=230
-[exec] d=10 h=0 market HIRE HIRE BUY_PRODUCT WHEAT 1 SELL EGG 6 SELL FERTILIZER 5 SELL TOMATO 2 SELL MILK 1
+[planner] wsp zone=hire1 OPTIMAL obj=2716 time=0.009s close0=4418 cons0=4022 open0=4123 empty=1 picks=1
+[planner] wsp zone=hire2 FEASIBLE obj=3606 time=0.090s close0=4445 cons0=3841 open0=4022 empty=2 picks=3
+[planner] wsp zone=hire4 FEASIBLE obj=4186 time=0.023s close0=4096 cons0=3826 open0=3839 empty=2 picks=5
+[planner] replan assign t10:STRAWBERRY@0, t12:STRAWBERRY@0, t15:MELON@0,CARROT@15, t22:WHEAT@0,CARROT@5,MELON@9, t24:WHEAT@1,MELON@9
+[planner] replan d=10 solver=zonewise_wsp shops=3 catalog=0 assign=5 locked=20
+[sell_dp] d=10 ms=7 quota=MELON=0 STRAWBERRY=0 MILK=6 WOOL=0 clamped=MILK=6(from 0) inv_melon=9980
+[snap] d=10 h=0 money=4123 farmer_empty=1 hire1_empty=1 hire2_empty=2 hire3_empty=0 hire4_empty=2 shops=3 demand_CARROT=2 demand_EGG=1 demand_MELON=0 demand_MILK=1 demand_STRAWBERRY=1 demand_TOMATO=0 demand_WHEAT=2 demand_WOOL=0 CARROT=38 EGG=52 FERTILIZER=97 MELON=277 MILK=218 STRAWBERRY=176 TOMATO=62 WHEAT=33 WOOL=226
+[exec] d=10 h=0 market HIRE HIRE BUY_SEED STRAWBERRY 2 BUY_SEED MELON 1 BUY_SEED WHEAT 1 SELL CARROT 4 SELL EGG 6 SELL FERTILIZER 6 SELL TOMATO 1 SELL MILK 1
 [exec] d=10 h=0 farmer PASS market-hour
 [exec] d=10 h=1 market HIRE HIRE SELL MILK 1
-[exec] d=10 h=1 farmer PICKUP WHEAT 2 farmer wheat
+[exec] d=10 h=1 farmer PICKUP WHEAT 1 farmer wheat
 [exec] d=10 h=1 hand0 WEST
 [exec] d=10 h=1 hand1 NORTH
 [exec] d=10 h=2 market SELL MILK 1
 [exec] d=10 h=2 farmer FEED farmer t1
 [exec] d=10 h=2 hand0 PICKUP WHEAT 2
-[exec] d=10 h=2 hand1 PICKUP WHEAT 2
+[exec] d=10 h=2 hand1 PICKUP WHEAT 1
 [exec] d=10 h=2 hand2 WEST
 [exec] d=10 h=2 hand3 NORTH
 [exec] d=10 h=3 market SELL MILK 1
-[exec] d=10 h=3 farmer PICKUP WHEAT 1 wheat
+[exec] d=10 h=3 farmer PICKUP WHEAT 1 farmer wheat
 [exec] d=10 h=3 hand0 WEST
 [exec] d=10 h=3 hand1 WEST
 [exec] d=10 h=3 hand2 PICKUP WHEAT 1
@@ -1258,25 +1254,22 @@
 [exec] d=10 h=4 hand1 WEST
 [exec] d=10 h=4 hand2 WEST
 [exec] d=10 h=4 hand3 WEST
-[exec] d=10 h=5 market SELL MILK 1
+[exec] d=10 h=5 market SELL WHEAT 15 SELL MILK 1
 [exec] d=10 h=5 farmer COLLECT_FERTILIZER farmer t1
 [exec] d=10 h=5 hand0 WEST
 [exec] d=10 h=5 hand1 WEST
 [exec] d=10 h=5 hand2 WEST
 [exec] d=10 h=5 hand3 FEED
-[exec] d=10 h=6 market BUY_PRODUCT WHEAT 1
 [exec] d=10 h=6 farmer NORTH farmer next
 [exec] d=10 h=6 hand0 WEST
 [exec] d=10 h=6 hand1 FEED
 [exec] d=10 h=6 hand2 FEED
 [exec] d=10 h=6 hand3 CARE
-[exec] d=10 h=7 market BUY_PRODUCT WHEAT 2
 [exec] d=10 h=7 farmer WATER farmer t2
 [exec] d=10 h=7 hand0 FEED
 [exec] d=10 h=7 hand1 CARE
 [exec] d=10 h=7 hand2 CARE
 [exec] d=10 h=7 hand3 HARVEST
-[exec] d=10 h=8 market BUY_PRODUCT WHEAT 1
 [exec] d=10 h=8 farmer HARVEST farmer t2
 [exec] d=10 h=8 hand0 CARE
 [exec] d=10 h=8 hand1 HARVEST
@@ -1291,62 +1284,59 @@
 [exec] d=10 h=10 hand0 NORTH
 [exec] d=10 h=10 hand1 NORTH
 [exec] d=10 h=10 hand2 NORTH
-[exec] d=10 h=10 hand3 WATER
+[exec] d=10 h=10 hand3 PLANT WHEAT
 [exec] d=10 h=11 farmer HARVEST farmer t3
-[exec] d=10 h=11 hand0 FEED
-[exec] d=10 h=11 hand1 WATER
+[exec] d=10 h=11 hand0 WATER
+[exec] d=10 h=11 hand1 PLANT STRAWBERRY
 [exec] d=10 h=11 hand2 WATER
-[exec] d=10 h=11 hand3 NORTH
-[exec] d=10 h=12 market BUY_PRODUCT WHEAT 1
+[exec] d=10 h=11 hand3 WATER
 [exec] d=10 h=12 farmer NORTH farmer next
-[exec] d=10 h=12 hand0 CARE
-[exec] d=10 h=12 hand1 NORTH
+[exec] d=10 h=12 hand0 NORTH
+[exec] d=10 h=12 hand1 WATER
 [exec] d=10 h=12 hand2 NORTH
-[exec] d=10 h=12 hand3 WATER
-[exec] d=10 h=13 farmer FEED farmer t4
-[exec] d=10 h=13 hand0 COLLECT_FERTILIZER
-[exec] d=10 h=13 hand1 WATER
+[exec] d=10 h=12 hand3 NORTH
+[exec] d=10 h=13 farmer NORTH farmer next
+[exec] d=10 h=13 hand0 FEED
+[exec] d=10 h=13 hand1 NORTH
 [exec] d=10 h=13 hand2 WATER
-[exec] d=10 h=13 hand3 FERTILIZE
-[exec] d=10 h=14 market BUY_PRODUCT WHEAT 1
-[exec] d=10 h=14 farmer CARE farmer t4
-[exec] d=10 h=14 hand0 NORTH
-[exec] d=10 h=14 hand1 NORTH
+[exec] d=10 h=13 hand3 WATER
+[exec] d=10 h=14 farmer WATER farmer t5
+[exec] d=10 h=14 hand0 CARE
+[exec] d=10 h=14 hand1 WATER
 [exec] d=10 h=14 hand2 NORTH
-[exec] d=10 h=14 hand3 HARVEST
-[exec] d=10 h=15 farmer COLLECT_FERTILIZER farmer t4
-[exec] d=10 h=15 hand0 WATER
-[exec] d=10 h=15 hand1 WATER
+[exec] d=10 h=14 hand3 FERTILIZE
+[exec] d=10 h=15 farmer PASS farmer tile-done
+[exec] d=10 h=15 hand0 COLLECT_FERTILIZER
+[exec] d=10 h=15 hand1 HARVEST
 [exec] d=10 h=15 hand2 WATER
-[exec] d=10 h=15 hand3 NORTH
-[exec] d=10 h=16 farmer NORTH farmer next
+[exec] d=10 h=15 hand3 HARVEST
+[exec] d=10 h=16 farmer PASS farmer done
 [exec] d=10 h=16 hand0 NORTH
 [exec] d=10 h=16 hand1 NORTH
 [exec] d=10 h=16 hand2 NORTH
-[exec] d=10 h=16 hand3 WATER
-[exec] d=10 h=17 farmer WATER farmer t5
+[exec] d=10 h=16 hand3 NORTH
+[exec] d=10 h=17 farmer PASS farmer done
 [exec] d=10 h=17 hand0 WATER
-[exec] d=10 h=17 hand1 FEED
+[exec] d=10 h=17 hand1 WATER
 [exec] d=10 h=17 hand2 WATER
 [exec] d=10 h=17 hand3 NORTH
-[exec] d=10 h=18 market BUY_PRODUCT WHEAT 1
-[exec] d=10 h=18 farmer PASS farmer tile-done
-[exec] d=10 h=18 hand0 NORTH
-[exec] d=10 h=18 hand1 CARE
+[exec] d=10 h=18 farmer PASS farmer done
+[exec] d=10 h=18 hand0 HARVEST
+[exec] d=10 h=18 hand1 NORTH
 [exec] d=10 h=18 hand2 PASS
 [exec] d=10 h=18 hand3 WATER
 [exec] d=10 h=19 farmer PASS farmer done
-[exec] d=10 h=19 hand0 WATER
-[exec] d=10 h=19 hand1 COLLECT_FERTILIZER
+[exec] d=10 h=19 hand0 NORTH
+[exec] d=10 h=19 hand1 PLANT MELON
 [exec] d=10 h=19 hand2 PASS
 [exec] d=10 h=19 hand3 PASS
 [exec] d=10 h=20 farmer PASS farmer done
-[exec] d=10 h=20 hand0 PASS
-[exec] d=10 h=20 hand1 PASS
+[exec] d=10 h=20 hand0 PLANT STRAWBERRY
+[exec] d=10 h=20 hand1 WATER
 [exec] d=10 h=20 hand2 PASS
 [exec] d=10 h=20 hand3 PASS
 [exec] d=10 h=21 farmer PASS farmer done
-[exec] d=10 h=21 hand0 PASS
+[exec] d=10 h=21 hand0 WATER
 [exec] d=10 h=21 hand1 PASS
 [exec] d=10 h=21 hand2 PASS
 [exec] d=10 h=21 hand3 PASS
@@ -1360,15 +1350,17 @@
 [exec] d=10 h=23 hand1 PASS
 [exec] d=10 h=23 hand2 PASS
 [exec] d=10 h=23 hand3 PASS
-[planner] wsp zone=farmer FEASIBLE obj=7656 time=0.033s bank=5098 empty=2 picks=3
-[planner] replan assign t2:TOMATO@0,SHEEP@12, t3:STRAWBERRY@1
-[planner] replan d=11 solver=zonewise_wsp shops=3 catalog=0 assign=2 locked=23
-[sell_dp] d=11 ms=10 quota=MELON=12 STRAWBERRY=0 MILK=0 WOOL=0 clamped=MELON=12(from 7) inv_melon=9976
-[snap] d=11 h=0 money=5098 farmer_empty=2 hire1_empty=0 hire2_empty=0 hire3_empty=0 hire4_empty=0 shops=3 demand_CARROT=0 demand_EGG=0 demand_MELON=0 demand_MILK=2 demand_STRAWBERRY=1 demand_TOMATO=1 demand_WHEAT=1 demand_WOOL=2 CARROT=33 EGG=45 FERTILIZER=95 MELON=278 MILK=245 STRAWBERRY=191 TOMATO=66 WHEAT=32 WOOL=233
-[exec] d=11 h=0 market HIRE HIRE BUY_PRODUCT WHEAT 1 BUY_SEED TOMATO 1 SELL EGG 6 SELL FERTILIZER 7 SELL TOMATO 2 SELL MELON 1
+[planner] wsp zone=farmer FEASIBLE obj=5186 time=0.095s close0=9761 cons0=6725 open0=6735 empty=2 picks=3
+[planner] wsp zone=hire1 OPTIMAL obj=2484 time=0.008s close0=7964 cons0=6644 open0=6725 empty=1 picks=3
+[planner] wsp zone=hire2 OPTIMAL obj=8840 time=0.011s close0=6451 cons0=6243 open0=6644 empty=1 picks=1
+[planner] replan assign t2:WHEAT@0,GOOSE@5, t3:STRAWBERRY@1, t9:MELON@0,CARROT@11,CARROT@15, t13:COW@0
+[planner] replan d=11 solver=zonewise_wsp shops=3 catalog=0 assign=4 locked=21
+[sell_dp] d=11 ms=12 quota=MELON=12 STRAWBERRY=0 MILK=0 WOOL=0 clamped=MELON=12(from 7) inv_melon=9976
+[snap] d=11 h=0 money=6735 farmer_empty=3 hire1_empty=1 hire2_empty=1 hire3_empty=0 hire4_empty=1 shops=3 demand_CARROT=2 demand_EGG=1 demand_MELON=0 demand_MILK=1 demand_STRAWBERRY=1 demand_TOMATO=0 demand_WHEAT=2 demand_WOOL=0 CARROT=39 EGG=52 FERTILIZER=95 MELON=278 MILK=220 STRAWBERRY=182 TOMATO=63 WHEAT=33 WOOL=228
+[exec] d=11 h=0 market HIRE HIRE BUY_SEED WHEAT 2 BUY_SEED MELON 1 BUY_ANIMAL COW 1 SELL EGG 6 SELL FERTILIZER 5 SELL TOMATO 1 SELL MELON 1
 [exec] d=11 h=0 farmer PASS market-hour
 [exec] d=11 h=1 market HIRE HIRE SELL MELON 1
-[exec] d=11 h=1 farmer PICKUP WHEAT 2 farmer wheat
+[exec] d=11 h=1 farmer PICKUP WHEAT 1 farmer wheat
 [exec] d=11 h=1 hand0 WEST
 [exec] d=11 h=1 hand1 NORTH
 [exec] d=11 h=2 market SELL MELON 1
@@ -1378,9 +1370,9 @@
 [exec] d=11 h=2 hand2 WEST
 [exec] d=11 h=2 hand3 NORTH
 [exec] d=11 h=3 market SELL MELON 1
-[exec] d=11 h=3 farmer PICKUP WHEAT 1 wheat
+[exec] d=11 h=3 farmer PICKUP WHEAT 1 farmer wheat
 [exec] d=11 h=3 hand0 WEST
-[exec] d=11 h=3 hand1 WEST
+[exec] d=11 h=3 hand1 PICKUP COW 1
 [exec] d=11 h=3 hand2 PICKUP WHEAT 1
 [exec] d=11 h=3 hand3 PICKUP WHEAT 1
 [exec] d=11 h=4 market SELL MELON 1
@@ -1389,99 +1381,96 @@
 [exec] d=11 h=4 hand1 WEST
 [exec] d=11 h=4 hand2 WEST
 [exec] d=11 h=4 hand3 WEST
-[exec] d=11 h=5 market SELL MELON 1
-[exec] d=11 h=5 farmer COLLECT_FERTILIZER farmer t1
+[exec] d=11 h=5 market SELL WHEAT 5 SELL MELON 1
+[exec] d=11 h=5 farmer HARVEST farmer t1
 [exec] d=11 h=5 hand0 WEST
 [exec] d=11 h=5 hand1 WEST
 [exec] d=11 h=5 hand2 WEST
 [exec] d=11 h=5 hand3 FEED
-[exec] d=11 h=6 market BUY_PRODUCT WHEAT 1 SELL MELON 1
-[exec] d=11 h=6 farmer NORTH farmer next
+[exec] d=11 h=6 market SELL MELON 1
+[exec] d=11 h=6 farmer COLLECT_FERTILIZER farmer t1
 [exec] d=11 h=6 hand0 WEST
-[exec] d=11 h=6 hand1 FEED
+[exec] d=11 h=6 hand1 WEST
 [exec] d=11 h=6 hand2 FEED
 [exec] d=11 h=6 hand3 CARE
-[exec] d=11 h=7 market BUY_PRODUCT WHEAT 2 SELL MELON 1
-[exec] d=11 h=7 farmer PLANT TOMATO farmer t2
+[exec] d=11 h=7 market SELL MELON 1
+[exec] d=11 h=7 farmer NORTH farmer next
 [exec] d=11 h=7 hand0 FEED
-[exec] d=11 h=7 hand1 CARE
+[exec] d=11 h=7 hand1 FEED
 [exec] d=11 h=7 hand2 CARE
 [exec] d=11 h=7 hand3 HARVEST
-[exec] d=11 h=8 market BUY_PRODUCT WHEAT 1 SELL MELON 1
-[exec] d=11 h=8 farmer WATER farmer t2
+[exec] d=11 h=8 market SELL MELON 1
+[exec] d=11 h=8 farmer PLANT WHEAT farmer t2
 [exec] d=11 h=8 hand0 CARE
-[exec] d=11 h=8 hand1 HARVEST
+[exec] d=11 h=8 hand1 CARE
 [exec] d=11 h=8 hand2 HARVEST
 [exec] d=11 h=8 hand3 COLLECT_FERTILIZER
 [exec] d=11 h=9 market SELL MELON 1
-[exec] d=11 h=9 farmer NORTH farmer next
+[exec] d=11 h=9 farmer WATER farmer t2
 [exec] d=11 h=9 hand0 HARVEST
-[exec] d=11 h=9 hand1 COLLECT_FERTILIZER
+[exec] d=11 h=9 hand1 HARVEST
 [exec] d=11 h=9 hand2 COLLECT_FERTILIZER
 [exec] d=11 h=9 hand3 NORTH
 [exec] d=11 h=10 market SELL MELON 1
 [exec] d=11 h=10 farmer NORTH farmer next
 [exec] d=11 h=10 hand0 COLLECT_FERTILIZER
-[exec] d=11 h=10 hand1 NORTH
+[exec] d=11 h=10 hand1 COLLECT_FERTILIZER
 [exec] d=11 h=10 hand2 NORTH
 [exec] d=11 h=10 hand3 WATER
 [exec] d=11 h=11 market SELL MELON 1
-[exec] d=11 h=11 farmer FEED farmer t4
+[exec] d=11 h=11 farmer NORTH farmer next
 [exec] d=11 h=11 hand0 NORTH
-[exec] d=11 h=11 hand1 WATER
+[exec] d=11 h=11 hand1 NORTH
 [exec] d=11 h=11 hand2 WATER
 [exec] d=11 h=11 hand3 NORTH
-[exec] d=11 h=12 market BUY_PRODUCT WHEAT 1
-[exec] d=11 h=12 farmer CARE farmer t4
-[exec] d=11 h=12 hand0 FEED
-[exec] d=11 h=12 hand1 NORTH
+[exec] d=11 h=12 farmer NORTH farmer next
+[exec] d=11 h=12 hand0 WATER
+[exec] d=11 h=12 hand1 WATER
 [exec] d=11 h=12 hand2 NORTH
 [exec] d=11 h=12 hand3 HARVEST
-[exec] d=11 h=13 market BUY_PRODUCT WHEAT 1
-[exec] d=11 h=13 farmer COLLECT_FERTILIZER farmer t4
-[exec] d=11 h=13 hand0 CARE
-[exec] d=11 h=13 hand1 WATER
+[exec] d=11 h=13 farmer WATER farmer t5
+[exec] d=11 h=13 hand0 NORTH
+[exec] d=11 h=13 hand1 NORTH
 [exec] d=11 h=13 hand2 WATER
 [exec] d=11 h=13 hand3 DIG
-[exec] d=11 h=14 farmer NORTH farmer next
-[exec] d=11 h=14 hand0 COLLECT_FERTILIZER
-[exec] d=11 h=14 hand1 NORTH
+[exec] d=11 h=14 farmer HARVEST farmer t5
+[exec] d=11 h=14 hand0 FEED
+[exec] d=11 h=14 hand1 BUILD_PASTURE
 [exec] d=11 h=14 hand2 NORTH
 [exec] d=11 h=14 hand3 NORTH
-[exec] d=11 h=15 farmer WATER farmer t5
-[exec] d=11 h=15 hand0 NORTH
-[exec] d=11 h=15 hand1 WATER
+[exec] d=11 h=15 farmer PASS farmer tile-done
+[exec] d=11 h=15 hand0 CARE
+[exec] d=11 h=15 hand1 PLACE COW
 [exec] d=11 h=15 hand2 WATER
-[exec] d=11 h=15 hand3 WATER
-[exec] d=11 h=16 farmer HARVEST farmer t5
-[exec] d=11 h=16 hand0 WATER
-[exec] d=11 h=16 hand1 NORTH
+[exec] d=11 h=15 hand3 PLANT WHEAT
+[exec] d=11 h=16 farmer PASS farmer done
+[exec] d=11 h=16 hand0 COLLECT_FERTILIZER
+[exec] d=11 h=16 hand1 FEED
 [exec] d=11 h=16 hand2 NORTH
-[exec] d=11 h=16 hand3 NORTH
-[exec] d=11 h=17 farmer PASS farmer tile-done
+[exec] d=11 h=16 hand3 WATER
+[exec] d=11 h=17 farmer PASS farmer done
 [exec] d=11 h=17 hand0 NORTH
-[exec] d=11 h=17 hand1 FEED
+[exec] d=11 h=17 hand1 CARE
 [exec] d=11 h=17 hand2 WATER
-[exec] d=11 h=17 hand3 WATER
-[exec] d=11 h=18 market BUY_PRODUCT WHEAT 1
+[exec] d=11 h=17 hand3 NORTH
 [exec] d=11 h=18 farmer PASS farmer done
-[exec] d=11 h=18 hand0 WATER
-[exec] d=11 h=18 hand1 CARE
+[exec] d=11 h=18 hand0 PLANT MELON
+[exec] d=11 h=18 hand1 NORTH
 [exec] d=11 h=18 hand2 PASS
-[exec] d=11 h=18 hand3 HARVEST
+[exec] d=11 h=18 hand3 WATER
 [exec] d=11 h=19 farmer PASS farmer done
-[exec] d=11 h=19 hand0 NORTH
-[exec] d=11 h=19 hand1 COLLECT_FERTILIZER
+[exec] d=11 h=19 hand0 WATER
+[exec] d=11 h=19 hand1 WATER
 [exec] d=11 h=19 hand2 PASS
 [exec] d=11 h=19 hand3 PASS
 [exec] d=11 h=20 farmer PASS farmer done
-[exec] d=11 h=20 hand0 WATER
-[exec] d=11 h=20 hand1 PASS
+[exec] d=11 h=20 hand0 NORTH
+[exec] d=11 h=20 hand1 NORTH
 [exec] d=11 h=20 hand2 PASS
 [exec] d=11 h=20 hand3 PASS
 [exec] d=11 h=21 farmer PASS farmer done
-[exec] d=11 h=21 hand0 PASS
-[exec] d=11 h=21 hand1 PASS
+[exec] d=11 h=21 hand0 WATER
+[exec] d=11 h=21 hand1 WATER
 [exec] d=11 h=21 hand2 PASS
 [exec] d=11 h=21 hand3 PASS
 [exec] d=11 h=22 farmer PASS farmer done
@@ -1494,114 +1483,114 @@
 [exec] d=11 h=23 hand1 PASS
 [exec] d=11 h=23 hand2 PASS
 [exec] d=11 h=23 hand3 PASS
-[planner] wsp zone=farmer OPTIMAL obj=3036 time=0.004s bank=9166 empty=1 picks=1
-[planner] wsp zone=hire4 FEASIBLE obj=3964 time=0.025s bank=9166 empty=2 picks=2
-[planner] replan assign t5:STRAWBERRY@0, t23:COW@0, t25:WHEAT@2
-[planner] replan d=12 solver=zonewise_wsp shops=4 catalog=0 assign=3 locked=22
-[sell_dp] d=12 ms=10 quota=MELON=6 STRAWBERRY=0 MILK=3 WOOL=0 clamped=MELON=6(from 0) inv_melon=9984
-[snap] d=12 h=0 money=9166 farmer_empty=2 hire1_empty=0 hire2_empty=0 hire3_empty=0 hire4_empty=2 shops=4 demand_CARROT=0 demand_EGG=1 demand_MELON=0 demand_MILK=2 demand_STRAWBERRY=1 demand_TOMATO=1 demand_WHEAT=2 demand_WOOL=2 CARROT=35 EGG=45 FERTILIZER=94 MELON=275 MILK=252 STRAWBERRY=196 TOMATO=67 WHEAT=33 WOOL=236
-[exec] d=12 h=0 market HIRE HIRE BUY_SEED STRAWBERRY 2 BUY_ANIMAL COW 1 SELL EGG 6 SELL FERTILIZER 8 SELL TOMATO 2 SELL MELON 1 SELL MILK 1
+[planner] wsp zone=farmer OPTIMAL obj=2892 time=0.005s close0=10468 cons0=10468 open0=10568 empty=1 picks=1
+[planner] wsp zone=hire4 OPTIMAL obj=2172 time=0.005s close0=10589 cons0=10381 open0=10464 empty=1 picks=2
+[planner] replan assign t5:STRAWBERRY@1, t23:MELON@0,WHEAT@13
+[planner] replan d=12 solver=zonewise_wsp shops=4 catalog=0 assign=2 locked=23
+[sell_dp] d=12 ms=7 quota=MELON=6 STRAWBERRY=0 MILK=3 WOOL=6 clamped=MELON=6(from 0) MILK=3(from 0) WOOL=6(from 0) inv_melon=9984
+[snap] d=12 h=0 money=10568 farmer_empty=3 hire1_empty=0 hire2_empty=0 hire3_empty=0 hire4_empty=1 shops=4 demand_CARROT=2 demand_EGG=1 demand_MELON=0 demand_MILK=1 demand_STRAWBERRY=1 demand_TOMATO=0 demand_WHEAT=2 demand_WOOL=2 CARROT=39 EGG=52 FERTILIZER=94 MELON=275 MILK=226 STRAWBERRY=187 TOMATO=63 WHEAT=34 WOOL=229
+[exec] d=12 h=0 market HIRE HIRE BUY_PRODUCT WHEAT 1 BUY_SEED STRAWBERRY 1 BUY_SEED MELON 1 SELL EGG 6 SELL FERTILIZER 6 SELL TOMATO 2 SELL MELON 1 SELL MILK 1
 [exec] d=12 h=0 farmer PASS market-hour
-[exec] d=12 h=1 market HIRE HIRE SELL MELON 1 SELL MILK 1
-[exec] d=12 h=1 farmer PICKUP WHEAT 2 farmer wheat
+[exec] d=12 h=1 market HIRE HIRE SELL MELON 1 SELL MILK 1 SELL WOOL 1
+[exec] d=12 h=1 farmer PICKUP WHEAT 1 farmer wheat
 [exec] d=12 h=1 hand0 WEST
 [exec] d=12 h=1 hand1 NORTH
-[exec] d=12 h=2 market SELL MELON 1 SELL MILK 1
+[exec] d=12 h=2 market SELL MELON 1 SELL MILK 1 SELL WOOL 1
 [exec] d=12 h=2 farmer FEED farmer t1
 [exec] d=12 h=2 hand0 PICKUP WHEAT 2
 [exec] d=12 h=2 hand1 PICKUP WHEAT 2
 [exec] d=12 h=2 hand2 WEST
 [exec] d=12 h=2 hand3 NORTH
-[exec] d=12 h=3 market SELL MELON 1
-[exec] d=12 h=3 farmer PICKUP WHEAT 1 wheat
+[exec] d=12 h=3 market SELL MELON 1 SELL WOOL 1
+[exec] d=12 h=3 farmer PICKUP WHEAT 1 farmer wheat
 [exec] d=12 h=3 hand0 WEST
 [exec] d=12 h=3 hand1 WEST
 [exec] d=12 h=3 hand2 PICKUP WHEAT 1
-[exec] d=12 h=3 hand3 PICKUP WHEAT 2
-[exec] d=12 h=4 market SELL MELON 1
+[exec] d=12 h=3 hand3 PICKUP WHEAT 1
+[exec] d=12 h=4 market SELL MELON 1 SELL WOOL 1
 [exec] d=12 h=4 farmer CARE farmer t1
 [exec] d=12 h=4 hand0 WEST
 [exec] d=12 h=4 hand1 WEST
 [exec] d=12 h=4 hand2 WEST
-[exec] d=12 h=4 hand3 PICKUP COW 1
-[exec] d=12 h=5 market SELL MELON 1
+[exec] d=12 h=4 hand3 WEST
+[exec] d=12 h=5 market SELL MELON 1 SELL WOOL 1
 [exec] d=12 h=5 farmer COLLECT_FERTILIZER farmer t1
 [exec] d=12 h=5 hand0 WEST
 [exec] d=12 h=5 hand1 WEST
 [exec] d=12 h=5 hand2 WEST
-[exec] d=12 h=5 hand3 WEST
+[exec] d=12 h=5 hand3 FEED
+[exec] d=12 h=6 market BUY_PRODUCT WHEAT 1
 [exec] d=12 h=6 farmer NORTH farmer next
 [exec] d=12 h=6 hand0 WEST
 [exec] d=12 h=6 hand1 FEED
 [exec] d=12 h=6 hand2 FEED
-[exec] d=12 h=6 hand3 FEED
+[exec] d=12 h=6 hand3 CARE
+[exec] d=12 h=7 market BUY_PRODUCT WHEAT 2
 [exec] d=12 h=7 farmer WATER farmer t2
 [exec] d=12 h=7 hand0 FEED
 [exec] d=12 h=7 hand1 CARE
 [exec] d=12 h=7 hand2 CARE
-[exec] d=12 h=7 hand3 CARE
+[exec] d=12 h=7 hand3 HARVEST
+[exec] d=12 h=8 market BUY_PRODUCT WHEAT 1
 [exec] d=12 h=8 farmer NORTH farmer next
 [exec] d=12 h=8 hand0 CARE
 [exec] d=12 h=8 hand1 HARVEST
 [exec] d=12 h=8 hand2 HARVEST
-[exec] d=12 h=8 hand3 HARVEST
+[exec] d=12 h=8 hand3 COLLECT_FERTILIZER
 [exec] d=12 h=9 farmer PLANT STRAWBERRY farmer t3
 [exec] d=12 h=9 hand0 COLLECT_FERTILIZER
 [exec] d=12 h=9 hand1 COLLECT_FERTILIZER
 [exec] d=12 h=9 hand2 COLLECT_FERTILIZER
-[exec] d=12 h=9 hand3 COLLECT_FERTILIZER
+[exec] d=12 h=9 hand3 NORTH
 [exec] d=12 h=10 farmer WATER farmer t3
 [exec] d=12 h=10 hand0 NORTH
 [exec] d=12 h=10 hand1 NORTH
 [exec] d=12 h=10 hand2 NORTH
-[exec] d=12 h=10 hand3 NORTH
+[exec] d=12 h=10 hand3 WATER
 [exec] d=12 h=11 farmer NORTH farmer next
-[exec] d=12 h=11 hand0 FEED
+[exec] d=12 h=11 hand0 WATER
 [exec] d=12 h=11 hand1 WATER
 [exec] d=12 h=11 hand2 WATER
-[exec] d=12 h=11 hand3 WATER
-[exec] d=12 h=12 market BUY_PRODUCT WHEAT 1
-[exec] d=12 h=12 farmer FEED farmer t4
-[exec] d=12 h=12 hand0 CARE
+[exec] d=12 h=11 hand3 FERTILIZE
+[exec] d=12 h=12 farmer NORTH farmer next
+[exec] d=12 h=12 hand0 NORTH
 [exec] d=12 h=12 hand1 NORTH
 [exec] d=12 h=12 hand2 NORTH
 [exec] d=12 h=12 hand3 NORTH
-[exec] d=12 h=13 market BUY_PRODUCT WHEAT 1
-[exec] d=12 h=13 farmer CARE farmer t4
-[exec] d=12 h=13 hand0 COLLECT_FERTILIZER
-[exec] d=12 h=13 hand1 WATER
+[exec] d=12 h=13 farmer PASS farmer tile-done
+[exec] d=12 h=13 hand0 FEED
+[exec] d=12 h=13 hand1 FEED
 [exec] d=12 h=13 hand2 WATER
-[exec] d=12 h=13 hand3 BUILD_PASTURE
-[exec] d=12 h=14 farmer COLLECT_FERTILIZER farmer t4
-[exec] d=12 h=14 hand0 NORTH
-[exec] d=12 h=14 hand1 NORTH
+[exec] d=12 h=13 hand3 PLANT MELON
+[exec] d=12 h=14 market BUY_PRODUCT WHEAT 2
+[exec] d=12 h=14 farmer PASS farmer done
+[exec] d=12 h=14 hand0 CARE
+[exec] d=12 h=14 hand1 CARE
 [exec] d=12 h=14 hand2 NORTH
-[exec] d=12 h=14 hand3 PLACE COW
-[exec] d=12 h=15 farmer NORTH farmer next
-[exec] d=12 h=15 hand0 WATER
-[exec] d=12 h=15 hand1 WATER
+[exec] d=12 h=14 hand3 WATER
+[exec] d=12 h=15 farmer PASS farmer done
+[exec] d=12 h=15 hand0 COLLECT_FERTILIZER
+[exec] d=12 h=15 hand1 COLLECT_FERTILIZER
 [exec] d=12 h=15 hand2 WATER
-[exec] d=12 h=15 hand3 FEED
-[exec] d=12 h=16 market BUY_PRODUCT WHEAT 1
-[exec] d=12 h=16 farmer PLANT STRAWBERRY farmer t5
+[exec] d=12 h=15 hand3 NORTH
+[exec] d=12 h=16 farmer PASS farmer done
 [exec] d=12 h=16 hand0 NORTH
 [exec] d=12 h=16 hand1 NORTH
 [exec] d=12 h=16 hand2 NORTH
-[exec] d=12 h=16 hand3 NORTH
-[exec] d=12 h=17 farmer WATER farmer t5
+[exec] d=12 h=16 hand3 WATER
+[exec] d=12 h=17 farmer PASS farmer done
 [exec] d=12 h=17 hand0 WATER
-[exec] d=12 h=17 hand1 FEED
+[exec] d=12 h=17 hand1 WATER
 [exec] d=12 h=17 hand2 WATER
-[exec] d=12 h=17 hand3 WATER
-[exec] d=12 h=18 market BUY_PRODUCT WHEAT 1
-[exec] d=12 h=18 farmer PASS farmer tile-done
+[exec] d=12 h=17 hand3 NORTH
+[exec] d=12 h=18 farmer PASS farmer done
 [exec] d=12 h=18 hand0 NORTH
-[exec] d=12 h=18 hand1 CARE
+[exec] d=12 h=18 hand1 NORTH
 [exec] d=12 h=18 hand2 PASS
-[exec] d=12 h=18 hand3 NORTH
+[exec] d=12 h=18 hand3 WATER
 [exec] d=12 h=19 farmer PASS farmer done
 [exec] d=12 h=19 hand0 WATER
-[exec] d=12 h=19 hand1 COLLECT_FERTILIZER
+[exec] d=12 h=19 hand1 WATER
 [exec] d=12 h=19 hand2 PASS
 [exec] d=12 h=19 hand3 PASS
 [exec] d=12 h=20 farmer PASS farmer done
@@ -1624,12 +1613,12 @@
 [exec] d=12 h=23 hand1 PASS
 [exec] d=12 h=23 hand2 PASS
 [exec] d=12 h=23 hand3 PASS
-[sell_dp] d=13 ms=16 quota=MELON=0 STRAWBERRY=0 MILK=0 WOOL=0 inv_melon=9986
-[snap] d=13 h=0 money=11978 farmer_empty=0 hire1_empty=0 hire2_empty=0 hire3_empty=0 hire4_empty=1 shops=4 demand_CARROT=0 demand_EGG=1 demand_MELON=0 demand_MILK=2 demand_STRAWBERRY=1 demand_TOMATO=1 demand_WHEAT=2 demand_WOOL=2 CARROT=37 EGG=46 FERTILIZER=92 MELON=274 MILK=257 STRAWBERRY=201 TOMATO=68 WHEAT=34 WOOL=238
-[exec] d=13 h=0 market HIRE HIRE BUY_PRODUCT WHEAT 1 SELL EGG 6 SELL FERTILIZER 8
+[sell_dp] d=13 ms=7 quota=MELON=0 STRAWBERRY=0 MILK=0 WOOL=1 clamped=WOOL=1(from 0) inv_melon=9986
+[snap] d=13 h=0 money=14612 farmer_empty=2 hire1_empty=0 hire2_empty=0 hire3_empty=0 hire4_empty=0 shops=4 demand_CARROT=2 demand_EGG=1 demand_MELON=0 demand_MILK=1 demand_STRAWBERRY=1 demand_TOMATO=0 demand_WHEAT=2 demand_WOOL=2 CARROT=40 EGG=53 FERTILIZER=93 MELON=274 MILK=230 STRAWBERRY=192 TOMATO=63 WHEAT=35 WOOL=232
+[exec] d=13 h=0 market HIRE HIRE BUY_PRODUCT WHEAT 1 BUY_SEED STRAWBERRY 1 SELL EGG 6 SELL FERTILIZER 6 SELL WOOL 1
 [exec] d=13 h=0 farmer PASS market-hour
 [exec] d=13 h=1 market HIRE HIRE
-[exec] d=13 h=1 farmer PICKUP WHEAT 2 farmer wheat
+[exec] d=13 h=1 farmer PICKUP WHEAT 1 farmer wheat
 [exec] d=13 h=1 hand0 WEST
 [exec] d=13 h=1 hand1 NORTH
 [exec] d=13 h=2 farmer FEED farmer t1
@@ -1637,11 +1626,11 @@
 [exec] d=13 h=2 hand1 PICKUP WHEAT 2
 [exec] d=13 h=2 hand2 WEST
 [exec] d=13 h=2 hand3 NORTH
-[exec] d=13 h=3 farmer PICKUP WHEAT 1 wheat
+[exec] d=13 h=3 farmer PICKUP WHEAT 1 farmer wheat
 [exec] d=13 h=3 hand0 WEST
 [exec] d=13 h=3 hand1 WEST
 [exec] d=13 h=3 hand2 PICKUP WHEAT 1
-[exec] d=13 h=3 hand3 PICKUP WHEAT 2
+[exec] d=13 h=3 hand3 PICKUP WHEAT 1
 [exec] d=13 h=4 farmer CARE farmer t1
 [exec] d=13 h=4 hand0 WEST
 [exec] d=13 h=4 hand1 WEST
@@ -1665,72 +1654,71 @@
 [exec] d=13 h=7 hand2 CARE
 [exec] d=13 h=7 hand3 HARVEST
 [exec] d=13 h=8 market BUY_PRODUCT WHEAT 1
-[exec] d=13 h=8 farmer NORTH farmer next
+[exec] d=13 h=8 farmer FERTILIZE farmer t2
 [exec] d=13 h=8 hand0 CARE
 [exec] d=13 h=8 hand1 HARVEST
 [exec] d=13 h=8 hand2 HARVEST
 [exec] d=13 h=8 hand3 COLLECT_FERTILIZER
-[exec] d=13 h=9 farmer WATER farmer t3
+[exec] d=13 h=9 farmer NORTH farmer next
 [exec] d=13 h=9 hand0 HARVEST
 [exec] d=13 h=9 hand1 COLLECT_FERTILIZER
 [exec] d=13 h=9 hand2 COLLECT_FERTILIZER
 [exec] d=13 h=9 hand3 NORTH
-[exec] d=13 h=10 farmer NORTH farmer next
+[exec] d=13 h=10 farmer WATER farmer t3
 [exec] d=13 h=10 hand0 COLLECT_FERTILIZER
 [exec] d=13 h=10 hand1 NORTH
 [exec] d=13 h=10 hand2 NORTH
 [exec] d=13 h=10 hand3 WATER
-[exec] d=13 h=11 farmer FEED farmer t4
+[exec] d=13 h=11 farmer NORTH farmer next
 [exec] d=13 h=11 hand0 NORTH
 [exec] d=13 h=11 hand1 WATER
 [exec] d=13 h=11 hand2 WATER
 [exec] d=13 h=11 hand3 NORTH
-[exec] d=13 h=12 market BUY_PRODUCT WHEAT 1
-[exec] d=13 h=12 farmer CARE farmer t4
-[exec] d=13 h=12 hand0 FEED
-[exec] d=13 h=12 hand1 FERTILIZE
+[exec] d=13 h=12 farmer NORTH farmer next
+[exec] d=13 h=12 hand0 WATER
+[exec] d=13 h=12 hand1 NORTH
 [exec] d=13 h=12 hand2 NORTH
-[exec] d=13 h=12 hand3 FEED
-[exec] d=13 h=13 market BUY_PRODUCT WHEAT 2
-[exec] d=13 h=13 farmer COLLECT_FERTILIZER farmer t4
-[exec] d=13 h=13 hand0 CARE
-[exec] d=13 h=13 hand1 NORTH
+[exec] d=13 h=12 hand3 WATER
+[exec] d=13 h=13 farmer PLANT STRAWBERRY farmer t5
+[exec] d=13 h=13 hand0 NORTH
+[exec] d=13 h=13 hand1 FEED
 [exec] d=13 h=13 hand2 WATER
-[exec] d=13 h=13 hand3 COLLECT_FERTILIZER
-[exec] d=13 h=14 farmer NORTH farmer next
-[exec] d=13 h=14 hand0 COLLECT_FERTILIZER
-[exec] d=13 h=14 hand1 WATER
+[exec] d=13 h=13 hand3 NORTH
+[exec] d=13 h=14 market BUY_PRODUCT WHEAT 1
+[exec] d=13 h=14 farmer WATER farmer t5
+[exec] d=13 h=14 hand0 FEED
+[exec] d=13 h=14 hand1 CARE
 [exec] d=13 h=14 hand2 NORTH
-[exec] d=13 h=14 hand3 NORTH
-[exec] d=13 h=15 farmer WATER farmer t5
-[exec] d=13 h=15 hand0 NORTH
-[exec] d=13 h=15 hand1 NORTH
+[exec] d=13 h=14 hand3 WATER
+[exec] d=13 h=15 market BUY_PRODUCT WHEAT 1
+[exec] d=13 h=15 farmer PASS farmer tile-done
+[exec] d=13 h=15 hand0 CARE
+[exec] d=13 h=15 hand1 COLLECT_FERTILIZER
 [exec] d=13 h=15 hand2 WATER
-[exec] d=13 h=15 hand3 WATER
-[exec] d=13 h=16 farmer PASS farmer tile-done
-[exec] d=13 h=16 hand0 WATER
-[exec] d=13 h=16 hand1 WATER
+[exec] d=13 h=15 hand3 FERTILIZE
+[exec] d=13 h=16 farmer PASS farmer done
+[exec] d=13 h=16 hand0 COLLECT_FERTILIZER
+[exec] d=13 h=16 hand1 NORTH
 [exec] d=13 h=16 hand2 NORTH
 [exec] d=13 h=16 hand3 NORTH
 [exec] d=13 h=17 farmer PASS farmer done
 [exec] d=13 h=17 hand0 NORTH
-[exec] d=13 h=17 hand1 NORTH
+[exec] d=13 h=17 hand1 WATER
 [exec] d=13 h=17 hand2 WATER
-[exec] d=13 h=17 hand3 PASS
+[exec] d=13 h=17 hand3 WATER
 [exec] d=13 h=18 farmer PASS farmer done
 [exec] d=13 h=18 hand0 WATER
-[exec] d=13 h=18 hand1 FEED
+[exec] d=13 h=18 hand1 NORTH
 [exec] d=13 h=18 hand2 PASS
 [exec] d=13 h=18 hand3 PASS
-[exec] d=13 h=19 market BUY_PRODUCT WHEAT 1
 [exec] d=13 h=19 farmer PASS farmer done
 [exec] d=13 h=19 hand0 NORTH
-[exec] d=13 h=19 hand1 CARE
+[exec] d=13 h=19 hand1 WATER
 [exec] d=13 h=19 hand2 PASS
 [exec] d=13 h=19 hand3 PASS
 [exec] d=13 h=20 farmer PASS farmer done
 [exec] d=13 h=20 hand0 WATER
-[exec] d=13 h=20 hand1 COLLECT_FERTILIZER
+[exec] d=13 h=20 hand1 PASS
 [exec] d=13 h=20 hand2 PASS
 [exec] d=13 h=20 hand3 PASS
 [exec] d=13 h=21 farmer PASS farmer done
@@ -1748,12 +1736,12 @@
 [exec] d=13 h=23 hand1 PASS
 [exec] d=13 h=23 hand2 PASS
 [exec] d=13 h=23 hand3 PASS
-[sell_dp] d=14 ms=23 quota=MELON=0 STRAWBERRY=0 MILK=3 WOOL=0 inv_melon=9982
-[snap] d=14 h=0 money=12661 farmer_empty=0 hire1_empty=0 hire2_empty=0 hire3_empty=0 hire4_empty=1 shops=4 demand_CARROT=0 demand_EGG=1 demand_MELON=0 demand_MILK=2 demand_STRAWBERRY=1 demand_TOMATO=1 demand_WHEAT=2 demand_WOOL=2 CARROT=38 EGG=46 FERTILIZER=91 MELON=276 MILK=263 STRAWBERRY=205 TOMATO=69 WHEAT=36 WOOL=239
-[exec] d=14 h=0 market HIRE HIRE BUY_PRODUCT WHEAT 1 BUY_SEED WHEAT 1 SELL EGG 6 SELL FERTILIZER 8 SELL MILK 1
+[sell_dp] d=14 ms=11 quota=MELON=0 STRAWBERRY=0 MILK=3 WOOL=0 inv_melon=9982
+[snap] d=14 h=0 money=15355 farmer_empty=1 hire1_empty=0 hire2_empty=0 hire3_empty=0 hire4_empty=0 shops=4 demand_CARROT=2 demand_EGG=1 demand_MELON=0 demand_MILK=1 demand_STRAWBERRY=1 demand_TOMATO=0 demand_WHEAT=2 demand_WOOL=2 CARROT=40 EGG=53 FERTILIZER=92 MELON=276 MILK=235 STRAWBERRY=197 TOMATO=64 WHEAT=36 WOOL=234
+[exec] d=14 h=0 market HIRE HIRE BUY_PRODUCT WHEAT 1 SELL EGG 6 SELL FERTILIZER 5 SELL MILK 1
 [exec] d=14 h=0 farmer PASS market-hour
 [exec] d=14 h=1 market HIRE HIRE SELL MILK 1
-[exec] d=14 h=1 farmer PICKUP WHEAT 2 farmer wheat
+[exec] d=14 h=1 farmer PICKUP WHEAT 1 farmer wheat
 [exec] d=14 h=1 hand0 WEST
 [exec] d=14 h=1 hand1 NORTH
 [exec] d=14 h=2 market SELL MILK 1
@@ -1762,110 +1750,108 @@
 [exec] d=14 h=2 hand1 PICKUP WHEAT 2
 [exec] d=14 h=2 hand2 WEST
 [exec] d=14 h=2 hand3 NORTH
-[exec] d=14 h=3 farmer PICKUP WHEAT 1 wheat
+[exec] d=14 h=3 farmer PICKUP WHEAT 1 farmer wheat
 [exec] d=14 h=3 hand0 WEST
 [exec] d=14 h=3 hand1 WEST
 [exec] d=14 h=3 hand2 PICKUP WHEAT 1
-[exec] d=14 h=3 hand3 PICKUP WHEAT 2
+[exec] d=14 h=3 hand3 PICKUP WHEAT 1
 [exec] d=14 h=4 farmer CARE farmer t1
 [exec] d=14 h=4 hand0 WEST
 [exec] d=14 h=4 hand1 WEST
 [exec] d=14 h=4 hand2 WEST
 [exec] d=14 h=4 hand3 WEST
-[exec] d=14 h=5 farmer COLLECT_FERTILIZER farmer t1
+[exec] d=14 h=5 farmer HARVEST farmer t1
 [exec] d=14 h=5 hand0 WEST
 [exec] d=14 h=5 hand1 WEST
 [exec] d=14 h=5 hand2 WEST
 [exec] d=14 h=5 hand3 FEED
 [exec] d=14 h=6 market BUY_PRODUCT WHEAT 1
-[exec] d=14 h=6 farmer NORTH farmer next
+[exec] d=14 h=6 farmer COLLECT_FERTILIZER farmer t1
 [exec] d=14 h=6 hand0 WEST
 [exec] d=14 h=6 hand1 FEED
 [exec] d=14 h=6 hand2 FEED
 [exec] d=14 h=6 hand3 CARE
 [exec] d=14 h=7 market BUY_PRODUCT WHEAT 2
-[exec] d=14 h=7 farmer WATER farmer t2
+[exec] d=14 h=7 farmer NORTH farmer next
 [exec] d=14 h=7 hand0 FEED
 [exec] d=14 h=7 hand1 CARE
 [exec] d=14 h=7 hand2 CARE
 [exec] d=14 h=7 hand3 HARVEST
 [exec] d=14 h=8 market BUY_PRODUCT WHEAT 1
-[exec] d=14 h=8 farmer NORTH farmer next
+[exec] d=14 h=8 farmer WATER farmer t2
 [exec] d=14 h=8 hand0 CARE
 [exec] d=14 h=8 hand1 HARVEST
 [exec] d=14 h=8 hand2 HARVEST
 [exec] d=14 h=8 hand3 COLLECT_FERTILIZER
-[exec] d=14 h=9 farmer WATER farmer t3
+[exec] d=14 h=9 farmer NORTH farmer next
 [exec] d=14 h=9 hand0 COLLECT_FERTILIZER
 [exec] d=14 h=9 hand1 COLLECT_FERTILIZER
 [exec] d=14 h=9 hand2 COLLECT_FERTILIZER
 [exec] d=14 h=9 hand3 NORTH
-[exec] d=14 h=10 farmer NORTH farmer next
+[exec] d=14 h=10 farmer WATER farmer t3
 [exec] d=14 h=10 hand0 NORTH
 [exec] d=14 h=10 hand1 NORTH
 [exec] d=14 h=10 hand2 NORTH
 [exec] d=14 h=10 hand3 WATER
-[exec] d=14 h=11 farmer FEED farmer t4
-[exec] d=14 h=11 hand0 FEED
+[exec] d=14 h=11 farmer NORTH farmer next
+[exec] d=14 h=11 hand0 WATER
 [exec] d=14 h=11 hand1 WATER
 [exec] d=14 h=11 hand2 WATER
-[exec] d=14 h=11 hand3 NORTH
-[exec] d=14 h=12 market BUY_PRODUCT WHEAT 2
-[exec] d=14 h=12 farmer CARE farmer t4
-[exec] d=14 h=12 hand0 CARE
-[exec] d=14 h=12 hand1 HARVEST
+[exec] d=14 h=11 hand3 HARVEST
+[exec] d=14 h=12 farmer NORTH farmer next
+[exec] d=14 h=12 hand0 NORTH
+[exec] d=14 h=12 hand1 NORTH
 [exec] d=14 h=12 hand2 NORTH
-[exec] d=14 h=12 hand3 FEED
-[exec] d=14 h=13 market BUY_PRODUCT WHEAT 1
-[exec] d=14 h=13 farmer COLLECT_FERTILIZER farmer t4
-[exec] d=14 h=13 hand0 COLLECT_FERTILIZER
-[exec] d=14 h=13 hand1 NORTH
+[exec] d=14 h=12 hand3 NORTH
+[exec] d=14 h=13 farmer WATER farmer t5
+[exec] d=14 h=13 hand0 FEED
+[exec] d=14 h=13 hand1 FEED
 [exec] d=14 h=13 hand2 WATER
-[exec] d=14 h=13 hand3 COLLECT_FERTILIZER
-[exec] d=14 h=14 farmer NORTH farmer next
-[exec] d=14 h=14 hand0 NORTH
-[exec] d=14 h=14 hand1 WATER
+[exec] d=14 h=13 hand3 WATER
+[exec] d=14 h=14 market BUY_PRODUCT WHEAT 1
+[exec] d=14 h=14 farmer PASS farmer tile-done
+[exec] d=14 h=14 hand0 CARE
+[exec] d=14 h=14 hand1 CARE
 [exec] d=14 h=14 hand2 NORTH
 [exec] d=14 h=14 hand3 NORTH
-[exec] d=14 h=15 farmer WATER farmer t5
-[exec] d=14 h=15 hand0 WATER
-[exec] d=14 h=15 hand1 NORTH
+[exec] d=14 h=15 farmer PASS farmer done
+[exec] d=14 h=15 hand0 HARVEST
+[exec] d=14 h=15 hand1 COLLECT_FERTILIZER
 [exec] d=14 h=15 hand2 WATER
 [exec] d=14 h=15 hand3 WATER
-[exec] d=14 h=16 farmer PASS farmer tile-done
-[exec] d=14 h=16 hand0 NORTH
-[exec] d=14 h=16 hand1 WATER
+[exec] d=14 h=16 farmer PASS farmer done
+[exec] d=14 h=16 hand0 COLLECT_FERTILIZER
+[exec] d=14 h=16 hand1 NORTH
 [exec] d=14 h=16 hand2 NORTH
 [exec] d=14 h=16 hand3 NORTH
 [exec] d=14 h=17 farmer PASS farmer done
-[exec] d=14 h=17 hand0 WATER
-[exec] d=14 h=17 hand1 FERTILIZE
+[exec] d=14 h=17 hand0 NORTH
+[exec] d=14 h=17 hand1 WATER
 [exec] d=14 h=17 hand2 WATER
-[exec] d=14 h=17 hand3 PLANT WHEAT
+[exec] d=14 h=17 hand3 WATER
 [exec] d=14 h=18 farmer PASS farmer done
-[exec] d=14 h=18 hand0 NORTH
+[exec] d=14 h=18 hand0 WATER
 [exec] d=14 h=18 hand1 NORTH
 [exec] d=14 h=18 hand2 PASS
-[exec] d=14 h=18 hand3 WATER
+[exec] d=14 h=18 hand3 PASS
 [exec] d=14 h=19 farmer PASS farmer done
-[exec] d=14 h=19 hand0 WATER
-[exec] d=14 h=19 hand1 FEED
+[exec] d=14 h=19 hand0 NORTH
+[exec] d=14 h=19 hand1 WATER
 [exec] d=14 h=19 hand2 PASS
 [exec] d=14 h=19 hand3 PASS
-[exec] d=14 h=20 market BUY_PRODUCT WHEAT 1
 [exec] d=14 h=20 farmer PASS farmer done
-[exec] d=14 h=20 hand0 PASS
-[exec] d=14 h=20 hand1 CARE
+[exec] d=14 h=20 hand0 WATER
+[exec] d=14 h=20 hand1 PASS
 [exec] d=14 h=20 hand2 PASS
 [exec] d=14 h=20 hand3 PASS
 [exec] d=14 h=21 farmer PASS farmer done
 [exec] d=14 h=21 hand0 PASS
-[exec] d=14 h=21 hand1 HARVEST
+[exec] d=14 h=21 hand1 PASS
 [exec] d=14 h=21 hand2 PASS
 [exec] d=14 h=21 hand3 PASS
 [exec] d=14 h=22 farmer PASS farmer done
 [exec] d=14 h=22 hand0 PASS
-[exec] d=14 h=22 hand1 COLLECT_FERTILIZER
+[exec] d=14 h=22 hand1 PASS
 [exec] d=14 h=22 hand2 PASS
 [exec] d=14 h=22 hand3 PASS
 [exec] d=14 h=23 farmer PASS farmer done
@@ -1873,121 +1859,120 @@
 [exec] d=14 h=23 hand1 PASS
 [exec] d=14 h=23 hand2 PASS
 [exec] d=14 h=23 hand3 PASS
-[sell_dp] d=15 ms=28 quota=MELON=0 STRAWBERRY=2 MILK=0 WOOL=6 inv_melon=9978
-[snap] d=15 h=0 money=14106 farmer_empty=0 hire1_empty=0 hire2_empty=0 hire3_empty=0 hire4_empty=0 shops=5 demand_CARROT=0 demand_EGG=2 demand_MELON=0 demand_MILK=2 demand_STRAWBERRY=2 demand_TOMATO=1 demand_WHEAT=3 demand_WOOL=2 CARROT=38 EGG=47 FERTILIZER=89 MELON=277 MILK=268 STRAWBERRY=209 TOMATO=70 WHEAT=37 WOOL=241
-[exec] d=15 h=0 market HIRE HIRE BUY_PRODUCT WHEAT 1 SELL EGG 6 SELL FERTILIZER 8 SELL STRAWBERRY 1 SELL WOOL 1
+[planner] wsp zone=hire4 OPTIMAL obj=2634 time=0.004s close0=17502 cons0=16592 open0=16605 empty=1 picks=3
+[planner] replan assign t22:WHEAT@0,WHEAT@5,WHEAT@10
+[planner] replan d=15 solver=zonewise_wsp shops=5 catalog=0 assign=1 locked=24
+[sell_dp] d=15 ms=17 quota=MELON=0 STRAWBERRY=0 MILK=6 WOOL=4 clamped=WOOL=4(from 2) inv_melon=9978
+[snap] d=15 h=0 money=16609 farmer_empty=1 hire1_empty=0 hire2_empty=0 hire3_empty=0 hire4_empty=1 shops=5 demand_CARROT=2 demand_EGG=2 demand_MELON=0 demand_MILK=1 demand_STRAWBERRY=2 demand_TOMATO=0 demand_WHEAT=3 demand_WOOL=2 CARROT=40 EGG=53 FERTILIZER=91 MELON=277 MILK=239 STRAWBERRY=201 TOMATO=64 WHEAT=37 WOOL=237
+[exec] d=15 h=0 market HIRE HIRE BUY_SEED WHEAT 1 SELL EGG 6 SELL FERTILIZER 7 SELL MILK 1 SELL WOOL 1
 [exec] d=15 h=0 farmer PASS market-hour
-[exec] d=15 h=1 market HIRE HIRE SELL STRAWBERRY 1 SELL WOOL 1
-[exec] d=15 h=1 farmer PICKUP WHEAT 2 farmer wheat
+[exec] d=15 h=1 market HIRE HIRE SELL MILK 1 SELL WOOL 1
+[exec] d=15 h=1 farmer PICKUP WHEAT 1 farmer wheat
 [exec] d=15 h=1 hand0 WEST
 [exec] d=15 h=1 hand1 NORTH
-[exec] d=15 h=2 market SELL WOOL 1
+[exec] d=15 h=2 market SELL MILK 1 SELL WOOL 1
 [exec] d=15 h=2 farmer FEED farmer t1
 [exec] d=15 h=2 hand0 PICKUP WHEAT 2
 [exec] d=15 h=2 hand1 PICKUP WHEAT 2
 [exec] d=15 h=2 hand2 WEST
 [exec] d=15 h=2 hand3 NORTH
-[exec] d=15 h=3 market SELL WOOL 1
-[exec] d=15 h=3 farmer PICKUP WHEAT 1 wheat
+[exec] d=15 h=3 market SELL MILK 1 SELL WOOL 1
+[exec] d=15 h=3 farmer PICKUP WHEAT 1 farmer wheat
 [exec] d=15 h=3 hand0 WEST
 [exec] d=15 h=3 hand1 WEST
 [exec] d=15 h=3 hand2 PICKUP WHEAT 1
-[exec] d=15 h=3 hand3 PICKUP WHEAT 2
-[exec] d=15 h=4 market SELL WOOL 1
+[exec] d=15 h=3 hand3 PICKUP WHEAT 1
+[exec] d=15 h=4 market SELL MILK 1
 [exec] d=15 h=4 farmer CARE farmer t1
 [exec] d=15 h=4 hand0 WEST
 [exec] d=15 h=4 hand1 WEST
 [exec] d=15 h=4 hand2 WEST
 [exec] d=15 h=4 hand3 WEST
-[exec] d=15 h=5 market SELL WOOL 1
+[exec] d=15 h=5 market SELL MILK 1
 [exec] d=15 h=5 farmer COLLECT_FERTILIZER farmer t1
 [exec] d=15 h=5 hand0 WEST
 [exec] d=15 h=5 hand1 WEST
 [exec] d=15 h=5 hand2 WEST
 [exec] d=15 h=5 hand3 FEED
-[exec] d=15 h=6 market BUY_PRODUCT WHEAT 1
 [exec] d=15 h=6 farmer NORTH farmer next
 [exec] d=15 h=6 hand0 WEST
 [exec] d=15 h=6 hand1 FEED
 [exec] d=15 h=6 hand2 FEED
 [exec] d=15 h=6 hand3 CARE
-[exec] d=15 h=7 market BUY_PRODUCT WHEAT 2
 [exec] d=15 h=7 farmer WATER farmer t2
 [exec] d=15 h=7 hand0 FEED
 [exec] d=15 h=7 hand1 CARE
 [exec] d=15 h=7 hand2 CARE
 [exec] d=15 h=7 hand3 HARVEST
-[exec] d=15 h=8 market BUY_PRODUCT WHEAT 1
-[exec] d=15 h=8 farmer NORTH farmer next
+[exec] d=15 h=8 farmer HARVEST farmer t2
 [exec] d=15 h=8 hand0 CARE
 [exec] d=15 h=8 hand1 HARVEST
 [exec] d=15 h=8 hand2 HARVEST
 [exec] d=15 h=8 hand3 COLLECT_FERTILIZER
-[exec] d=15 h=9 farmer WATER farmer t3
+[exec] d=15 h=9 farmer NORTH farmer next
 [exec] d=15 h=9 hand0 HARVEST
 [exec] d=15 h=9 hand1 COLLECT_FERTILIZER
 [exec] d=15 h=9 hand2 COLLECT_FERTILIZER
 [exec] d=15 h=9 hand3 NORTH
-[exec] d=15 h=10 farmer NORTH farmer next
+[exec] d=15 h=10 farmer WATER farmer t3
 [exec] d=15 h=10 hand0 COLLECT_FERTILIZER
 [exec] d=15 h=10 hand1 NORTH
 [exec] d=15 h=10 hand2 NORTH
-[exec] d=15 h=10 hand3 WATER
-[exec] d=15 h=11 farmer FEED farmer t4
+[exec] d=15 h=10 hand3 PLANT WHEAT
+[exec] d=15 h=11 farmer NORTH farmer next
 [exec] d=15 h=11 hand0 NORTH
 [exec] d=15 h=11 hand1 WATER
 [exec] d=15 h=11 hand2 WATER
-[exec] d=15 h=11 hand3 NORTH
-[exec] d=15 h=12 market BUY_PRODUCT WHEAT 1
-[exec] d=15 h=12 farmer CARE farmer t4
-[exec] d=15 h=12 hand0 FEED
+[exec] d=15 h=11 hand3 WATER
+[exec] d=15 h=12 farmer NORTH farmer next
+[exec] d=15 h=12 hand0 WATER
 [exec] d=15 h=12 hand1 NORTH
 [exec] d=15 h=12 hand2 NORTH
-[exec] d=15 h=12 hand3 FEED
-[exec] d=15 h=13 market BUY_PRODUCT WHEAT 2
-[exec] d=15 h=13 farmer COLLECT_FERTILIZER farmer t4
-[exec] d=15 h=13 hand0 CARE
-[exec] d=15 h=13 hand1 WATER
+[exec] d=15 h=12 hand3 NORTH
+[exec] d=15 h=13 farmer WATER farmer t5
+[exec] d=15 h=13 hand0 NORTH
+[exec] d=15 h=13 hand1 FEED
 [exec] d=15 h=13 hand2 WATER
-[exec] d=15 h=13 hand3 COLLECT_FERTILIZER
-[exec] d=15 h=14 farmer NORTH farmer next
-[exec] d=15 h=14 hand0 HARVEST
-[exec] d=15 h=14 hand1 NORTH
+[exec] d=15 h=13 hand3 WATER
+[exec] d=15 h=14 market BUY_PRODUCT WHEAT 1
+[exec] d=15 h=14 farmer PASS farmer tile-done
+[exec] d=15 h=14 hand0 FEED
+[exec] d=15 h=14 hand1 CARE
 [exec] d=15 h=14 hand2 NORTH
 [exec] d=15 h=14 hand3 NORTH
-[exec] d=15 h=15 farmer WATER farmer t5
-[exec] d=15 h=15 hand0 COLLECT_FERTILIZER
-[exec] d=15 h=15 hand1 WATER
+[exec] d=15 h=15 market BUY_PRODUCT WHEAT 1
+[exec] d=15 h=15 farmer PASS farmer done
+[exec] d=15 h=15 hand0 CARE
+[exec] d=15 h=15 hand1 COLLECT_FERTILIZER
 [exec] d=15 h=15 hand2 WATER
 [exec] d=15 h=15 hand3 WATER
-[exec] d=15 h=16 farmer PASS farmer tile-done
-[exec] d=15 h=16 hand0 NORTH
-[exec] d=15 h=16 hand1 HARVEST
+[exec] d=15 h=16 farmer PASS farmer done
+[exec] d=15 h=16 hand0 COLLECT_FERTILIZER
+[exec] d=15 h=16 hand1 NORTH
 [exec] d=15 h=16 hand2 NORTH
 [exec] d=15 h=16 hand3 HARVEST
 [exec] d=15 h=17 farmer PASS farmer done
-[exec] d=15 h=17 hand0 WATER
-[exec] d=15 h=17 hand1 NORTH
+[exec] d=15 h=17 hand0 NORTH
+[exec] d=15 h=17 hand1 WATER
 [exec] d=15 h=17 hand2 WATER
 [exec] d=15 h=17 hand3 NORTH
 [exec] d=15 h=18 farmer PASS farmer done
-[exec] d=15 h=18 hand0 NORTH
-[exec] d=15 h=18 hand1 FEED
-[exec] d=15 h=18 hand2 HARVEST
+[exec] d=15 h=18 hand0 WATER
+[exec] d=15 h=18 hand1 NORTH
+[exec] d=15 h=18 hand2 PASS
 [exec] d=15 h=18 hand3 WATER
-[exec] d=15 h=19 market BUY_PRODUCT WHEAT 1
 [exec] d=15 h=19 farmer PASS farmer done
-[exec] d=15 h=19 hand0 WATER
-[exec] d=15 h=19 hand1 CARE
+[exec] d=15 h=19 hand0 NORTH
+[exec] d=15 h=19 hand1 WATER
 [exec] d=15 h=19 hand2 PASS
 [exec] d=15 h=19 hand3 PASS
 [exec] d=15 h=20 farmer PASS farmer done
-[exec] d=15 h=20 hand0 NORTH
-[exec] d=15 h=20 hand1 COLLECT_FERTILIZER
+[exec] d=15 h=20 hand0 WATER
+[exec] d=15 h=20 hand1 PASS
 [exec] d=15 h=20 hand2 PASS
 [exec] d=15 h=20 hand3 PASS
 [exec] d=15 h=21 farmer PASS farmer done
-[exec] d=15 h=21 hand0 WATER
+[exec] d=15 h=21 hand0 PASS
 [exec] d=15 h=21 hand1 PASS
 [exec] d=15 h=21 hand2 PASS
 [exec] d=15 h=21 hand3 PASS
@@ -2001,129 +1986,118 @@
 [exec] d=15 h=23 hand1 PASS
 [exec] d=15 h=23 hand2 PASS
 [exec] d=15 h=23 hand3 PASS
-[planner] wsp zone=hire3 OPTIMAL obj=1936 time=0.004s bank=16615 empty=1 picks=3
-[planner] wsp zone=hire4 OPTIMAL obj=1804 time=0.003s bank=16615 empty=1 picks=2
-[planner] replan assign t20:WHEAT@0,CARROT@5,WHEAT@9, t24:WHEAT@3,WHEAT@9
+[planner] wsp zone=farmer OPTIMAL obj=9496 time=0.005s close0=19348 cons0=19348 open0=19848 empty=1 picks=1
+[planner] wsp zone=hire4 OPTIMAL obj=2264 time=0.004s close0=19655 cons0=19331 open0=19344 empty=1 picks=3
+[planner] replan assign t2:SHEEP@0, t24:WHEAT@0,CARROT@5,WHEAT@9
 [planner] replan d=16 solver=zonewise_wsp shops=5 catalog=0 assign=2 locked=23
-[sell_dp] d=16 ms=32 quota=MELON=12 STRAWBERRY=2 MILK=9 WOOL=0 clamped=MELON=12(from 9) MILK=9(from 6) inv_melon=9974
-[snap] d=16 h=0 money=16615 farmer_empty=0 hire1_empty=0 hire2_empty=0 hire3_empty=1 hire4_empty=1 shops=5 demand_CARROT=0 demand_EGG=2 demand_MELON=0 demand_MILK=2 demand_STRAWBERRY=2 demand_TOMATO=1 demand_WHEAT=3 demand_WOOL=2 CARROT=38 EGG=50 FERTILIZER=88 MELON=279 MILK=273 STRAWBERRY=214 TOMATO=72 WHEAT=38 WOOL=241
-[exec] d=16 h=0 market HIRE HIRE BUY_PRODUCT WHEAT 1 BUY_SEED WHEAT 1 SELL EGG 6 SELL FERTILIZER 9 SELL MELON 1 SELL MILK 1 SELL STRAWBERRY 1
+[sell_dp] d=16 ms=21 quota=MELON=0 STRAWBERRY=0 MILK=3 WOOL=0 inv_melon=9974
+[snap] d=16 h=0 money=19848 farmer_empty=2 hire1_empty=0 hire2_empty=0 hire3_empty=0 hire4_empty=1 shops=5 demand_CARROT=2 demand_EGG=2 demand_MELON=0 demand_MILK=1 demand_STRAWBERRY=2 demand_TOMATO=0 demand_WHEAT=3 demand_WOOL=2 CARROT=40 EGG=54 FERTILIZER=90 MELON=279 MILK=241 STRAWBERRY=208 TOMATO=65 WHEAT=38 WOOL=238
+[exec] d=16 h=0 market HIRE HIRE BUY_SEED WHEAT 1 BUY_ANIMAL SHEEP 1 SELL EGG 6 SELL FERTILIZER 7 SELL MILK 1
 [exec] d=16 h=0 farmer PASS market-hour
-[exec] d=16 h=1 market HIRE HIRE SELL MELON 1 SELL MILK 1 SELL STRAWBERRY 1
+[exec] d=16 h=1 market HIRE HIRE SELL MILK 1
 [exec] d=16 h=1 farmer PICKUP WHEAT 2 farmer wheat
 [exec] d=16 h=1 hand0 WEST
 [exec] d=16 h=1 hand1 NORTH
-[exec] d=16 h=2 market SELL MELON 1 SELL MILK 1
-[exec] d=16 h=2 farmer FEED farmer t1
+[exec] d=16 h=2 market SELL MILK 1
+[exec] d=16 h=2 farmer PICKUP SHEEP 1 animal
 [exec] d=16 h=2 hand0 PICKUP WHEAT 2
 [exec] d=16 h=2 hand1 PICKUP WHEAT 2
 [exec] d=16 h=2 hand2 WEST
 [exec] d=16 h=2 hand3 NORTH
-[exec] d=16 h=3 market SELL MELON 1 SELL MILK 1
-[exec] d=16 h=3 farmer PICKUP WHEAT 1 wheat
+[exec] d=16 h=3 farmer FEED farmer t1
 [exec] d=16 h=3 hand0 WEST
 [exec] d=16 h=3 hand1 WEST
 [exec] d=16 h=3 hand2 PICKUP WHEAT 1
-[exec] d=16 h=3 hand3 PICKUP WHEAT 2
-[exec] d=16 h=4 market SELL MELON 1 SELL MILK 1
-[exec] d=16 h=4 farmer CARE farmer t1
+[exec] d=16 h=3 hand3 PICKUP WHEAT 1
+[exec] d=16 h=4 farmer PICKUP WHEAT 1 wheat
 [exec] d=16 h=4 hand0 WEST
 [exec] d=16 h=4 hand1 WEST
 [exec] d=16 h=4 hand2 WEST
 [exec] d=16 h=4 hand3 WEST
-[exec] d=16 h=5 market SELL MELON 1 SELL MILK 1
-[exec] d=16 h=5 farmer COLLECT_FERTILIZER farmer t1
+[exec] d=16 h=5 market SELL WHEAT 3
+[exec] d=16 h=5 farmer CARE farmer t1
 [exec] d=16 h=5 hand0 WEST
 [exec] d=16 h=5 hand1 WEST
 [exec] d=16 h=5 hand2 WEST
 [exec] d=16 h=5 hand3 FEED
-[exec] d=16 h=6 market BUY_PRODUCT WHEAT 1 SELL MELON 1 SELL MILK 1
-[exec] d=16 h=6 farmer NORTH farmer next
+[exec] d=16 h=6 farmer COLLECT_FERTILIZER farmer t1
 [exec] d=16 h=6 hand0 WEST
 [exec] d=16 h=6 hand1 FEED
 [exec] d=16 h=6 hand2 FEED
 [exec] d=16 h=6 hand3 CARE
-[exec] d=16 h=7 market BUY_PRODUCT WHEAT 2 SELL MELON 1 SELL MILK 1
-[exec] d=16 h=7 farmer WATER farmer t2
+[exec] d=16 h=7 farmer NORTH farmer next
 [exec] d=16 h=7 hand0 FEED
 [exec] d=16 h=7 hand1 CARE
 [exec] d=16 h=7 hand2 CARE
 [exec] d=16 h=7 hand3 HARVEST
-[exec] d=16 h=8 market BUY_PRODUCT WHEAT 1 SELL MELON 1 SELL MILK 1
-[exec] d=16 h=8 farmer NORTH farmer next
+[exec] d=16 h=8 farmer BUILD_PASTURE farmer t2
 [exec] d=16 h=8 hand0 CARE
 [exec] d=16 h=8 hand1 HARVEST
 [exec] d=16 h=8 hand2 HARVEST
 [exec] d=16 h=8 hand3 COLLECT_FERTILIZER
-[exec] d=16 h=9 market SELL MELON 1
-[exec] d=16 h=9 farmer WATER farmer t3
+[exec] d=16 h=9 farmer PLACE SHEEP farmer t2
 [exec] d=16 h=9 hand0 COLLECT_FERTILIZER
 [exec] d=16 h=9 hand1 COLLECT_FERTILIZER
 [exec] d=16 h=9 hand2 COLLECT_FERTILIZER
 [exec] d=16 h=9 hand3 NORTH
-[exec] d=16 h=10 market SELL MELON 1
-[exec] d=16 h=10 farmer NORTH farmer next
+[exec] d=16 h=10 farmer FEED farmer t2
 [exec] d=16 h=10 hand0 NORTH
 [exec] d=16 h=10 hand1 NORTH
 [exec] d=16 h=10 hand2 NORTH
 [exec] d=16 h=10 hand3 WATER
-[exec] d=16 h=11 market SELL MELON 1
-[exec] d=16 h=11 farmer FEED farmer t4
-[exec] d=16 h=11 hand0 FEED
+[exec] d=16 h=11 farmer CARE farmer t2
+[exec] d=16 h=11 hand0 WATER
 [exec] d=16 h=11 hand1 WATER
 [exec] d=16 h=11 hand2 WATER
 [exec] d=16 h=11 hand3 NORTH
-[exec] d=16 h=12 market BUY_PRODUCT WHEAT 2
-[exec] d=16 h=12 farmer CARE farmer t4
-[exec] d=16 h=12 hand0 CARE
-[exec] d=16 h=12 hand1 HARVEST
-[exec] d=16 h=12 hand2 NORTH
-[exec] d=16 h=12 hand3 FEED
-[exec] d=16 h=13 market BUY_PRODUCT WHEAT 1
-[exec] d=16 h=13 farmer COLLECT_FERTILIZER farmer t4
-[exec] d=16 h=13 hand0 COLLECT_FERTILIZER
-[exec] d=16 h=13 hand1 NORTH
-[exec] d=16 h=13 hand2 WATER
-[exec] d=16 h=13 hand3 COLLECT_FERTILIZER
+[exec] d=16 h=12 farmer NORTH farmer next
+[exec] d=16 h=12 hand0 NORTH
+[exec] d=16 h=12 hand1 NORTH
+[exec] d=16 h=12 hand2 FERTILIZE
+[exec] d=16 h=12 hand3 WATER
+[exec] d=16 h=13 farmer WATER farmer t3
+[exec] d=16 h=13 hand0 FEED
+[exec] d=16 h=13 hand1 FEED
+[exec] d=16 h=13 hand2 NORTH
+[exec] d=16 h=13 hand3 NORTH
 [exec] d=16 h=14 farmer NORTH farmer next
-[exec] d=16 h=14 hand0 NORTH
-[exec] d=16 h=14 hand1 WATER
-[exec] d=16 h=14 hand2 NORTH
-[exec] d=16 h=14 hand3 NORTH
-[exec] d=16 h=15 farmer WATER farmer t5
-[exec] d=16 h=15 hand0 WATER
-[exec] d=16 h=15 hand1 FERTILIZE
-[exec] d=16 h=15 hand2 WATER
-[exec] d=16 h=15 hand3 NORTH
-[exec] d=16 h=16 farmer PASS farmer tile-done
-[exec] d=16 h=16 hand0 NORTH
+[exec] d=16 h=14 hand0 CARE
+[exec] d=16 h=14 hand1 CARE
+[exec] d=16 h=14 hand2 WATER
+[exec] d=16 h=14 hand3 PLANT WHEAT
+[exec] d=16 h=15 farmer NORTH farmer next
+[exec] d=16 h=15 hand0 HARVEST
+[exec] d=16 h=15 hand1 COLLECT_FERTILIZER
+[exec] d=16 h=15 hand2 NORTH
+[exec] d=16 h=15 hand3 WATER
+[exec] d=16 h=16 farmer WATER farmer t5
+[exec] d=16 h=16 hand0 COLLECT_FERTILIZER
 [exec] d=16 h=16 hand1 NORTH
-[exec] d=16 h=16 hand2 NORTH
-[exec] d=16 h=16 hand3 WATER
-[exec] d=16 h=17 farmer PASS farmer done
-[exec] d=16 h=17 hand0 WATER
+[exec] d=16 h=16 hand2 WATER
+[exec] d=16 h=16 hand3 NORTH
+[exec] d=16 h=17 farmer PASS farmer tile-done
+[exec] d=16 h=17 hand0 NORTH
 [exec] d=16 h=17 hand1 WATER
-[exec] d=16 h=17 hand2 PLANT WHEAT
-[exec] d=16 h=17 hand3 FERTILIZE
+[exec] d=16 h=17 hand2 HARVEST
+[exec] d=16 h=17 hand3 WATER
 [exec] d=16 h=18 farmer PASS farmer done
-[exec] d=16 h=18 hand0 NORTH
+[exec] d=16 h=18 hand0 WATER
 [exec] d=16 h=18 hand1 NORTH
-[exec] d=16 h=18 hand2 WATER
+[exec] d=16 h=18 hand2 NORTH
 [exec] d=16 h=18 hand3 PASS
 [exec] d=16 h=19 farmer PASS farmer done
-[exec] d=16 h=19 hand0 WATER
-[exec] d=16 h=19 hand1 FEED
-[exec] d=16 h=19 hand2 PASS
+[exec] d=16 h=19 hand0 NORTH
+[exec] d=16 h=19 hand1 WATER
+[exec] d=16 h=19 hand2 WATER
 [exec] d=16 h=19 hand3 PASS
-[exec] d=16 h=20 market BUY_PRODUCT WHEAT 1
 [exec] d=16 h=20 farmer PASS farmer done
-[exec] d=16 h=20 hand0 PASS
-[exec] d=16 h=20 hand1 CARE
+[exec] d=16 h=20 hand0 WATER
+[exec] d=16 h=20 hand1 PASS
 [exec] d=16 h=20 hand2 PASS
 [exec] d=16 h=20 hand3 PASS
 [exec] d=16 h=21 farmer PASS farmer done
 [exec] d=16 h=21 hand0 PASS
-[exec] d=16 h=21 hand1 COLLECT_FERTILIZER
+[exec] d=16 h=21 hand1 PASS
 [exec] d=16 h=21 hand2 PASS
 [exec] d=16 h=21 hand3 PASS
 [exec] d=16 h=22 farmer PASS farmer done
@@ -2136,259 +2110,268 @@
 [exec] d=16 h=23 hand1 PASS
 [exec] d=16 h=23 hand2 PASS
 [exec] d=16 h=23 hand3 PASS
-[sell_dp] d=17 ms=20 quota=MELON=0 STRAWBERRY=2 MILK=0 WOOL=0 inv_melon=9982
-[snap] d=17 h=0 money=23553 farmer_empty=0 hire1_empty=0 hire2_empty=0 hire3_empty=0 hire4_empty=1 shops=5 demand_CARROT=0 demand_EGG=2 demand_MELON=0 demand_MILK=2 demand_STRAWBERRY=2 demand_TOMATO=1 demand_WHEAT=3 demand_WOOL=2 CARROT=38 EGG=51 FERTILIZER=86 MELON=276 MILK=276 STRAWBERRY=219 TOMATO=73 WHEAT=39 WOOL=242
-[exec] d=17 h=0 market HIRE HIRE BUY_PRODUCT WHEAT 1 SELL EGG 6 SELL FERTILIZER 7 SELL STRAWBERRY 1
+[planner] wsp zone=hire3 OPTIMAL obj=1852 time=0.004s close0=21664 cons0=20698 open0=20710 empty=1 picks=2
+[planner] replan assign t19:WHEAT@0,WHEAT@8
+[planner] replan d=17 solver=zonewise_wsp shops=5 catalog=0 assign=1 locked=24
+[sell_dp] d=17 ms=28 quota=MELON=6 STRAWBERRY=0 MILK=3 WOOL=0 inv_melon=9970
+[snap] d=17 h=0 money=21112 farmer_empty=1 hire1_empty=0 hire2_empty=0 hire3_empty=1 hire4_empty=0 shops=5 demand_CARROT=2 demand_EGG=2 demand_MELON=0 demand_MILK=1 demand_STRAWBERRY=2 demand_TOMATO=0 demand_WHEAT=3 demand_WOOL=2 CARROT=40 EGG=54 FERTILIZER=88 MELON=280 MILK=244 STRAWBERRY=214 TOMATO=65 WHEAT=39 WOOL=239
+[exec] d=17 h=0 market HIRE HIRE BUY_PRODUCT WHEAT 2 BUY_SEED WHEAT 1 BUY_ANIMAL COW 1 BUY_PRODUCT WHEAT 1 SELL EGG 6 SELL FERTILIZER 6 SELL MELON 1 SELL MILK 1
 [exec] d=17 h=0 farmer PASS market-hour
-[exec] d=17 h=1 market HIRE HIRE SELL STRAWBERRY 1
-[exec] d=17 h=1 farmer PICKUP WHEAT 2 farmer wheat
+[exec] d=17 h=1 market HIRE HIRE SELL MELON 1 SELL MILK 1
+[exec] d=17 h=1 farmer PICKUP WHEAT 3 farmer wheat
 [exec] d=17 h=1 hand0 WEST
 [exec] d=17 h=1 hand1 NORTH
-[exec] d=17 h=2 farmer FEED farmer t1
+[exec] d=17 h=2 market SELL MELON 1 SELL MILK 1
+[exec] d=17 h=2 farmer PICKUP COW 1 animal
 [exec] d=17 h=2 hand0 PICKUP WHEAT 2
 [exec] d=17 h=2 hand1 PICKUP WHEAT 2
 [exec] d=17 h=2 hand2 WEST
 [exec] d=17 h=2 hand3 NORTH
-[exec] d=17 h=3 farmer PICKUP WHEAT 1 wheat
+[exec] d=17 h=3 market SELL MELON 1
+[exec] d=17 h=3 farmer FEED farmer t1
 [exec] d=17 h=3 hand0 WEST
 [exec] d=17 h=3 hand1 WEST
 [exec] d=17 h=3 hand2 PICKUP WHEAT 1
-[exec] d=17 h=3 hand3 PICKUP WHEAT 2
-[exec] d=17 h=4 farmer CARE farmer t1
+[exec] d=17 h=3 hand3 PICKUP WHEAT 1
+[exec] d=17 h=4 market SELL MELON 1
+[exec] d=17 h=4 farmer PICKUP WHEAT 1 wheat
 [exec] d=17 h=4 hand0 WEST
 [exec] d=17 h=4 hand1 WEST
 [exec] d=17 h=4 hand2 WEST
 [exec] d=17 h=4 hand3 WEST
-[exec] d=17 h=5 farmer HARVEST farmer t1
+[exec] d=17 h=5 market SELL MELON 1
+[exec] d=17 h=5 farmer CARE farmer t1
 [exec] d=17 h=5 hand0 WEST
 [exec] d=17 h=5 hand1 WEST
 [exec] d=17 h=5 hand2 WEST
 [exec] d=17 h=5 hand3 FEED
-[exec] d=17 h=6 market BUY_PRODUCT WHEAT 1
-[exec] d=17 h=6 farmer COLLECT_FERTILIZER farmer t1
+[exec] d=17 h=6 farmer HARVEST farmer t1
 [exec] d=17 h=6 hand0 WEST
 [exec] d=17 h=6 hand1 FEED
 [exec] d=17 h=6 hand2 FEED
 [exec] d=17 h=6 hand3 CARE
 [exec] d=17 h=7 market BUY_PRODUCT WHEAT 2
-[exec] d=17 h=7 farmer NORTH farmer next
+[exec] d=17 h=7 farmer COLLECT_FERTILIZER farmer t1
 [exec] d=17 h=7 hand0 FEED
 [exec] d=17 h=7 hand1 CARE
 [exec] d=17 h=7 hand2 CARE
 [exec] d=17 h=7 hand3 HARVEST
 [exec] d=17 h=8 market BUY_PRODUCT WHEAT 1
-[exec] d=17 h=8 farmer WATER farmer t2
+[exec] d=17 h=8 farmer NORTH farmer next
 [exec] d=17 h=8 hand0 CARE
 [exec] d=17 h=8 hand1 HARVEST
 [exec] d=17 h=8 hand2 HARVEST
 [exec] d=17 h=8 hand3 COLLECT_FERTILIZER
-[exec] d=17 h=9 farmer NORTH farmer next
+[exec] d=17 h=9 farmer FEED farmer t2
 [exec] d=17 h=9 hand0 HARVEST
 [exec] d=17 h=9 hand1 COLLECT_FERTILIZER
 [exec] d=17 h=9 hand2 COLLECT_FERTILIZER
 [exec] d=17 h=9 hand3 NORTH
-[exec] d=17 h=10 farmer WATER farmer t3
+[exec] d=17 h=10 market BUY_PRODUCT WHEAT 1
+[exec] d=17 h=10 farmer CARE farmer t2
 [exec] d=17 h=10 hand0 COLLECT_FERTILIZER
 [exec] d=17 h=10 hand1 NORTH
 [exec] d=17 h=10 hand2 NORTH
 [exec] d=17 h=10 hand3 WATER
-[exec] d=17 h=11 farmer NORTH farmer next
+[exec] d=17 h=11 farmer COLLECT_FERTILIZER farmer t2
 [exec] d=17 h=11 hand0 NORTH
 [exec] d=17 h=11 hand1 WATER
 [exec] d=17 h=11 hand2 WATER
 [exec] d=17 h=11 hand3 FERTILIZE
-[exec] d=17 h=12 farmer FEED farmer t4
-[exec] d=17 h=12 hand0 FEED
-[exec] d=17 h=12 hand1 FERTILIZE
+[exec] d=17 h=12 farmer NORTH farmer next
+[exec] d=17 h=12 hand0 WATER
+[exec] d=17 h=12 hand1 NORTH
 [exec] d=17 h=12 hand2 HARVEST
 [exec] d=17 h=12 hand3 NORTH
-[exec] d=17 h=13 market BUY_PRODUCT WHEAT 2
-[exec] d=17 h=13 farmer CARE farmer t4
-[exec] d=17 h=13 hand0 CARE
-[exec] d=17 h=13 hand1 NORTH
+[exec] d=17 h=13 farmer WATER farmer t3
+[exec] d=17 h=13 hand0 HARVEST
+[exec] d=17 h=13 hand1 FEED
 [exec] d=17 h=13 hand2 NORTH
-[exec] d=17 h=13 hand3 FEED
+[exec] d=17 h=13 hand3 WATER
 [exec] d=17 h=14 market BUY_PRODUCT WHEAT 1
-[exec] d=17 h=14 farmer HARVEST farmer t4
-[exec] d=17 h=14 hand0 HARVEST
-[exec] d=17 h=14 hand1 WATER
+[exec] d=17 h=14 farmer NORTH farmer next
+[exec] d=17 h=14 hand0 NORTH
+[exec] d=17 h=14 hand1 CARE
 [exec] d=17 h=14 hand2 WATER
-[exec] d=17 h=14 hand3 COLLECT_FERTILIZER
-[exec] d=17 h=15 farmer COLLECT_FERTILIZER farmer t4
-[exec] d=17 h=15 hand0 COLLECT_FERTILIZER
-[exec] d=17 h=15 hand1 HARVEST
-[exec] d=17 h=15 hand2 NORTH
-[exec] d=17 h=15 hand3 NORTH
-[exec] d=17 h=16 farmer NORTH farmer next
-[exec] d=17 h=16 hand0 NORTH
+[exec] d=17 h=14 hand3 NORTH
+[exec] d=17 h=15 farmer BUILD_PASTURE farmer t4
+[exec] d=17 h=15 hand0 FEED
+[exec] d=17 h=15 hand1 COLLECT_FERTILIZER
+[exec] d=17 h=15 hand2 FERTILIZE
+[exec] d=17 h=15 hand3 WATER
+[exec] d=17 h=16 market BUY_PRODUCT WHEAT 1
+[exec] d=17 h=16 farmer PLACE COW farmer t4
+[exec] d=17 h=16 hand0 CARE
 [exec] d=17 h=16 hand1 NORTH
-[exec] d=17 h=16 hand2 WATER
+[exec] d=17 h=16 hand2 NORTH
 [exec] d=17 h=16 hand3 NORTH
-[exec] d=17 h=17 farmer WATER farmer t5
-[exec] d=17 h=17 hand0 WATER
+[exec] d=17 h=17 farmer FEED farmer t4
+[exec] d=17 h=17 hand0 COLLECT_FERTILIZER
 [exec] d=17 h=17 hand1 WATER
-[exec] d=17 h=17 hand2 NORTH
+[exec] d=17 h=17 hand2 PLANT WHEAT
 [exec] d=17 h=17 hand3 WATER
-[exec] d=17 h=18 farmer PASS farmer tile-done
-[exec] d=17 h=18 hand0 FERTILIZE
+[exec] d=17 h=18 market BUY_PRODUCT WHEAT 1
+[exec] d=17 h=18 farmer CARE farmer t4
+[exec] d=17 h=18 hand0 NORTH
 [exec] d=17 h=18 hand1 HARVEST
 [exec] d=17 h=18 hand2 WATER
-[exec] d=17 h=18 hand3 PASS
-[exec] d=17 h=19 farmer PASS farmer done
-[exec] d=17 h=19 hand0 NORTH
+[exec] d=17 h=18 hand3 HARVEST
+[exec] d=17 h=19 farmer NORTH farmer next
+[exec] d=17 h=19 hand0 WATER
 [exec] d=17 h=19 hand1 NORTH
-[exec] d=17 h=19 hand2 PASS
+[exec] d=17 h=19 hand2 NORTH
 [exec] d=17 h=19 hand3 PASS
-[exec] d=17 h=20 farmer PASS farmer done
-[exec] d=17 h=20 hand0 WATER
-[exec] d=17 h=20 hand1 FEED
-[exec] d=17 h=20 hand2 PASS
+[exec] d=17 h=20 farmer WATER farmer t5
+[exec] d=17 h=20 hand0 NORTH
+[exec] d=17 h=20 hand1 WATER
+[exec] d=17 h=20 hand2 WATER
 [exec] d=17 h=20 hand3 PASS
-[exec] d=17 h=21 market BUY_PRODUCT WHEAT 1
-[exec] d=17 h=21 farmer PASS farmer done
-[exec] d=17 h=21 hand0 NORTH
-[exec] d=17 h=21 hand1 CARE
+[exec] d=17 h=21 farmer PASS farmer tile-done
+[exec] d=17 h=21 hand0 WATER
+[exec] d=17 h=21 hand1 PASS
 [exec] d=17 h=21 hand2 PASS
 [exec] d=17 h=21 hand3 PASS
 [exec] d=17 h=22 farmer PASS farmer done
-[exec] d=17 h=22 hand0 WATER
-[exec] d=17 h=22 hand1 HARVEST
+[exec] d=17 h=22 hand0 PASS
+[exec] d=17 h=22 hand1 PASS
 [exec] d=17 h=22 hand2 PASS
 [exec] d=17 h=22 hand3 PASS
 [exec] d=17 h=23 farmer PASS farmer done
-[exec] d=17 h=23 hand0 FERTILIZE
-[exec] d=17 h=23 hand1 COLLECT_FERTILIZER
+[exec] d=17 h=23 hand0 PASS
+[exec] d=17 h=23 hand1 PASS
 [exec] d=17 h=23 hand2 PASS
 [exec] d=17 h=23 hand3 PASS
-[planner] wsp zone=hire3 OPTIMAL obj=2380 time=0.004s bank=24532 empty=1 picks=2
-[planner] replan assign t17:WHEAT@0,WHEAT@7
-[planner] replan d=18 solver=zonewise_wsp shops=6 catalog=0 assign=1 locked=24
-[sell_dp] d=18 ms=20 quota=MELON=6 STRAWBERRY=4 MILK=18 WOOL=4 clamped=MELON=6(from 5) MILK=18(from 11) inv_melon=9978
-[snap] d=18 h=0 money=24532 farmer_empty=0 hire1_empty=0 hire2_empty=0 hire3_empty=1 hire4_empty=1 shops=6 demand_CARROT=0 demand_EGG=2 demand_MELON=0 demand_MILK=3 demand_STRAWBERRY=3 demand_TOMATO=1 demand_WHEAT=4 demand_WOOL=2 CARROT=39 EGG=52 FERTILIZER=84 MELON=277 MILK=281 STRAWBERRY=224 TOMATO=74 WHEAT=40 WOOL=243
-[exec] d=18 h=0 market HIRE HIRE BUY_PRODUCT WHEAT 1 BUY_SEED WHEAT 1 SELL EGG 6 SELL FERTILIZER 5 SELL MELON 1 SELL MILK 1 SELL STRAWBERRY 1 SELL WOOL 1
+[planner] wsp zone=hire1 OPTIMAL obj=2380 time=0.004s close0=25775 cons0=23552 open0=23563 empty=1 picks=2
+[planner] wsp zone=hire2 OPTIMAL obj=2380 time=0.003s close0=23871 cons0=23541 open0=23552 empty=1 picks=2
+[planner] wsp zone=hire4 OPTIMAL obj=2380 time=0.003s close0=23856 cons0=23526 open0=23539 empty=1 picks=2
+[planner] replan assign t7:WHEAT@0,WHEAT@7, t14:WHEAT@0,WHEAT@7, t25:WHEAT@0,WHEAT@7
+[planner] replan d=18 solver=zonewise_wsp shops=6 catalog=0 assign=3 locked=22
+[sell_dp] d=18 ms=23 quota=MELON=18 STRAWBERRY=2 MILK=3 WOOL=4 clamped=MELON=18(from 11) inv_melon=9972
+[snap] d=18 h=0 money=23563 farmer_empty=0 hire1_empty=1 hire2_empty=1 hire3_empty=0 hire4_empty=1 shops=6 demand_CARROT=2 demand_EGG=2 demand_MELON=0 demand_MILK=2 demand_STRAWBERRY=2 demand_TOMATO=1 demand_WHEAT=4 demand_WOOL=2 CARROT=41 EGG=55 FERTILIZER=87 MELON=280 MILK=247 STRAWBERRY=220 TOMATO=66 WHEAT=40 WOOL=241
+[exec] d=18 h=0 market HIRE HIRE BUY_PRODUCT WHEAT 1 BUY_SEED WHEAT 3 SELL EGG 6 SELL FERTILIZER 6 SELL MELON 1 SELL MILK 1 SELL STRAWBERRY 1 SELL WOOL 1
 [exec] d=18 h=0 farmer PASS market-hour
 [exec] d=18 h=1 market HIRE HIRE SELL MELON 1 SELL MILK 1 SELL STRAWBERRY 1 SELL WOOL 1
-[exec] d=18 h=1 farmer PICKUP WHEAT 2 farmer wheat
+[exec] d=18 h=1 farmer PICKUP WHEAT 3 farmer wheat
 [exec] d=18 h=1 hand0 WEST
 [exec] d=18 h=1 hand1 NORTH
-[exec] d=18 h=2 market SELL MELON 1 SELL MILK 1 SELL STRAWBERRY 1 SELL WOOL 1
+[exec] d=18 h=2 market SELL MELON 1 SELL MILK 1 SELL WOOL 1
 [exec] d=18 h=2 farmer FEED farmer t1
 [exec] d=18 h=2 hand0 PICKUP WHEAT 2
 [exec] d=18 h=2 hand1 PICKUP WHEAT 2
 [exec] d=18 h=2 hand2 WEST
 [exec] d=18 h=2 hand3 NORTH
-[exec] d=18 h=3 market SELL MELON 1 SELL MILK 1 SELL STRAWBERRY 1 SELL WOOL 1
+[exec] d=18 h=3 market SELL MELON 1 SELL WOOL 1
 [exec] d=18 h=3 farmer PICKUP WHEAT 1 wheat
 [exec] d=18 h=3 hand0 WEST
 [exec] d=18 h=3 hand1 WEST
 [exec] d=18 h=3 hand2 PICKUP WHEAT 1
-[exec] d=18 h=3 hand3 PICKUP WHEAT 2
-[exec] d=18 h=4 market SELL MELON 1 SELL MILK 1
+[exec] d=18 h=3 hand3 PICKUP WHEAT 1
+[exec] d=18 h=4 market SELL MELON 1
 [exec] d=18 h=4 farmer CARE farmer t1
 [exec] d=18 h=4 hand0 WEST
 [exec] d=18 h=4 hand1 WEST
 [exec] d=18 h=4 hand2 WEST
 [exec] d=18 h=4 hand3 WEST
-[exec] d=18 h=5 market SELL MELON 1 SELL MILK 1
+[exec] d=18 h=5 market SELL MELON 1
 [exec] d=18 h=5 farmer COLLECT_FERTILIZER farmer t1
 [exec] d=18 h=5 hand0 WEST
 [exec] d=18 h=5 hand1 WEST
 [exec] d=18 h=5 hand2 WEST
 [exec] d=18 h=5 hand3 FEED
-[exec] d=18 h=6 market BUY_PRODUCT WHEAT 1 SELL MILK 1
+[exec] d=18 h=6 market BUY_PRODUCT WHEAT 1 SELL MELON 1
 [exec] d=18 h=6 farmer NORTH farmer next
 [exec] d=18 h=6 hand0 WEST
 [exec] d=18 h=6 hand1 FEED
 [exec] d=18 h=6 hand2 FEED
 [exec] d=18 h=6 hand3 CARE
-[exec] d=18 h=7 market BUY_PRODUCT WHEAT 2 SELL MILK 1
-[exec] d=18 h=7 farmer WATER farmer t2
+[exec] d=18 h=7 market BUY_PRODUCT WHEAT 2 SELL MELON 1
+[exec] d=18 h=7 farmer FEED farmer t2
 [exec] d=18 h=7 hand0 FEED
 [exec] d=18 h=7 hand1 CARE
 [exec] d=18 h=7 hand2 CARE
 [exec] d=18 h=7 hand3 HARVEST
-[exec] d=18 h=8 market BUY_PRODUCT WHEAT 1 SELL MILK 1
-[exec] d=18 h=8 farmer FERTILIZE farmer t2
+[exec] d=18 h=8 market BUY_PRODUCT WHEAT 2 SELL MELON 1
+[exec] d=18 h=8 farmer CARE farmer t2
 [exec] d=18 h=8 hand0 CARE
 [exec] d=18 h=8 hand1 HARVEST
 [exec] d=18 h=8 hand2 HARVEST
 [exec] d=18 h=8 hand3 COLLECT_FERTILIZER
-[exec] d=18 h=9 market SELL MILK 1
-[exec] d=18 h=9 farmer NORTH farmer next
+[exec] d=18 h=9 market SELL MELON 1
+[exec] d=18 h=9 farmer COLLECT_FERTILIZER farmer t2
 [exec] d=18 h=9 hand0 COLLECT_FERTILIZER
 [exec] d=18 h=9 hand1 COLLECT_FERTILIZER
 [exec] d=18 h=9 hand2 COLLECT_FERTILIZER
 [exec] d=18 h=9 hand3 NORTH
-[exec] d=18 h=10 market SELL MILK 1
-[exec] d=18 h=10 farmer WATER farmer t3
+[exec] d=18 h=10 market SELL MELON 1
+[exec] d=18 h=10 farmer NORTH farmer next
 [exec] d=18 h=10 hand0 NORTH
 [exec] d=18 h=10 hand1 NORTH
 [exec] d=18 h=10 hand2 NORTH
 [exec] d=18 h=10 hand3 WATER
-[exec] d=18 h=11 market SELL MILK 1
-[exec] d=18 h=11 farmer NORTH farmer next
-[exec] d=18 h=11 hand0 FEED
+[exec] d=18 h=11 market SELL MELON 1
+[exec] d=18 h=11 farmer WATER farmer t3
+[exec] d=18 h=11 hand0 PLANT WHEAT
 [exec] d=18 h=11 hand1 WATER
-[exec] d=18 h=11 hand2 PLANT WHEAT
-[exec] d=18 h=11 hand3 HARVEST
-[exec] d=18 h=12 market BUY_PRODUCT WHEAT 1 SELL MILK 1
-[exec] d=18 h=12 farmer FEED farmer t4
-[exec] d=18 h=12 hand0 CARE
-[exec] d=18 h=12 hand1 HARVEST
-[exec] d=18 h=12 hand2 WATER
-[exec] d=18 h=12 hand3 NORTH
-[exec] d=18 h=13 market BUY_PRODUCT WHEAT 1 SELL MILK 1
-[exec] d=18 h=13 farmer CARE farmer t4
-[exec] d=18 h=13 hand0 COLLECT_FERTILIZER
-[exec] d=18 h=13 hand1 NORTH
-[exec] d=18 h=13 hand2 NORTH
-[exec] d=18 h=13 hand3 FEED
-[exec] d=18 h=14 market BUY_PRODUCT WHEAT 1 SELL MILK 1
-[exec] d=18 h=14 farmer COLLECT_FERTILIZER farmer t4
-[exec] d=18 h=14 hand0 NORTH
-[exec] d=18 h=14 hand1 WATER
-[exec] d=18 h=14 hand2 WATER
-[exec] d=18 h=14 hand3 COLLECT_FERTILIZER
-[exec] d=18 h=15 market SELL MILK 1
-[exec] d=18 h=15 farmer NORTH farmer next
-[exec] d=18 h=15 hand0 WATER
-[exec] d=18 h=15 hand1 NORTH
-[exec] d=18 h=15 hand2 HARVEST
-[exec] d=18 h=15 hand3 NORTH
-[exec] d=18 h=16 market SELL MILK 1
-[exec] d=18 h=16 farmer WATER farmer t5
+[exec] d=18 h=11 hand2 WATER
+[exec] d=18 h=11 hand3 NORTH
+[exec] d=18 h=12 market SELL MELON 1
+[exec] d=18 h=12 farmer NORTH farmer next
+[exec] d=18 h=12 hand0 WATER
+[exec] d=18 h=12 hand1 NORTH
+[exec] d=18 h=12 hand2 NORTH
+[exec] d=18 h=12 hand3 WATER
+[exec] d=18 h=13 market SELL MELON 1
+[exec] d=18 h=13 farmer FEED farmer t4
+[exec] d=18 h=13 hand0 NORTH
+[exec] d=18 h=13 hand1 FEED
+[exec] d=18 h=13 hand2 WATER
+[exec] d=18 h=13 hand3 NORTH
+[exec] d=18 h=14 market BUY_PRODUCT WHEAT 2 SELL MELON 1
+[exec] d=18 h=14 farmer CARE farmer t4
+[exec] d=18 h=14 hand0 FEED
+[exec] d=18 h=14 hand1 CARE
+[exec] d=18 h=14 hand2 HARVEST
+[exec] d=18 h=14 hand3 WATER
+[exec] d=18 h=15 market BUY_PRODUCT WHEAT 1 SELL MELON 1
+[exec] d=18 h=15 farmer COLLECT_FERTILIZER farmer t4
+[exec] d=18 h=15 hand0 CARE
+[exec] d=18 h=15 hand1 COLLECT_FERTILIZER
+[exec] d=18 h=15 hand2 NORTH
+[exec] d=18 h=15 hand3 FERTILIZE
+[exec] d=18 h=16 market SELL MELON 1
+[exec] d=18 h=16 farmer NORTH farmer next
 [exec] d=18 h=16 hand0 HARVEST
-[exec] d=18 h=16 hand1 WATER
-[exec] d=18 h=16 hand2 NORTH
+[exec] d=18 h=16 hand1 NORTH
+[exec] d=18 h=16 hand2 WATER
 [exec] d=18 h=16 hand3 NORTH
-[exec] d=18 h=17 market SELL MILK 1
-[exec] d=18 h=17 farmer PASS farmer tile-done
-[exec] d=18 h=17 hand0 NORTH
-[exec] d=18 h=17 hand1 FERTILIZE
-[exec] d=18 h=17 hand2 WATER
-[exec] d=18 h=17 hand3 WATER
-[exec] d=18 h=18 farmer PASS farmer done
-[exec] d=18 h=18 hand0 WATER
-[exec] d=18 h=18 hand1 NORTH
-[exec] d=18 h=18 hand2 HARVEST
-[exec] d=18 h=18 hand3 HARVEST
+[exec] d=18 h=17 market SELL MELON 1
+[exec] d=18 h=17 farmer WATER farmer t5
+[exec] d=18 h=17 hand0 COLLECT_FERTILIZER
+[exec] d=18 h=17 hand1 PLANT WHEAT
+[exec] d=18 h=17 hand2 NORTH
+[exec] d=18 h=17 hand3 PLANT WHEAT
+[exec] d=18 h=18 farmer PASS farmer tile-done
+[exec] d=18 h=18 hand0 NORTH
+[exec] d=18 h=18 hand1 WATER
+[exec] d=18 h=18 hand2 WATER
+[exec] d=18 h=18 hand3 WATER
 [exec] d=18 h=19 farmer PASS farmer done
-[exec] d=18 h=19 hand0 HARVEST
-[exec] d=18 h=19 hand1 FEED
-[exec] d=18 h=19 hand2 NORTH
+[exec] d=18 h=19 hand0 WATER
+[exec] d=18 h=19 hand1 NORTH
+[exec] d=18 h=19 hand2 FERTILIZE
 [exec] d=18 h=19 hand3 PASS
 [exec] d=18 h=20 farmer PASS farmer done
 [exec] d=18 h=20 hand0 NORTH
-[exec] d=18 h=20 hand1 CARE
-[exec] d=18 h=20 hand2 WATER
+[exec] d=18 h=20 hand1 WATER
+[exec] d=18 h=20 hand2 PASS
 [exec] d=18 h=20 hand3 PASS
 [exec] d=18 h=21 farmer PASS farmer done
 [exec] d=18 h=21 hand0 WATER
-[exec] d=18 h=21 hand1 COLLECT_FERTILIZER
-[exec] d=18 h=21 hand2 FERTILIZE
+[exec] d=18 h=21 hand1 PASS
+[exec] d=18 h=21 hand2 PASS
 [exec] d=18 h=21 hand3 PASS
 [exec] d=18 h=22 farmer PASS farmer done
-[exec] d=18 h=22 hand0 HARVEST
+[exec] d=18 h=22 hand0 PASS
 [exec] d=18 h=22 hand1 PASS
 [exec] d=18 h=22 hand2 PASS
 [exec] d=18 h=22 hand3 PASS
@@ -2397,138 +2380,121 @@
 [exec] d=18 h=23 hand1 PASS
 [exec] d=18 h=23 hand2 PASS
 [exec] d=18 h=23 hand3 PASS
-[planner] wsp zone=hire1 OPTIMAL obj=2440 time=0.004s bank=33511 empty=1 picks=2
-[planner] wsp zone=hire3 FEASIBLE obj=2528 time=0.010s bank=33511 empty=2 picks=3
-[planner] wsp zone=hire4 OPTIMAL obj=-0 time=0.002s bank=33511 empty=1 picks=0
-[planner] replan assign t9:WHEAT@0,WHEAT@6, t18:MELON@0, t19:WHEAT@0,CARROT@7, t25:IDLE
-[planner] replan d=19 solver=zonewise_wsp shops=6 catalog=0 assign=3 locked=21
-[sell_dp] d=19 ms=14 quota=MELON=18 STRAWBERRY=8 MILK=0 WOOL=0 clamped=MELON=18(from 0) inv_melon=9980
-[snap] d=19 h=0 money=33511 farmer_empty=0 hire1_empty=1 hire2_empty=0 hire3_empty=2 hire4_empty=2 shops=6 demand_CARROT=0 demand_EGG=2 demand_MELON=0 demand_MILK=3 demand_STRAWBERRY=3 demand_TOMATO=1 demand_WHEAT=4 demand_WOOL=2 CARROT=39 EGG=52 FERTILIZER=83 MELON=277 MILK=282 STRAWBERRY=230 TOMATO=75 WHEAT=41 WOOL=244
-[exec] d=19 h=0 market HIRE HIRE BUY_SEED WHEAT 3 BUY_SEED MELON 1 SELL EGG 6 SELL FERTILIZER 6 SELL MELON 1 SELL STRAWBERRY 1
+[sell_dp] d=19 ms=14 quota=MELON=0 STRAWBERRY=2 MILK=3 WOOL=0 inv_melon=9986
+[snap] d=19 h=0 money=31151 farmer_empty=0 hire1_empty=0 hire2_empty=0 hire3_empty=0 hire4_empty=0 shops=6 demand_CARROT=2 demand_EGG=2 demand_MELON=0 demand_MILK=2 demand_STRAWBERRY=2 demand_TOMATO=1 demand_WHEAT=4 demand_WOOL=2 CARROT=41 EGG=55 FERTILIZER=86 MELON=274 MILK=252 STRAWBERRY=225 TOMATO=67 WHEAT=41 WOOL=242
+[exec] d=19 h=0 market HIRE HIRE BUY_PRODUCT WHEAT 1 SELL EGG 6 SELL FERTILIZER 7 SELL MILK 1 SELL STRAWBERRY 1
 [exec] d=19 h=0 farmer PASS market-hour
-[exec] d=19 h=1 market HIRE HIRE SELL MELON 1 SELL STRAWBERRY 1
-[exec] d=19 h=1 farmer PICKUP WHEAT 2 farmer wheat
+[exec] d=19 h=1 market HIRE HIRE SELL MILK 1 SELL STRAWBERRY 1
+[exec] d=19 h=1 farmer PICKUP WHEAT 3 farmer wheat
 [exec] d=19 h=1 hand0 WEST
 [exec] d=19 h=1 hand1 NORTH
-[exec] d=19 h=2 market SELL MELON 1 SELL STRAWBERRY 1
+[exec] d=19 h=2 market SELL MILK 1
 [exec] d=19 h=2 farmer FEED farmer t1
 [exec] d=19 h=2 hand0 PICKUP WHEAT 2
 [exec] d=19 h=2 hand1 PICKUP WHEAT 2
 [exec] d=19 h=2 hand2 WEST
 [exec] d=19 h=2 hand3 NORTH
-[exec] d=19 h=3 market SELL MELON 1 SELL STRAWBERRY 1
 [exec] d=19 h=3 farmer PICKUP WHEAT 1 wheat
 [exec] d=19 h=3 hand0 WEST
 [exec] d=19 h=3 hand1 WEST
 [exec] d=19 h=3 hand2 PICKUP WHEAT 1
-[exec] d=19 h=3 hand3 PICKUP WHEAT 2
-[exec] d=19 h=4 market SELL MELON 1 SELL STRAWBERRY 1
+[exec] d=19 h=3 hand3 PICKUP WHEAT 1
 [exec] d=19 h=4 farmer CARE farmer t1
 [exec] d=19 h=4 hand0 WEST
 [exec] d=19 h=4 hand1 WEST
 [exec] d=19 h=4 hand2 WEST
 [exec] d=19 h=4 hand3 WEST
-[exec] d=19 h=5 market SELL MELON 1 SELL STRAWBERRY 1
-[exec] d=19 h=5 farmer HARVEST farmer t1
+[exec] d=19 h=5 farmer COLLECT_FERTILIZER farmer t1
 [exec] d=19 h=5 hand0 WEST
 [exec] d=19 h=5 hand1 WEST
 [exec] d=19 h=5 hand2 WEST
 [exec] d=19 h=5 hand3 FEED
-[exec] d=19 h=6 market SELL MELON 1 SELL STRAWBERRY 1
-[exec] d=19 h=6 farmer COLLECT_FERTILIZER farmer t1
+[exec] d=19 h=6 market BUY_PRODUCT WHEAT 1
+[exec] d=19 h=6 farmer NORTH farmer next
 [exec] d=19 h=6 hand0 WEST
 [exec] d=19 h=6 hand1 FEED
 [exec] d=19 h=6 hand2 FEED
 [exec] d=19 h=6 hand3 CARE
-[exec] d=19 h=7 market SELL MELON 1 SELL STRAWBERRY 1
-[exec] d=19 h=7 farmer NORTH farmer next
+[exec] d=19 h=7 market BUY_PRODUCT WHEAT 2
+[exec] d=19 h=7 farmer FEED farmer t2
 [exec] d=19 h=7 hand0 FEED
 [exec] d=19 h=7 hand1 CARE
 [exec] d=19 h=7 hand2 CARE
 [exec] d=19 h=7 hand3 HARVEST
-[exec] d=19 h=8 market SELL MELON 1
-[exec] d=19 h=8 farmer WATER farmer t2
+[exec] d=19 h=8 market BUY_PRODUCT WHEAT 2
+[exec] d=19 h=8 farmer CARE farmer t2
 [exec] d=19 h=8 hand0 CARE
 [exec] d=19 h=8 hand1 HARVEST
 [exec] d=19 h=8 hand2 HARVEST
 [exec] d=19 h=8 hand3 COLLECT_FERTILIZER
-[exec] d=19 h=9 market SELL MELON 1
-[exec] d=19 h=9 farmer HARVEST farmer t2
+[exec] d=19 h=9 farmer COLLECT_FERTILIZER farmer t2
 [exec] d=19 h=9 hand0 HARVEST
 [exec] d=19 h=9 hand1 COLLECT_FERTILIZER
 [exec] d=19 h=9 hand2 COLLECT_FERTILIZER
 [exec] d=19 h=9 hand3 NORTH
-[exec] d=19 h=10 market SELL MELON 1
 [exec] d=19 h=10 farmer NORTH farmer next
 [exec] d=19 h=10 hand0 COLLECT_FERTILIZER
 [exec] d=19 h=10 hand1 NORTH
 [exec] d=19 h=10 hand2 NORTH
 [exec] d=19 h=10 hand3 WATER
-[exec] d=19 h=11 market SELL MELON 1
 [exec] d=19 h=11 farmer WATER farmer t3
 [exec] d=19 h=11 hand0 NORTH
 [exec] d=19 h=11 hand1 WATER
 [exec] d=19 h=11 hand2 WATER
-[exec] d=19 h=11 hand3 NORTH
-[exec] d=19 h=12 market SELL MELON 1
+[exec] d=19 h=11 hand3 HARVEST
 [exec] d=19 h=12 farmer NORTH farmer next
-[exec] d=19 h=12 hand0 FEED
-[exec] d=19 h=12 hand1 NORTH
-[exec] d=19 h=12 hand2 NORTH
-[exec] d=19 h=12 hand3 FEED
-[exec] d=19 h=13 market BUY_PRODUCT WHEAT 2 SELL MELON 1
+[exec] d=19 h=12 hand0 WATER
+[exec] d=19 h=12 hand1 FERTILIZE
+[exec] d=19 h=12 hand2 HARVEST
+[exec] d=19 h=12 hand3 NORTH
 [exec] d=19 h=13 farmer FEED farmer t4
-[exec] d=19 h=13 hand0 CARE
-[exec] d=19 h=13 hand1 WATER
-[exec] d=19 h=13 hand2 PLANT MELON
-[exec] d=19 h=13 hand3 COLLECT_FERTILIZER
-[exec] d=19 h=14 market BUY_PRODUCT WHEAT 1 SELL MELON 1
+[exec] d=19 h=13 hand0 NORTH
+[exec] d=19 h=13 hand1 NORTH
+[exec] d=19 h=13 hand2 NORTH
+[exec] d=19 h=13 hand3 WATER
 [exec] d=19 h=14 farmer CARE farmer t4
-[exec] d=19 h=14 hand0 HARVEST
-[exec] d=19 h=14 hand1 HARVEST
+[exec] d=19 h=14 hand0 FEED
+[exec] d=19 h=14 hand1 FEED
 [exec] d=19 h=14 hand2 WATER
 [exec] d=19 h=14 hand3 NORTH
-[exec] d=19 h=15 market SELL MELON 1
-[exec] d=19 h=15 farmer HARVEST farmer t4
-[exec] d=19 h=15 hand0 COLLECT_FERTILIZER
-[exec] d=19 h=15 hand1 NORTH
+[exec] d=19 h=15 market BUY_PRODUCT WHEAT 2
+[exec] d=19 h=15 farmer COLLECT_FERTILIZER farmer t4
+[exec] d=19 h=15 hand0 CARE
+[exec] d=19 h=15 hand1 CARE
 [exec] d=19 h=15 hand2 NORTH
-[exec] d=19 h=15 hand3 PLANT WHEAT
-[exec] d=19 h=16 market SELL MELON 1
-[exec] d=19 h=16 farmer COLLECT_FERTILIZER farmer t4
-[exec] d=19 h=16 hand0 NORTH
-[exec] d=19 h=16 hand1 WATER
-[exec] d=19 h=16 hand2 PLANT WHEAT
-[exec] d=19 h=16 hand3 WATER
-[exec] d=19 h=17 market SELL MELON 1
-[exec] d=19 h=17 farmer NORTH farmer next
-[exec] d=19 h=17 hand0 WATER
-[exec] d=19 h=17 hand1 HARVEST
-[exec] d=19 h=17 hand2 WATER
-[exec] d=19 h=17 hand3 NORTH
-[exec] d=19 h=18 farmer WATER farmer t5
-[exec] d=19 h=18 hand0 NORTH
+[exec] d=19 h=15 hand3 WATER
+[exec] d=19 h=16 farmer NORTH farmer next
+[exec] d=19 h=16 hand0 COLLECT_FERTILIZER
+[exec] d=19 h=16 hand1 HARVEST
+[exec] d=19 h=16 hand2 WATER
+[exec] d=19 h=16 hand3 NORTH
+[exec] d=19 h=17 farmer WATER farmer t5
+[exec] d=19 h=17 hand0 NORTH
+[exec] d=19 h=17 hand1 COLLECT_FERTILIZER
+[exec] d=19 h=17 hand2 FERTILIZE
+[exec] d=19 h=17 hand3 WATER
+[exec] d=19 h=18 farmer PASS farmer tile-done
+[exec] d=19 h=18 hand0 WATER
 [exec] d=19 h=18 hand1 NORTH
 [exec] d=19 h=18 hand2 NORTH
 [exec] d=19 h=18 hand3 PASS
-[exec] d=19 h=19 farmer PASS farmer tile-done
-[exec] d=19 h=19 hand0 PLANT WHEAT
-[exec] d=19 h=19 hand1 FEED
+[exec] d=19 h=19 farmer PASS farmer done
+[exec] d=19 h=19 hand0 NORTH
+[exec] d=19 h=19 hand1 WATER
 [exec] d=19 h=19 hand2 WATER
 [exec] d=19 h=19 hand3 PASS
-[exec] d=19 h=20 market BUY_PRODUCT WHEAT 1
 [exec] d=19 h=20 farmer PASS farmer done
 [exec] d=19 h=20 hand0 WATER
-[exec] d=19 h=20 hand1 CARE
-[exec] d=19 h=20 hand2 PASS
+[exec] d=19 h=20 hand1 NORTH
+[exec] d=19 h=20 hand2 HARVEST
 [exec] d=19 h=20 hand3 PASS
 [exec] d=19 h=21 farmer PASS farmer done
-[exec] d=19 h=21 hand0 NORTH
-[exec] d=19 h=21 hand1 COLLECT_FERTILIZER
+[exec] d=19 h=21 hand0 FERTILIZE
+[exec] d=19 h=21 hand1 WATER
 [exec] d=19 h=21 hand2 PASS
 [exec] d=19 h=21 hand3 PASS
 [exec] d=19 h=22 farmer PASS farmer done
-[exec] d=19 h=22 hand0 WATER
+[exec] d=19 h=22 hand0 PASS
 [exec] d=19 h=22 hand1 PASS
 [exec] d=19 h=22 hand2 PASS
 [exec] d=19 h=22 hand3 PASS
@@ -2537,15 +2503,15 @@
 [exec] d=19 h=23 hand1 PASS
 [exec] d=19 h=23 hand2 PASS
 [exec] d=19 h=23 hand3 PASS
-[planner] wsp zone=hire4 OPTIMAL obj=-0 time=0.002s bank=40799 empty=1 picks=0
-[planner] replan assign t25:IDLE
-[planner] replan d=20 solver=zonewise_wsp shops=6 catalog=0 assign=0 locked=24
-[sell_dp] d=20 ms=9 quota=MELON=0 STRAWBERRY=4 MILK=12 WOOL=0 clamped=MILK=12(from 8) inv_melon=9994
-[snap] d=20 h=0 money=40799 farmer_empty=0 hire1_empty=0 hire2_empty=0 hire3_empty=0 hire4_empty=1 shops=6 demand_CARROT=0 demand_EGG=2 demand_MELON=0 demand_MILK=3 demand_STRAWBERRY=3 demand_TOMATO=1 demand_WHEAT=4 demand_WOOL=2 CARROT=39 EGG=53 FERTILIZER=82 MELON=267 MILK=289 STRAWBERRY=235 TOMATO=76 WHEAT=42 WOOL=245
-[exec] d=20 h=0 market HIRE HIRE BUY_PRODUCT WHEAT 1 SELL EGG 6 SELL FERTILIZER 9 SELL TOMATO 2 SELL MILK 1 SELL STRAWBERRY 1
+[planner] wsp zone=hire4 OPTIMAL obj=2500 time=0.003s close0=34105 cons0=32929 open0=32942 empty=1 picks=2
+[planner] replan assign t22:WHEAT@0,WHEAT@5
+[planner] replan d=20 solver=zonewise_wsp shops=6 catalog=0 assign=1 locked=24
+[sell_dp] d=20 ms=13 quota=MELON=0 STRAWBERRY=4 MILK=9 WOOL=0 clamped=MILK=9(from 7) inv_melon=9982
+[snap] d=20 h=0 money=32946 farmer_empty=0 hire1_empty=0 hire2_empty=0 hire3_empty=0 hire4_empty=1 shops=6 demand_CARROT=2 demand_EGG=2 demand_MELON=0 demand_MILK=2 demand_STRAWBERRY=2 demand_TOMATO=1 demand_WHEAT=4 demand_WOOL=2 CARROT=41 EGG=56 FERTILIZER=84 MELON=276 MILK=258 STRAWBERRY=230 TOMATO=68 WHEAT=42 WOOL=243
+[exec] d=20 h=0 market HIRE HIRE BUY_SEED WHEAT 1 SELL EGG 6 SELL FERTILIZER 6 SELL MILK 1 SELL STRAWBERRY 1
 [exec] d=20 h=0 farmer PASS market-hour
 [exec] d=20 h=1 market HIRE HIRE SELL MILK 1 SELL STRAWBERRY 1
-[exec] d=20 h=1 farmer PICKUP WHEAT 2 farmer wheat
+[exec] d=20 h=1 farmer PICKUP WHEAT 3 farmer wheat
 [exec] d=20 h=1 hand0 WEST
 [exec] d=20 h=1 hand1 NORTH
 [exec] d=20 h=2 market SELL MILK 1 SELL STRAWBERRY 1
@@ -2559,7 +2525,7 @@
 [exec] d=20 h=3 hand0 WEST
 [exec] d=20 h=3 hand1 WEST
 [exec] d=20 h=3 hand2 PICKUP WHEAT 1
-[exec] d=20 h=3 hand3 PICKUP WHEAT 2
+[exec] d=20 h=3 hand3 PICKUP WHEAT 1
 [exec] d=20 h=4 market SELL MILK 1
 [exec] d=20 h=4 farmer CARE farmer t1
 [exec] d=20 h=4 hand0 WEST
@@ -2567,103 +2533,99 @@
 [exec] d=20 h=4 hand2 WEST
 [exec] d=20 h=4 hand3 WEST
 [exec] d=20 h=5 market SELL MILK 1
-[exec] d=20 h=5 farmer COLLECT_FERTILIZER farmer t1
+[exec] d=20 h=5 farmer HARVEST farmer t1
 [exec] d=20 h=5 hand0 WEST
 [exec] d=20 h=5 hand1 WEST
 [exec] d=20 h=5 hand2 WEST
 [exec] d=20 h=5 hand3 FEED
-[exec] d=20 h=6 market BUY_PRODUCT WHEAT 1 SELL MILK 1
-[exec] d=20 h=6 farmer NORTH farmer next
+[exec] d=20 h=6 market SELL MILK 1
+[exec] d=20 h=6 farmer COLLECT_FERTILIZER farmer t1
 [exec] d=20 h=6 hand0 WEST
 [exec] d=20 h=6 hand1 FEED
 [exec] d=20 h=6 hand2 FEED
 [exec] d=20 h=6 hand3 CARE
-[exec] d=20 h=7 market BUY_PRODUCT WHEAT 2 SELL MILK 1
-[exec] d=20 h=7 farmer WATER farmer t2
+[exec] d=20 h=7 market SELL MILK 1
+[exec] d=20 h=7 farmer NORTH farmer next
 [exec] d=20 h=7 hand0 FEED
 [exec] d=20 h=7 hand1 CARE
 [exec] d=20 h=7 hand2 CARE
 [exec] d=20 h=7 hand3 HARVEST
-[exec] d=20 h=8 market BUY_PRODUCT WHEAT 1 SELL MILK 1
-[exec] d=20 h=8 farmer HARVEST farmer t2
+[exec] d=20 h=8 market SELL MILK 1
+[exec] d=20 h=8 farmer FEED farmer t2
 [exec] d=20 h=8 hand0 CARE
 [exec] d=20 h=8 hand1 HARVEST
 [exec] d=20 h=8 hand2 HARVEST
 [exec] d=20 h=8 hand3 COLLECT_FERTILIZER
-[exec] d=20 h=9 market SELL MILK 1
-[exec] d=20 h=9 farmer NORTH farmer next
+[exec] d=20 h=9 market BUY_PRODUCT WHEAT 1
+[exec] d=20 h=9 farmer CARE farmer t2
 [exec] d=20 h=9 hand0 COLLECT_FERTILIZER
 [exec] d=20 h=9 hand1 COLLECT_FERTILIZER
 [exec] d=20 h=9 hand2 COLLECT_FERTILIZER
 [exec] d=20 h=9 hand3 NORTH
-[exec] d=20 h=10 market SELL MILK 1
-[exec] d=20 h=10 farmer WATER farmer t3
+[exec] d=20 h=10 farmer COLLECT_FERTILIZER farmer t2
 [exec] d=20 h=10 hand0 NORTH
 [exec] d=20 h=10 hand1 NORTH
 [exec] d=20 h=10 hand2 NORTH
-[exec] d=20 h=10 hand3 WATER
-[exec] d=20 h=11 market SELL MILK 1
+[exec] d=20 h=10 hand3 PLANT WHEAT
 [exec] d=20 h=11 farmer NORTH farmer next
-[exec] d=20 h=11 hand0 FEED
-[exec] d=20 h=11 hand1 HARVEST
+[exec] d=20 h=11 hand0 WATER
+[exec] d=20 h=11 hand1 WATER
 [exec] d=20 h=11 hand2 WATER
-[exec] d=20 h=11 hand3 HARVEST
-[exec] d=20 h=12 market BUY_PRODUCT WHEAT 1
-[exec] d=20 h=12 farmer FEED farmer t4
-[exec] d=20 h=12 hand0 CARE
-[exec] d=20 h=12 hand1 DIG
+[exec] d=20 h=11 hand3 WATER
+[exec] d=20 h=12 farmer WATER farmer t3
+[exec] d=20 h=12 hand0 FERTILIZE
+[exec] d=20 h=12 hand1 HARVEST
 [exec] d=20 h=12 hand2 FERTILIZE
 [exec] d=20 h=12 hand3 NORTH
-[exec] d=20 h=13 market BUY_SEED WHEAT 1 BUY_PRODUCT WHEAT 1
-[exec] d=20 h=13 farmer CARE farmer t4
-[exec] d=20 h=13 hand0 COLLECT_FERTILIZER
+[exec] d=20 h=13 farmer NORTH farmer next
+[exec] d=20 h=13 hand0 NORTH
 [exec] d=20 h=13 hand1 NORTH
 [exec] d=20 h=13 hand2 NORTH
-[exec] d=20 h=13 hand3 FEED
-[exec] d=20 h=14 market BUY_PRODUCT WHEAT 1
-[exec] d=20 h=14 farmer COLLECT_FERTILIZER farmer t4
-[exec] d=20 h=14 hand0 NORTH
-[exec] d=20 h=14 hand1 WATER
+[exec] d=20 h=13 hand3 WATER
+[exec] d=20 h=14 farmer FEED farmer t4
+[exec] d=20 h=14 hand0 FEED
+[exec] d=20 h=14 hand1 FEED
 [exec] d=20 h=14 hand2 WATER
-[exec] d=20 h=14 hand3 HARVEST
-[exec] d=20 h=15 farmer NORTH farmer next
-[exec] d=20 h=15 hand0 WATER
-[exec] d=20 h=15 hand1 FERTILIZE
-[exec] d=20 h=15 hand2 NORTH
-[exec] d=20 h=15 hand3 COLLECT_FERTILIZER
-[exec] d=20 h=16 farmer WATER farmer t5
+[exec] d=20 h=14 hand3 NORTH
+[exec] d=20 h=15 market BUY_PRODUCT WHEAT 3
+[exec] d=20 h=15 farmer CARE farmer t4
+[exec] d=20 h=15 hand0 CARE
+[exec] d=20 h=15 hand1 CARE
+[exec] d=20 h=15 hand2 HARVEST
+[exec] d=20 h=15 hand3 WATER
+[exec] d=20 h=16 farmer COLLECT_FERTILIZER farmer t4
 [exec] d=20 h=16 hand0 HARVEST
-[exec] d=20 h=16 hand1 NORTH
-[exec] d=20 h=16 hand2 WATER
-[exec] d=20 h=16 hand3 NORTH
-[exec] d=20 h=17 farmer PASS farmer tile-done
-[exec] d=20 h=17 hand0 NORTH
-[exec] d=20 h=17 hand1 WATER
-[exec] d=20 h=17 hand2 NORTH
-[exec] d=20 h=17 hand3 WATER
-[exec] d=20 h=18 farmer PASS farmer done
-[exec] d=20 h=18 hand0 WATER
-[exec] d=20 h=18 hand1 NORTH
-[exec] d=20 h=18 hand2 WATER
-[exec] d=20 h=18 hand3 NORTH
-[exec] d=20 h=19 farmer PASS farmer done
-[exec] d=20 h=19 hand0 NORTH
-[exec] d=20 h=19 hand1 FEED
-[exec] d=20 h=19 hand2 HARVEST
-[exec] d=20 h=19 hand3 PASS
+[exec] d=20 h=16 hand1 COLLECT_FERTILIZER
+[exec] d=20 h=16 hand2 NORTH
+[exec] d=20 h=16 hand3 HARVEST
+[exec] d=20 h=17 farmer NORTH farmer next
+[exec] d=20 h=17 hand0 COLLECT_FERTILIZER
+[exec] d=20 h=17 hand1 NORTH
+[exec] d=20 h=17 hand2 WATER
+[exec] d=20 h=17 hand3 NORTH
+[exec] d=20 h=18 farmer WATER farmer t5
+[exec] d=20 h=18 hand0 NORTH
+[exec] d=20 h=18 hand1 WATER
+[exec] d=20 h=18 hand2 NORTH
+[exec] d=20 h=18 hand3 WATER
+[exec] d=20 h=19 farmer PASS farmer tile-done
+[exec] d=20 h=19 hand0 WATER
+[exec] d=20 h=19 hand1 FERTILIZE
+[exec] d=20 h=19 hand2 WATER
+[exec] d=20 h=19 hand3 FERTILIZE
 [exec] d=20 h=20 farmer PASS farmer done
-[exec] d=20 h=20 hand0 WATER
-[exec] d=20 h=20 hand1 CARE
+[exec] d=20 h=20 hand0 NORTH
+[exec] d=20 h=20 hand1 NORTH
 [exec] d=20 h=20 hand2 PASS
 [exec] d=20 h=20 hand3 PASS
 [exec] d=20 h=21 farmer PASS farmer done
-[exec] d=20 h=21 hand0 HARVEST
-[exec] d=20 h=21 hand1 HARVEST
+[exec] d=20 h=21 hand0 WATER
+[exec] d=20 h=21 hand1 WATER
 [exec] d=20 h=21 hand2 PASS
 [exec] d=20 h=21 hand3 PASS
 [exec] d=20 h=22 farmer PASS farmer done
-[exec] d=20 h=22 hand0 PASS
-[exec] d=20 h=22 hand1 COLLECT_FERTILIZER
+[exec] d=20 h=22 hand0 HARVEST
+[exec] d=20 h=22 hand1 HARVEST
 [exec] d=20 h=22 hand2 PASS
 [exec] d=20 h=22 hand3 PASS
 [exec] d=20 h=23 farmer PASS farmer done
@@ -2671,263 +2633,249 @@
 [exec] d=20 h=23 hand1 PASS
 [exec] d=20 h=23 hand2 PASS
 [exec] d=20 h=23 hand3 PASS
-[planner] wsp zone=hire2 OPTIMAL obj=1728 time=0.003s bank=46058 empty=1 picks=2
-[planner] wsp zone=hire3 OPTIMAL obj=1728 time=0.003s bank=46058 empty=1 picks=2
-[planner] wsp zone=hire4 OPTIMAL obj=-0 time=0.002s bank=46058 empty=1 picks=0
-[planner] replan assign t12:WHEAT@0,CARROT@5, t20:WHEAT@0,CARROT@5, t25:IDLE
-[planner] replan d=21 solver=zonewise_wsp shops=7 catalog=0 assign=2 locked=22
-[sell_dp] d=21 ms=7 quota=MELON=0 STRAWBERRY=8 MILK=1 WOOL=4 inv_melon=9986
-[snap] d=21 h=0 money=46058 farmer_empty=0 hire1_empty=0 hire2_empty=1 hire3_empty=1 hire4_empty=1 shops=7 demand_CARROT=2 demand_EGG=2 demand_MELON=0 demand_MILK=3 demand_STRAWBERRY=3 demand_TOMATO=1 demand_WHEAT=4 demand_WOOL=2 CARROT=39 EGG=54 FERTILIZER=80 MELON=274 MILK=293 STRAWBERRY=241 TOMATO=78 WHEAT=43 WOOL=246
-[exec] d=21 h=0 market HIRE HIRE BUY_SEED WHEAT 1 SELL EGG 6 SELL FERTILIZER 7 SELL TOMATO 2 SELL MILK 1 SELL STRAWBERRY 1 SELL WOOL 1
+[planner] wsp zone=hire2 OPTIMAL obj=2174 time=0.003s close0=39532 cons0=36832 open0=36843 empty=1 picks=2
+[planner] wsp zone=hire4 OPTIMAL obj=2174 time=0.003s close0=37159 cons0=36817 open0=36830 empty=1 picks=2
+[planner] replan assign t15:WHEAT@0,CARROT@5, t24:WHEAT@0,CARROT@5
+[planner] replan d=21 solver=zonewise_wsp shops=7 catalog=0 assign=2 locked=23
+[sell_dp] d=21 ms=10 quota=MELON=6 STRAWBERRY=6 MILK=3 WOOL=4 clamped=MELON=6(from 0) inv_melon=9974
+[snap] d=21 h=0 money=36844 farmer_empty=0 hire1_empty=0 hire2_empty=1 hire3_empty=0 hire4_empty=1 shops=7 demand_CARROT=3 demand_EGG=2 demand_MELON=0 demand_MILK=2 demand_STRAWBERRY=3 demand_TOMATO=2 demand_WHEAT=5 demand_WOOL=2 CARROT=41 EGG=57 FERTILIZER=83 MELON=279 MILK=262 STRAWBERRY=235 TOMATO=70 WHEAT=43 WOOL=244
+[exec] d=21 h=0 market HIRE HIRE BUY_SEED WHEAT 2 SELL EGG 6 SELL FERTILIZER 5 SELL MELON 1 SELL MILK 1 SELL STRAWBERRY 1 SELL WOOL 1
 [exec] d=21 h=0 farmer PASS market-hour
-[exec] d=21 h=1 market HIRE HIRE SELL STRAWBERRY 1 SELL WOOL 1
-[exec] d=21 h=1 farmer PICKUP WHEAT 2 farmer wheat
+[exec] d=21 h=1 market HIRE HIRE SELL MELON 1 SELL MILK 1 SELL STRAWBERRY 1 SELL WOOL 1
+[exec] d=21 h=1 farmer PICKUP WHEAT 3 farmer wheat
 [exec] d=21 h=1 hand0 WEST
 [exec] d=21 h=1 hand1 NORTH
-[exec] d=21 h=2 market SELL STRAWBERRY 1 SELL WOOL 1
+[exec] d=21 h=2 market SELL MELON 1 SELL MILK 1 SELL STRAWBERRY 1 SELL WOOL 1
 [exec] d=21 h=2 farmer FEED farmer t1
 [exec] d=21 h=2 hand0 PICKUP WHEAT 2
 [exec] d=21 h=2 hand1 PICKUP WHEAT 2
 [exec] d=21 h=2 hand2 WEST
 [exec] d=21 h=2 hand3 NORTH
-[exec] d=21 h=3 market SELL STRAWBERRY 1 SELL WOOL 1
+[exec] d=21 h=3 market SELL MELON 1 SELL STRAWBERRY 1 SELL WOOL 1
 [exec] d=21 h=3 farmer PICKUP WHEAT 1 wheat
 [exec] d=21 h=3 hand0 WEST
 [exec] d=21 h=3 hand1 WEST
 [exec] d=21 h=3 hand2 PICKUP WHEAT 1
-[exec] d=21 h=3 hand3 PICKUP WHEAT 2
-[exec] d=21 h=4 market SELL STRAWBERRY 1
+[exec] d=21 h=3 hand3 PICKUP WHEAT 1
+[exec] d=21 h=4 market SELL MELON 1 SELL STRAWBERRY 1
 [exec] d=21 h=4 farmer CARE farmer t1
 [exec] d=21 h=4 hand0 WEST
 [exec] d=21 h=4 hand1 WEST
 [exec] d=21 h=4 hand2 WEST
 [exec] d=21 h=4 hand3 WEST
-[exec] d=21 h=5 market SELL STRAWBERRY 1
-[exec] d=21 h=5 farmer HARVEST farmer t1
+[exec] d=21 h=5 market SELL MELON 1 SELL STRAWBERRY 1
+[exec] d=21 h=5 farmer COLLECT_FERTILIZER farmer t1
 [exec] d=21 h=5 hand0 WEST
 [exec] d=21 h=5 hand1 WEST
 [exec] d=21 h=5 hand2 WEST
 [exec] d=21 h=5 hand3 FEED
-[exec] d=21 h=6 market SELL STRAWBERRY 1
-[exec] d=21 h=6 farmer COLLECT_FERTILIZER farmer t1
+[exec] d=21 h=6 farmer NORTH farmer next
 [exec] d=21 h=6 hand0 WEST
 [exec] d=21 h=6 hand1 FEED
 [exec] d=21 h=6 hand2 FEED
 [exec] d=21 h=6 hand3 CARE
-[exec] d=21 h=7 market SELL STRAWBERRY 1
-[exec] d=21 h=7 farmer NORTH farmer next
+[exec] d=21 h=7 farmer FEED farmer t2
 [exec] d=21 h=7 hand0 FEED
 [exec] d=21 h=7 hand1 CARE
 [exec] d=21 h=7 hand2 CARE
 [exec] d=21 h=7 hand3 HARVEST
-[exec] d=21 h=8 farmer WATER farmer t2
+[exec] d=21 h=8 farmer CARE farmer t2
 [exec] d=21 h=8 hand0 CARE
 [exec] d=21 h=8 hand1 HARVEST
 [exec] d=21 h=8 hand2 HARVEST
 [exec] d=21 h=8 hand3 COLLECT_FERTILIZER
-[exec] d=21 h=9 farmer FERTILIZE farmer t2
+[exec] d=21 h=9 farmer COLLECT_FERTILIZER farmer t2
 [exec] d=21 h=9 hand0 HARVEST
 [exec] d=21 h=9 hand1 COLLECT_FERTILIZER
 [exec] d=21 h=9 hand2 COLLECT_FERTILIZER
 [exec] d=21 h=9 hand3 NORTH
-[exec] d=21 h=10 farmer HARVEST farmer t2
+[exec] d=21 h=10 farmer NORTH farmer next
 [exec] d=21 h=10 hand0 COLLECT_FERTILIZER
 [exec] d=21 h=10 hand1 NORTH
 [exec] d=21 h=10 hand2 NORTH
 [exec] d=21 h=10 hand3 WATER
-[exec] d=21 h=11 farmer NORTH farmer next
+[exec] d=21 h=11 farmer WATER farmer t3
 [exec] d=21 h=11 hand0 NORTH
-[exec] d=21 h=11 hand1 PLANT WHEAT
+[exec] d=21 h=11 hand1 WATER
 [exec] d=21 h=11 hand2 WATER
-[exec] d=21 h=11 hand3 FERTILIZE
-[exec] d=21 h=12 farmer WATER farmer t3
-[exec] d=21 h=12 hand0 FEED
-[exec] d=21 h=12 hand1 WATER
-[exec] d=21 h=12 hand2 NORTH
-[exec] d=21 h=12 hand3 NORTH
-[exec] d=21 h=13 market BUY_PRODUCT WHEAT 1
+[exec] d=21 h=11 hand3 NORTH
+[exec] d=21 h=12 farmer FERTILIZE farmer t3
+[exec] d=21 h=12 hand0 WATER
+[exec] d=21 h=12 hand1 NORTH
+[exec] d=21 h=12 hand2 HARVEST
+[exec] d=21 h=12 hand3 WATER
 [exec] d=21 h=13 farmer NORTH farmer next
-[exec] d=21 h=13 hand0 CARE
-[exec] d=21 h=13 hand1 NORTH
-[exec] d=21 h=13 hand2 WATER
-[exec] d=21 h=13 hand3 FEED
+[exec] d=21 h=13 hand0 NORTH
+[exec] d=21 h=13 hand1 FEED
+[exec] d=21 h=13 hand2 NORTH
+[exec] d=21 h=13 hand3 NORTH
 [exec] d=21 h=14 market BUY_PRODUCT WHEAT 1
 [exec] d=21 h=14 farmer FEED farmer t4
-[exec] d=21 h=14 hand0 HARVEST
-[exec] d=21 h=14 hand1 WATER
-[exec] d=21 h=14 hand2 NORTH
-[exec] d=21 h=14 hand3 COLLECT_FERTILIZER
-[exec] d=21 h=15 market BUY_PRODUCT WHEAT 1
+[exec] d=21 h=14 hand0 FEED
+[exec] d=21 h=14 hand1 CARE
+[exec] d=21 h=14 hand2 WATER
+[exec] d=21 h=14 hand3 PLANT WHEAT
+[exec] d=21 h=15 market BUY_PRODUCT WHEAT 2
 [exec] d=21 h=15 farmer CARE farmer t4
-[exec] d=21 h=15 hand0 COLLECT_FERTILIZER
+[exec] d=21 h=15 hand0 CARE
 [exec] d=21 h=15 hand1 HARVEST
-[exec] d=21 h=15 hand2 WATER
-[exec] d=21 h=15 hand3 NORTH
-[exec] d=21 h=16 farmer HARVEST farmer t4
-[exec] d=21 h=16 hand0 NORTH
-[exec] d=21 h=16 hand1 NORTH
-[exec] d=21 h=16 hand2 FERTILIZE
-[exec] d=21 h=16 hand3 WATER
-[exec] d=21 h=17 farmer COLLECT_FERTILIZER farmer t4
-[exec] d=21 h=17 hand0 WATER
-[exec] d=21 h=17 hand1 HARVEST
-[exec] d=21 h=17 hand2 NORTH
-[exec] d=21 h=17 hand3 FERTILIZE
-[exec] d=21 h=18 farmer NORTH farmer next
-[exec] d=21 h=18 hand0 FERTILIZE
-[exec] d=21 h=18 hand1 DIG
-[exec] d=21 h=18 hand2 PLANT WHEAT
-[exec] d=21 h=18 hand3 NORTH
-[exec] d=21 h=19 market BUY_SEED WHEAT 1
-[exec] d=21 h=19 farmer WATER farmer t5
-[exec] d=21 h=19 hand0 NORTH
+[exec] d=21 h=15 hand2 FERTILIZE
+[exec] d=21 h=15 hand3 WATER
+[exec] d=21 h=16 farmer COLLECT_FERTILIZER farmer t4
+[exec] d=21 h=16 hand0 COLLECT_FERTILIZER
+[exec] d=21 h=16 hand1 COLLECT_FERTILIZER
+[exec] d=21 h=16 hand2 NORTH
+[exec] d=21 h=16 hand3 NORTH
+[exec] d=21 h=17 farmer NORTH farmer next
+[exec] d=21 h=17 hand0 NORTH
+[exec] d=21 h=17 hand1 NORTH
+[exec] d=21 h=17 hand2 WATER
+[exec] d=21 h=17 hand3 WATER
+[exec] d=21 h=18 farmer WATER farmer t5
+[exec] d=21 h=18 hand0 WATER
+[exec] d=21 h=18 hand1 WATER
+[exec] d=21 h=18 hand2 HARVEST
+[exec] d=21 h=18 hand3 PASS
+[exec] d=21 h=19 farmer PASS farmer tile-done
+[exec] d=21 h=19 hand0 HARVEST
 [exec] d=21 h=19 hand1 NORTH
-[exec] d=21 h=19 hand2 WATER
+[exec] d=21 h=19 hand2 NORTH
 [exec] d=21 h=19 hand3 PASS
-[exec] d=21 h=20 farmer FERTILIZE farmer t5
-[exec] d=21 h=20 hand0 WATER
-[exec] d=21 h=20 hand1 FEED
-[exec] d=21 h=20 hand2 PASS
+[exec] d=21 h=20 farmer PASS farmer done
+[exec] d=21 h=20 hand0 NORTH
+[exec] d=21 h=20 hand1 PLANT WHEAT
+[exec] d=21 h=20 hand2 WATER
 [exec] d=21 h=20 hand3 PASS
-[exec] d=21 h=21 market BUY_PRODUCT WHEAT 1
-[exec] d=21 h=21 farmer PASS farmer tile-done
-[exec] d=21 h=21 hand0 FERTILIZE
-[exec] d=21 h=21 hand1 CARE
-[exec] d=21 h=21 hand2 PASS
+[exec] d=21 h=21 farmer PASS farmer done
+[exec] d=21 h=21 hand0 WATER
+[exec] d=21 h=21 hand1 WATER
+[exec] d=21 h=21 hand2 HARVEST
 [exec] d=21 h=21 hand3 PASS
 [exec] d=21 h=22 farmer PASS farmer done
-[exec] d=21 h=22 hand0 NORTH
-[exec] d=21 h=22 hand1 COLLECT_FERTILIZER
+[exec] d=21 h=22 hand0 PASS
+[exec] d=21 h=22 hand1 PASS
 [exec] d=21 h=22 hand2 PASS
 [exec] d=21 h=22 hand3 PASS
 [exec] d=21 h=23 farmer PASS farmer done
-[exec] d=21 h=23 hand0 WATER
+[exec] d=21 h=23 hand0 PASS
 [exec] d=21 h=23 hand1 PASS
 [exec] d=21 h=23 hand2 PASS
 [exec] d=21 h=23 hand3 PASS
-[planner] wsp zone=hire2 OPTIMAL obj=1310 time=0.002s bank=50104 empty=1 picks=1
-[planner] wsp zone=hire4 OPTIMAL obj=-0 time=0.002s bank=50104 empty=1 picks=0
-[planner] replan assign t14:WHEAT@3, t25:IDLE
-[planner] replan d=22 solver=zonewise_wsp shops=7 catalog=0 assign=1 locked=23
-[sell_dp] d=22 ms=6 quota=MELON=0 STRAWBERRY=4 MILK=12 WOOL=0 clamped=MILK=12(from 8) inv_melon=9978
-[snap] d=22 h=0 money=50104 farmer_empty=0 hire1_empty=0 hire2_empty=1 hire3_empty=0 hire4_empty=1 shops=7 demand_CARROT=2 demand_EGG=2 demand_MELON=0 demand_MILK=3 demand_STRAWBERRY=3 demand_TOMATO=1 demand_WHEAT=4 demand_WOOL=2 CARROT=40 EGG=54 FERTILIZER=79 MELON=277 MILK=300 STRAWBERRY=246 TOMATO=79 WHEAT=44 WOOL=246
-[exec] d=22 h=0 market HIRE HIRE BUY_PRODUCT WHEAT 1 SELL EGG 6 SELL FERTILIZER 2 SELL TOMATO 2 SELL MILK 1 SELL STRAWBERRY 1
+[planner] wsp zone=hire1 OPTIMAL obj=3892 time=0.003s close0=46727 cons0=42295 open0=42296 empty=1 picks=1
+[planner] wsp zone=hire3 OPTIMAL obj=1574 time=0.003s close0=43604 cons0=42292 open0=42294 empty=1 picks=1
+[planner] replan assign t9:SHEEP@1, t19:WHEAT@3
+[planner] replan d=22 solver=zonewise_wsp shops=7 catalog=0 assign=2 locked=23
+[sell_dp] d=22 ms=7 quota=MELON=6 STRAWBERRY=4 MILK=6 WOOL=0 clamped=MELON=6(from 0) inv_melon=9972
+[snap] d=22 h=0 money=42296 farmer_empty=0 hire1_empty=1 hire2_empty=0 hire3_empty=1 hire4_empty=0 shops=7 demand_CARROT=3 demand_EGG=2 demand_MELON=0 demand_MILK=2 demand_STRAWBERRY=3 demand_TOMATO=2 demand_WHEAT=5 demand_WOOL=2 CARROT=41 EGG=58 FERTILIZER=82 MELON=280 MILK=268 STRAWBERRY=241 TOMATO=72 WHEAT=44 WOOL=244
+[exec] d=22 h=0 market HIRE HIRE SELL EGG 6 SELL FERTILIZER 7 SELL MELON 1 SELL MILK 1 SELL STRAWBERRY 1
 [exec] d=22 h=0 farmer PASS market-hour
-[exec] d=22 h=1 market HIRE HIRE SELL MILK 1 SELL STRAWBERRY 1
-[exec] d=22 h=1 farmer PICKUP WHEAT 2 farmer wheat
+[exec] d=22 h=1 market HIRE HIRE SELL MELON 1 SELL MILK 1 SELL STRAWBERRY 1
+[exec] d=22 h=1 farmer PICKUP WHEAT 3 farmer wheat
 [exec] d=22 h=1 hand0 WEST
 [exec] d=22 h=1 hand1 NORTH
-[exec] d=22 h=2 market SELL MILK 1 SELL STRAWBERRY 1
+[exec] d=22 h=2 market SELL MELON 1 SELL MILK 1 SELL STRAWBERRY 1
 [exec] d=22 h=2 farmer FEED farmer t1
 [exec] d=22 h=2 hand0 PICKUP WHEAT 2
 [exec] d=22 h=2 hand1 PICKUP WHEAT 2
 [exec] d=22 h=2 hand2 WEST
 [exec] d=22 h=2 hand3 NORTH
-[exec] d=22 h=3 market SELL MILK 1 SELL STRAWBERRY 1
+[exec] d=22 h=3 market SELL MELON 1 SELL MILK 1 SELL STRAWBERRY 1
 [exec] d=22 h=3 farmer PICKUP WHEAT 1 wheat
 [exec] d=22 h=3 hand0 WEST
 [exec] d=22 h=3 hand1 WEST
 [exec] d=22 h=3 hand2 PICKUP WHEAT 1
-[exec] d=22 h=3 hand3 PICKUP WHEAT 2
-[exec] d=22 h=4 market SELL MILK 1
+[exec] d=22 h=3 hand3 PICKUP WHEAT 1
+[exec] d=22 h=4 market SELL MELON 1 SELL MILK 1
 [exec] d=22 h=4 farmer CARE farmer t1
 [exec] d=22 h=4 hand0 WEST
 [exec] d=22 h=4 hand1 WEST
 [exec] d=22 h=4 hand2 WEST
 [exec] d=22 h=4 hand3 WEST
-[exec] d=22 h=5 market SELL MILK 1
+[exec] d=22 h=5 market SELL MELON 1 SELL MILK 1
 [exec] d=22 h=5 farmer COLLECT_FERTILIZER farmer t1
 [exec] d=22 h=5 hand0 WEST
 [exec] d=22 h=5 hand1 WEST
 [exec] d=22 h=5 hand2 WEST
 [exec] d=22 h=5 hand3 FEED
-[exec] d=22 h=6 market BUY_PRODUCT WHEAT 1 SELL MILK 1
 [exec] d=22 h=6 farmer NORTH farmer next
 [exec] d=22 h=6 hand0 WEST
 [exec] d=22 h=6 hand1 FEED
 [exec] d=22 h=6 hand2 FEED
 [exec] d=22 h=6 hand3 CARE
-[exec] d=22 h=7 market BUY_PRODUCT WHEAT 2 SELL MILK 1
-[exec] d=22 h=7 farmer HARVEST farmer t2
+[exec] d=22 h=7 farmer FEED farmer t2
 [exec] d=22 h=7 hand0 FEED
 [exec] d=22 h=7 hand1 CARE
 [exec] d=22 h=7 hand2 CARE
 [exec] d=22 h=7 hand3 HARVEST
-[exec] d=22 h=8 market BUY_PRODUCT WHEAT 1 SELL MILK 1
-[exec] d=22 h=8 farmer DIG farmer t2
+[exec] d=22 h=8 farmer CARE farmer t2
 [exec] d=22 h=8 hand0 CARE
 [exec] d=22 h=8 hand1 HARVEST
 [exec] d=22 h=8 hand2 HARVEST
 [exec] d=22 h=8 hand3 COLLECT_FERTILIZER
-[exec] d=22 h=9 market SELL MILK 1
-[exec] d=22 h=9 farmer NORTH farmer next
+[exec] d=22 h=9 farmer HARVEST farmer t2
 [exec] d=22 h=9 hand0 COLLECT_FERTILIZER
 [exec] d=22 h=9 hand1 COLLECT_FERTILIZER
 [exec] d=22 h=9 hand2 COLLECT_FERTILIZER
 [exec] d=22 h=9 hand3 NORTH
-[exec] d=22 h=10 market SELL MILK 1
-[exec] d=22 h=10 farmer WATER farmer t3
+[exec] d=22 h=10 farmer COLLECT_FERTILIZER farmer t2
 [exec] d=22 h=10 hand0 NORTH
 [exec] d=22 h=10 hand1 NORTH
 [exec] d=22 h=10 hand2 NORTH
 [exec] d=22 h=10 hand3 WATER
-[exec] d=22 h=11 market SELL MILK 1
-[exec] d=22 h=11 farmer HARVEST farmer t3
-[exec] d=22 h=11 hand0 FEED
+[exec] d=22 h=11 farmer NORTH farmer next
+[exec] d=22 h=11 hand0 WATER
 [exec] d=22 h=11 hand1 WATER
 [exec] d=22 h=11 hand2 WATER
-[exec] d=22 h=11 hand3 HARVEST
-[exec] d=22 h=12 market BUY_PRODUCT WHEAT 1
-[exec] d=22 h=12 farmer NORTH farmer next
-[exec] d=22 h=12 hand0 CARE
-[exec] d=22 h=12 hand1 NORTH
-[exec] d=22 h=12 hand2 HARVEST
+[exec] d=22 h=11 hand3 FERTILIZE
+[exec] d=22 h=12 farmer WATER farmer t3
+[exec] d=22 h=12 hand0 HARVEST
+[exec] d=22 h=12 hand1 HARVEST
+[exec] d=22 h=12 hand2 NORTH
 [exec] d=22 h=12 hand3 NORTH
-[exec] d=22 h=13 farmer FEED farmer t4
-[exec] d=22 h=13 hand0 COLLECT_FERTILIZER
-[exec] d=22 h=13 hand1 WATER
-[exec] d=22 h=13 hand2 NORTH
-[exec] d=22 h=13 hand3 FEED
-[exec] d=22 h=14 market BUY_PRODUCT WHEAT 1
-[exec] d=22 h=14 farmer CARE farmer t4
-[exec] d=22 h=14 hand0 NORTH
-[exec] d=22 h=14 hand1 NORTH
-[exec] d=22 h=14 hand2 WATER
+[exec] d=22 h=13 farmer HARVEST farmer t3
+[exec] d=22 h=13 hand0 NORTH
+[exec] d=22 h=13 hand1 NORTH
+[exec] d=22 h=13 hand2 WATER
+[exec] d=22 h=13 hand3 WATER
+[exec] d=22 h=14 farmer NORTH farmer next
+[exec] d=22 h=14 hand0 FEED
+[exec] d=22 h=14 hand1 FEED
+[exec] d=22 h=14 hand2 HARVEST
 [exec] d=22 h=14 hand3 HARVEST
-[exec] d=22 h=15 farmer COLLECT_FERTILIZER farmer t4
-[exec] d=22 h=15 hand0 WATER
-[exec] d=22 h=15 hand1 NORTH
+[exec] d=22 h=15 farmer FEED farmer t4
+[exec] d=22 h=15 hand0 CARE
+[exec] d=22 h=15 hand1 CARE
 [exec] d=22 h=15 hand2 NORTH
-[exec] d=22 h=15 hand3 COLLECT_FERTILIZER
-[exec] d=22 h=16 farmer NORTH farmer next
+[exec] d=22 h=15 hand3 NORTH
+[exec] d=22 h=16 market BUY_PRODUCT WHEAT 1
+[exec] d=22 h=16 farmer CARE farmer t4
 [exec] d=22 h=16 hand0 HARVEST
-[exec] d=22 h=16 hand1 FEED
-[exec] d=22 h=16 hand2 WATER
-[exec] d=22 h=16 hand3 NORTH
-[exec] d=22 h=17 market BUY_PRODUCT WHEAT 1
-[exec] d=22 h=17 farmer WATER farmer t5
-[exec] d=22 h=17 hand0 NORTH
-[exec] d=22 h=17 hand1 CARE
-[exec] d=22 h=17 hand2 NORTH
-[exec] d=22 h=17 hand3 WATER
-[exec] d=22 h=18 farmer HARVEST farmer t5
-[exec] d=22 h=18 hand0 WATER
-[exec] d=22 h=18 hand1 COLLECT_FERTILIZER
-[exec] d=22 h=18 hand2 WATER
-[exec] d=22 h=18 hand3 NORTH
-[exec] d=22 h=19 farmer PASS farmer tile-done
+[exec] d=22 h=16 hand1 COLLECT_FERTILIZER
+[exec] d=22 h=16 hand2 NORTH
+[exec] d=22 h=16 hand3 WATER
+[exec] d=22 h=17 farmer COLLECT_FERTILIZER farmer t4
+[exec] d=22 h=17 hand0 COLLECT_FERTILIZER
+[exec] d=22 h=17 hand1 NORTH
+[exec] d=22 h=17 hand2 WATER
+[exec] d=22 h=17 hand3 NORTH
+[exec] d=22 h=18 farmer NORTH farmer next
+[exec] d=22 h=18 hand0 NORTH
+[exec] d=22 h=18 hand1 WATER
+[exec] d=22 h=18 hand2 FERTILIZE
+[exec] d=22 h=18 hand3 WATER
+[exec] d=22 h=19 farmer WATER farmer t5
 [exec] d=22 h=19 hand0 NORTH
-[exec] d=22 h=19 hand1 PASS
+[exec] d=22 h=19 hand1 HARVEST
 [exec] d=22 h=19 hand2 PASS
-[exec] d=22 h=19 hand3 PASS
-[exec] d=22 h=20 farmer PASS farmer done
+[exec] d=22 h=19 hand3 HARVEST
+[exec] d=22 h=20 farmer FERTILIZE farmer t5
 [exec] d=22 h=20 hand0 WATER
-[exec] d=22 h=20 hand1 PASS
+[exec] d=22 h=20 hand1 NORTH
 [exec] d=22 h=20 hand2 PASS
 [exec] d=22 h=20 hand3 PASS
-[exec] d=22 h=21 farmer PASS farmer done
+[exec] d=22 h=21 farmer PASS farmer tile-done
 [exec] d=22 h=21 hand0 HARVEST
-[exec] d=22 h=21 hand1 PASS
+[exec] d=22 h=21 hand1 WATER
 [exec] d=22 h=21 hand2 PASS
 [exec] d=22 h=21 hand3 PASS
 [exec] d=22 h=22 farmer PASS farmer done
@@ -2940,287 +2888,278 @@
 [exec] d=22 h=23 hand1 PASS
 [exec] d=22 h=23 hand2 PASS
 [exec] d=22 h=23 hand3 PASS
-[planner] wsp zone=farmer OPTIMAL obj=3946 time=0.002s bank=54973 empty=1 picks=1
-[planner] wsp zone=hire3 OPTIMAL obj=1340 time=0.002s bank=54973 empty=1 picks=1
-[planner] wsp zone=hire4 OPTIMAL obj=-0 time=0.002s bank=54973 empty=1 picks=0
-[planner] replan assign t2:SHEEP@0, t17:WHEAT@2, t25:IDLE
-[planner] replan d=23 solver=zonewise_wsp shops=7 catalog=0 assign=2 locked=22
-[sell_dp] d=23 ms=3 quota=MELON=0 STRAWBERRY=8 MILK=1 WOOL=0 clamped=STRAWBERRY=8(from 6) inv_melon=9970
-[snap] d=23 h=0 money=54973 farmer_empty=1 hire1_empty=0 hire2_empty=1 hire3_empty=1 hire4_empty=1 shops=7 demand_CARROT=2 demand_EGG=2 demand_MELON=0 demand_MILK=3 demand_STRAWBERRY=3 demand_TOMATO=1 demand_WHEAT=4 demand_WOOL=2 CARROT=40 EGG=55 FERTILIZER=79 MELON=280 MILK=303 STRAWBERRY=252 TOMATO=81 WHEAT=45 WOOL=247
-[exec] d=23 h=0 market HIRE HIRE BUY_ANIMAL SHEEP 1 SELL EGG 6 SELL FERTILIZER 9 SELL TOMATO 2 SELL MILK 1 SELL STRAWBERRY 1
+[planner] wsp zone=hire1 OPTIMAL obj=1610 time=0.002s close0=49377 cons0=46920 open0=47421 empty=1 picks=1
+[planner] wsp zone=hire2 OPTIMAL obj=1610 time=0.002s close0=49730 cons0=46919 open0=46920 empty=1 picks=1
+[planner] wsp zone=hire4 OPTIMAL obj=3220 time=0.004s close0=47248 cons0=46894 open0=46917 empty=2 picks=2
+[planner] replan assign t7:WHEAT@2, t14:WHEAT@2, t23:WHEAT@0, t25:WHEAT@0
+[planner] replan d=23 solver=zonewise_wsp shops=7 catalog=0 assign=4 locked=21
+[sell_dp] d=23 ms=4 quota=MELON=6 STRAWBERRY=8 MILK=3 WOOL=6 clamped=MELON=6(from 0) inv_melon=9970
+[snap] d=23 h=0 money=47421 farmer_empty=0 hire1_empty=2 hire2_empty=1 hire3_empty=1 hire4_empty=2 shops=7 demand_CARROT=3 demand_EGG=2 demand_MELON=0 demand_MILK=2 demand_STRAWBERRY=3 demand_TOMATO=2 demand_WHEAT=5 demand_WOOL=2 CARROT=41 EGG=59 FERTILIZER=81 MELON=280 MILK=273 STRAWBERRY=247 TOMATO=75 WHEAT=45 WOOL=245
+[exec] d=23 h=0 market HIRE HIRE BUY_SEED WHEAT 2 BUY_ANIMAL SHEEP 1 SELL EGG 6 SELL FERTILIZER 6 SELL MELON 1 SELL MILK 1 SELL STRAWBERRY 1 SELL WOOL 1
 [exec] d=23 h=0 farmer PASS market-hour
-[exec] d=23 h=1 market HIRE HIRE SELL STRAWBERRY 1
+[exec] d=23 h=1 market HIRE HIRE SELL MELON 1 SELL MILK 1 SELL STRAWBERRY 1 SELL WOOL 1
 [exec] d=23 h=1 farmer PICKUP WHEAT 3 farmer wheat
 [exec] d=23 h=1 hand0 WEST
 [exec] d=23 h=1 hand1 NORTH
-[exec] d=23 h=2 market SELL STRAWBERRY 1
-[exec] d=23 h=2 farmer PICKUP SHEEP 1 animal
-[exec] d=23 h=2 hand0 PICKUP WHEAT 2
+[exec] d=23 h=2 market SELL MELON 1 SELL MILK 1 SELL STRAWBERRY 1 SELL WOOL 1
+[exec] d=23 h=2 farmer FEED farmer t1
+[exec] d=23 h=2 hand0 PICKUP WHEAT 3
 [exec] d=23 h=2 hand1 PICKUP WHEAT 2
 [exec] d=23 h=2 hand2 WEST
 [exec] d=23 h=2 hand3 NORTH
-[exec] d=23 h=3 market SELL STRAWBERRY 1
-[exec] d=23 h=3 farmer FEED farmer t1
-[exec] d=23 h=3 hand0 WEST
+[exec] d=23 h=3 market SELL MELON 1 SELL STRAWBERRY 1 SELL WOOL 1
+[exec] d=23 h=3 farmer PICKUP WHEAT 1 wheat
+[exec] d=23 h=3 hand0 PICKUP SHEEP 1
 [exec] d=23 h=3 hand1 WEST
 [exec] d=23 h=3 hand2 PICKUP WHEAT 1
-[exec] d=23 h=3 hand3 PICKUP WHEAT 2
-[exec] d=23 h=4 market SELL STRAWBERRY 1
-[exec] d=23 h=4 farmer PICKUP WHEAT 1 wheat
+[exec] d=23 h=3 hand3 PICKUP WHEAT 1
+[exec] d=23 h=4 market SELL MELON 1 SELL STRAWBERRY 1 SELL WOOL 1
+[exec] d=23 h=4 farmer CARE farmer t1
 [exec] d=23 h=4 hand0 WEST
 [exec] d=23 h=4 hand1 WEST
 [exec] d=23 h=4 hand2 WEST
 [exec] d=23 h=4 hand3 WEST
-[exec] d=23 h=5 market SELL STRAWBERRY 1
-[exec] d=23 h=5 farmer CARE farmer t1
+[exec] d=23 h=5 market SELL WHEAT 5 SELL MELON 1 SELL STRAWBERRY 1 SELL WOOL 1
+[exec] d=23 h=5 farmer HARVEST farmer t1
 [exec] d=23 h=5 hand0 WEST
 [exec] d=23 h=5 hand1 WEST
 [exec] d=23 h=5 hand2 WEST
 [exec] d=23 h=5 hand3 FEED
 [exec] d=23 h=6 market SELL STRAWBERRY 1
-[exec] d=23 h=6 farmer HARVEST farmer t1
+[exec] d=23 h=6 farmer COLLECT_FERTILIZER farmer t1
 [exec] d=23 h=6 hand0 WEST
 [exec] d=23 h=6 hand1 FEED
 [exec] d=23 h=6 hand2 FEED
 [exec] d=23 h=6 hand3 CARE
 [exec] d=23 h=7 market SELL STRAWBERRY 1
-[exec] d=23 h=7 farmer COLLECT_FERTILIZER farmer t1
-[exec] d=23 h=7 hand0 FEED
+[exec] d=23 h=7 farmer NORTH farmer next
+[exec] d=23 h=7 hand0 WEST
 [exec] d=23 h=7 hand1 CARE
 [exec] d=23 h=7 hand2 CARE
 [exec] d=23 h=7 hand3 HARVEST
-[exec] d=23 h=8 market BUY_PRODUCT WHEAT 1
-[exec] d=23 h=8 farmer NORTH farmer next
-[exec] d=23 h=8 hand0 CARE
+[exec] d=23 h=8 farmer FEED farmer t2
+[exec] d=23 h=8 hand0 FEED
 [exec] d=23 h=8 hand1 HARVEST
 [exec] d=23 h=8 hand2 HARVEST
 [exec] d=23 h=8 hand3 COLLECT_FERTILIZER
-[exec] d=23 h=9 farmer BUILD_PASTURE farmer t2
-[exec] d=23 h=9 hand0 HARVEST
+[exec] d=23 h=9 farmer CARE farmer t2
+[exec] d=23 h=9 hand0 CARE
 [exec] d=23 h=9 hand1 COLLECT_FERTILIZER
 [exec] d=23 h=9 hand2 COLLECT_FERTILIZER
 [exec] d=23 h=9 hand3 NORTH
-[exec] d=23 h=10 farmer PLACE SHEEP farmer t2
-[exec] d=23 h=10 hand0 COLLECT_FERTILIZER
+[exec] d=23 h=10 farmer COLLECT_FERTILIZER farmer t2
+[exec] d=23 h=10 hand0 HARVEST
 [exec] d=23 h=10 hand1 NORTH
 [exec] d=23 h=10 hand2 NORTH
 [exec] d=23 h=10 hand3 WATER
-[exec] d=23 h=11 farmer FEED farmer t2
-[exec] d=23 h=11 hand0 NORTH
+[exec] d=23 h=11 farmer NORTH farmer next
+[exec] d=23 h=11 hand0 COLLECT_FERTILIZER
 [exec] d=23 h=11 hand1 WATER
-[exec] d=23 h=11 hand2 NORTH
+[exec] d=23 h=11 hand2 HARVEST
 [exec] d=23 h=11 hand3 NORTH
-[exec] d=23 h=12 market BUY_PRODUCT WHEAT 1
-[exec] d=23 h=12 farmer CARE farmer t2
-[exec] d=23 h=12 hand0 FEED
+[exec] d=23 h=12 farmer WATER farmer t3
+[exec] d=23 h=12 hand0 NORTH
 [exec] d=23 h=12 hand1 FERTILIZE
-[exec] d=23 h=12 hand2 WATER
-[exec] d=23 h=12 hand3 FEED
-[exec] d=23 h=13 market BUY_PRODUCT WHEAT 2
+[exec] d=23 h=12 hand2 DIG
+[exec] d=23 h=12 hand3 PLANT WHEAT
+[exec] d=23 h=13 market BUY_SEED WHEAT 1
 [exec] d=23 h=13 farmer NORTH farmer next
-[exec] d=23 h=13 hand0 CARE
+[exec] d=23 h=13 hand0 NORTH
 [exec] d=23 h=13 hand1 NORTH
-[exec] d=23 h=13 hand2 NORTH
-[exec] d=23 h=13 hand3 COLLECT_FERTILIZER
-[exec] d=23 h=14 farmer WATER farmer t3
-[exec] d=23 h=14 hand0 HARVEST
-[exec] d=23 h=14 hand1 HARVEST
+[exec] d=23 h=13 hand2 PLANT WHEAT
+[exec] d=23 h=13 hand3 WATER
+[exec] d=23 h=14 farmer FEED farmer t4
+[exec] d=23 h=14 hand0 FEED
+[exec] d=23 h=14 hand1 FEED
 [exec] d=23 h=14 hand2 WATER
 [exec] d=23 h=14 hand3 NORTH
-[exec] d=23 h=15 farmer NORTH farmer next
-[exec] d=23 h=15 hand0 COLLECT_FERTILIZER
-[exec] d=23 h=15 hand1 DIG
-[exec] d=23 h=15 hand2 HARVEST
+[exec] d=23 h=15 farmer CARE farmer t4
+[exec] d=23 h=15 hand0 CARE
+[exec] d=23 h=15 hand1 CARE
+[exec] d=23 h=15 hand2 NORTH
 [exec] d=23 h=15 hand3 WATER
-[exec] d=23 h=16 farmer FEED farmer t4
-[exec] d=23 h=16 hand0 NORTH
-[exec] d=23 h=16 hand1 PLANT WHEAT
-[exec] d=23 h=16 hand2 NORTH
-[exec] d=23 h=16 hand3 HARVEST
-[exec] d=23 h=17 farmer CARE farmer t4
-[exec] d=23 h=17 hand0 WATER
-[exec] d=23 h=17 hand1 WATER
-[exec] d=23 h=17 hand2 WATER
+[exec] d=23 h=16 farmer COLLECT_FERTILIZER farmer t4
+[exec] d=23 h=16 hand0 COLLECT_FERTILIZER
+[exec] d=23 h=16 hand1 HARVEST
+[exec] d=23 h=16 hand2 WATER
+[exec] d=23 h=16 hand3 FERTILIZE
+[exec] d=23 h=17 farmer NORTH farmer next
+[exec] d=23 h=17 hand0 NORTH
+[exec] d=23 h=17 hand1 COLLECT_FERTILIZER
+[exec] d=23 h=17 hand2 NORTH
 [exec] d=23 h=17 hand3 NORTH
-[exec] d=23 h=18 farmer HARVEST farmer t4
-[exec] d=23 h=18 hand0 NORTH
+[exec] d=23 h=18 farmer WATER farmer t5
+[exec] d=23 h=18 hand0 BUILD_PASTURE
 [exec] d=23 h=18 hand1 NORTH
-[exec] d=23 h=18 hand2 FERTILIZE
-[exec] d=23 h=18 hand3 PASS
-[exec] d=23 h=19 farmer COLLECT_FERTILIZER farmer t4
-[exec] d=23 h=19 hand0 WATER
+[exec] d=23 h=18 hand2 NORTH
+[exec] d=23 h=18 hand3 PLANT WHEAT
+[exec] d=23 h=19 farmer HARVEST farmer t5
+[exec] d=23 h=19 hand0 PLACE SHEEP
 [exec] d=23 h=19 hand1 NORTH
-[exec] d=23 h=19 hand2 PASS
-[exec] d=23 h=19 hand3 PASS
-[exec] d=23 h=20 farmer NORTH farmer next
-[exec] d=23 h=20 hand0 HARVEST
-[exec] d=23 h=20 hand1 FEED
-[exec] d=23 h=20 hand2 PASS
+[exec] d=23 h=19 hand2 WATER
+[exec] d=23 h=19 hand3 WATER
+[exec] d=23 h=20 farmer PASS farmer tile-done
+[exec] d=23 h=20 hand0 FEED
+[exec] d=23 h=20 hand1 WATER
+[exec] d=23 h=20 hand2 HARVEST
 [exec] d=23 h=20 hand3 PASS
-[exec] d=23 h=21 farmer WATER farmer t5
-[exec] d=23 h=21 hand0 NORTH
-[exec] d=23 h=21 hand1 CARE
+[exec] d=23 h=21 farmer PASS farmer done
+[exec] d=23 h=21 hand0 CARE
+[exec] d=23 h=21 hand1 FERTILIZE
 [exec] d=23 h=21 hand2 PASS
 [exec] d=23 h=21 hand3 PASS
-[exec] d=23 h=22 farmer PASS farmer tile-done
-[exec] d=23 h=22 hand0 WATER
-[exec] d=23 h=22 hand1 HARVEST
+[exec] d=23 h=22 farmer PASS farmer done
+[exec] d=23 h=22 hand0 NORTH
+[exec] d=23 h=22 hand1 PASS
 [exec] d=23 h=22 hand2 PASS
 [exec] d=23 h=22 hand3 PASS
 [exec] d=23 h=23 farmer PASS farmer done
-[exec] d=23 h=23 hand0 PASS
-[exec] d=23 h=23 hand1 COLLECT_FERTILIZER
+[exec] d=23 h=23 hand0 WATER
+[exec] d=23 h=23 hand1 PASS
 [exec] d=23 h=23 hand2 PASS
 [exec] d=23 h=23 hand3 PASS
-[planner] wsp zone=hire1 OPTIMAL obj=1646 time=0.002s bank=57803 empty=1 picks=1
-[planner] wsp zone=hire3 OPTIMAL obj=1646 time=0.002s bank=57803 empty=1 picks=1
-[planner] wsp zone=hire4 OPTIMAL obj=1646 time=0.002s bank=57803 empty=2 picks=1
-[planner] replan assign t9:WHEAT@0, t19:WHEAT@1, t24:WHEAT@1, t25:IDLE
-[planner] replan d=24 solver=zonewise_wsp shops=8 catalog=0 assign=3 locked=21
-[sell_dp] d=24 ms=2 quota=MELON=0 STRAWBERRY=2 MILK=12 WOOL=4 clamped=MILK=12(from 8) inv_melon=9962
-[snap] d=24 h=0 money=57803 farmer_empty=0 hire1_empty=1 hire2_empty=1 hire3_empty=2 hire4_empty=2 shops=8 demand_CARROT=3 demand_EGG=2 demand_MELON=0 demand_MILK=3 demand_STRAWBERRY=4 demand_TOMATO=2 demand_WHEAT=5 demand_WOOL=2 CARROT=40 EGG=56 FERTILIZER=77 MELON=282 MILK=310 STRAWBERRY=257 TOMATO=82 WHEAT=46 WOOL=248
-[exec] d=24 h=0 market HIRE HIRE BUY_SEED WHEAT 1 SELL EGG 6 SELL FERTILIZER 7 SELL MILK 1 SELL STRAWBERRY 1 SELL WOOL 1
+[sell_dp] d=24 ms=2 quota=MELON=0 STRAWBERRY=6 MILK=6 WOOL=4 inv_melon=9968
+[snap] d=24 h=0 money=53905 farmer_empty=0 hire1_empty=1 hire2_empty=1 hire3_empty=1 hire4_empty=0 shops=8 demand_CARROT=3 demand_EGG=2 demand_MELON=0 demand_MILK=3 demand_STRAWBERRY=4 demand_TOMATO=2 demand_WHEAT=5 demand_WOOL=2 CARROT=41 EGG=59 FERTILIZER=80 MELON=281 MILK=278 STRAWBERRY=252 TOMATO=77 WHEAT=46 WOOL=246
+[exec] d=24 h=0 market HIRE HIRE BUY_PRODUCT WHEAT 1 SELL EGG 6 SELL FERTILIZER 6 SELL MILK 1 SELL STRAWBERRY 1 SELL WOOL 1
 [exec] d=24 h=0 farmer PASS market-hour
 [exec] d=24 h=1 market HIRE HIRE SELL MILK 1 SELL STRAWBERRY 1 SELL WOOL 1
 [exec] d=24 h=1 farmer PICKUP WHEAT 3 farmer wheat
 [exec] d=24 h=1 hand0 WEST
 [exec] d=24 h=1 hand1 NORTH
-[exec] d=24 h=2 market SELL MILK 1 SELL WOOL 1
+[exec] d=24 h=2 market SELL MILK 1 SELL STRAWBERRY 1 SELL WOOL 1
 [exec] d=24 h=2 farmer FEED farmer t1
-[exec] d=24 h=2 hand0 PICKUP WHEAT 2
+[exec] d=24 h=2 hand0 PICKUP WHEAT 3
 [exec] d=24 h=2 hand1 PICKUP WHEAT 2
 [exec] d=24 h=2 hand2 WEST
 [exec] d=24 h=2 hand3 NORTH
-[exec] d=24 h=3 market SELL MILK 1 SELL WOOL 1
+[exec] d=24 h=3 market SELL MILK 1 SELL STRAWBERRY 1 SELL WOOL 1
 [exec] d=24 h=3 farmer PICKUP WHEAT 1 wheat
 [exec] d=24 h=3 hand0 WEST
 [exec] d=24 h=3 hand1 WEST
 [exec] d=24 h=3 hand2 PICKUP WHEAT 1
-[exec] d=24 h=3 hand3 PICKUP WHEAT 2
-[exec] d=24 h=4 market SELL MILK 1
+[exec] d=24 h=3 hand3 PICKUP WHEAT 1
+[exec] d=24 h=4 market SELL MILK 1 SELL STRAWBERRY 1
 [exec] d=24 h=4 farmer CARE farmer t1
 [exec] d=24 h=4 hand0 WEST
 [exec] d=24 h=4 hand1 WEST
 [exec] d=24 h=4 hand2 WEST
 [exec] d=24 h=4 hand3 WEST
-[exec] d=24 h=5 market SELL WHEAT 5 SELL MILK 1
+[exec] d=24 h=5 market SELL MILK 1 SELL STRAWBERRY 1
 [exec] d=24 h=5 farmer COLLECT_FERTILIZER farmer t1
 [exec] d=24 h=5 hand0 WEST
 [exec] d=24 h=5 hand1 WEST
 [exec] d=24 h=5 hand2 WEST
 [exec] d=24 h=5 hand3 FEED
-[exec] d=24 h=6 market SELL MILK 1
+[exec] d=24 h=6 market BUY_PRODUCT WHEAT 1
 [exec] d=24 h=6 farmer NORTH farmer next
 [exec] d=24 h=6 hand0 WEST
 [exec] d=24 h=6 hand1 FEED
 [exec] d=24 h=6 hand2 FEED
 [exec] d=24 h=6 hand3 CARE
-[exec] d=24 h=7 market SELL MILK 1
+[exec] d=24 h=7 market BUY_PRODUCT WHEAT 2
 [exec] d=24 h=7 farmer FEED farmer t2
 [exec] d=24 h=7 hand0 FEED
 [exec] d=24 h=7 hand1 CARE
 [exec] d=24 h=7 hand2 CARE
 [exec] d=24 h=7 hand3 HARVEST
-[exec] d=24 h=8 market SELL MILK 1
+[exec] d=24 h=8 market BUY_PRODUCT WHEAT 2
 [exec] d=24 h=8 farmer CARE farmer t2
 [exec] d=24 h=8 hand0 CARE
 [exec] d=24 h=8 hand1 HARVEST
 [exec] d=24 h=8 hand2 HARVEST
 [exec] d=24 h=8 hand3 COLLECT_FERTILIZER
-[exec] d=24 h=9 market SELL MILK 1
 [exec] d=24 h=9 farmer COLLECT_FERTILIZER farmer t2
 [exec] d=24 h=9 hand0 COLLECT_FERTILIZER
 [exec] d=24 h=9 hand1 COLLECT_FERTILIZER
 [exec] d=24 h=9 hand2 COLLECT_FERTILIZER
 [exec] d=24 h=9 hand3 NORTH
-[exec] d=24 h=10 market SELL MILK 1
 [exec] d=24 h=10 farmer NORTH farmer next
 [exec] d=24 h=10 hand0 NORTH
 [exec] d=24 h=10 hand1 NORTH
 [exec] d=24 h=10 hand2 NORTH
-[exec] d=24 h=10 hand3 HARVEST
-[exec] d=24 h=11 market SELL MILK 1
+[exec] d=24 h=10 hand3 WATER
 [exec] d=24 h=11 farmer WATER farmer t3
-[exec] d=24 h=11 hand0 FEED
+[exec] d=24 h=11 hand0 NORTH
 [exec] d=24 h=11 hand1 WATER
-[exec] d=24 h=11 hand2 NORTH
-[exec] d=24 h=11 hand3 DIG
-[exec] d=24 h=12 market BUY_SEED WHEAT 1
+[exec] d=24 h=11 hand2 WATER
+[exec] d=24 h=11 hand3 HARVEST
 [exec] d=24 h=12 farmer HARVEST farmer t3
-[exec] d=24 h=12 hand0 CARE
-[exec] d=24 h=12 hand1 NORTH
-[exec] d=24 h=12 hand2 WATER
-[exec] d=24 h=12 hand3 PLANT WHEAT
+[exec] d=24 h=12 hand0 FEED
+[exec] d=24 h=12 hand1 HARVEST
+[exec] d=24 h=12 hand2 NORTH
+[exec] d=24 h=12 hand3 NORTH
 [exec] d=24 h=13 farmer NORTH farmer next
-[exec] d=24 h=13 hand0 COLLECT_FERTILIZER
-[exec] d=24 h=13 hand1 WATER
-[exec] d=24 h=13 hand2 NORTH
+[exec] d=24 h=13 hand0 CARE
+[exec] d=24 h=13 hand1 NORTH
+[exec] d=24 h=13 hand2 HARVEST
 [exec] d=24 h=13 hand3 WATER
 [exec] d=24 h=14 farmer FEED farmer t4
-[exec] d=24 h=14 hand0 NORTH
-[exec] d=24 h=14 hand1 NORTH
-[exec] d=24 h=14 hand2 NORTH
+[exec] d=24 h=14 hand0 HARVEST
+[exec] d=24 h=14 hand1 FEED
+[exec] d=24 h=14 hand2 DIG
 [exec] d=24 h=14 hand3 NORTH
+[exec] d=24 h=15 market BUY_SEED WHEAT 1 BUY_PRODUCT WHEAT 2
 [exec] d=24 h=15 farmer CARE farmer t4
-[exec] d=24 h=15 hand0 HARVEST
-[exec] d=24 h=15 hand1 NORTH
-[exec] d=24 h=15 hand2 WATER
-[exec] d=24 h=15 hand3 FEED
+[exec] d=24 h=15 hand0 COLLECT_FERTILIZER
+[exec] d=24 h=15 hand1 CARE
+[exec] d=24 h=15 hand2 NORTH
+[exec] d=24 h=15 hand3 WATER
 [exec] d=24 h=16 farmer COLLECT_FERTILIZER farmer t4
-[exec] d=24 h=16 hand0 DIG
-[exec] d=24 h=16 hand1 FEED
-[exec] d=24 h=16 hand2 PASS
-[exec] d=24 h=16 hand3 HARVEST
+[exec] d=24 h=16 hand0 NORTH
+[exec] d=24 h=16 hand1 COLLECT_FERTILIZER
+[exec] d=24 h=16 hand2 NORTH
+[exec] d=24 h=16 hand3 NORTH
 [exec] d=24 h=17 farmer NORTH farmer next
-[exec] d=24 h=17 hand0 NORTH
-[exec] d=24 h=17 hand1 CARE
-[exec] d=24 h=17 hand2 PASS
-[exec] d=24 h=17 hand3 COLLECT_FERTILIZER
+[exec] d=24 h=17 hand0 FEED
+[exec] d=24 h=17 hand1 NORTH
+[exec] d=24 h=17 hand2 WATER
+[exec] d=24 h=17 hand3 WATER
+[exec] d=24 h=18 market BUY_PRODUCT WHEAT 1
 [exec] d=24 h=18 farmer WATER farmer t5
-[exec] d=24 h=18 hand0 PLANT WHEAT
-[exec] d=24 h=18 hand1 COLLECT_FERTILIZER
+[exec] d=24 h=18 hand0 CARE
+[exec] d=24 h=18 hand1 NORTH
 [exec] d=24 h=18 hand2 PASS
-[exec] d=24 h=18 hand3 NORTH
-[exec] d=24 h=19 farmer HARVEST farmer t5
-[exec] d=24 h=19 hand0 WATER
-[exec] d=24 h=19 hand1 PASS
-[exec] d=24 h=19 hand2 PASS
-[exec] d=24 h=19 hand3 NORTH
-[exec] d=24 h=20 farmer PASS farmer tile-done
+[exec] d=24 h=18 hand3 PASS
+[exec] d=24 h=19 farmer PASS farmer tile-done
+[exec] d=24 h=19 hand0 COLLECT_FERTILIZER
+[exec] d=24 h=19 hand1 WATER
+[exec] d=24 h=19 hand2 SOUTH
+[exec] d=24 h=19 hand3 PASS
+[exec] d=24 h=20 farmer PASS farmer done
 [exec] d=24 h=20 hand0 NORTH
 [exec] d=24 h=20 hand1 PASS
-[exec] d=24 h=20 hand2 PASS
+[exec] d=24 h=20 hand2 SOUTH
 [exec] d=24 h=20 hand3 PASS
 [exec] d=24 h=21 farmer PASS farmer done
-[exec] d=24 h=21 hand0 HARVEST
+[exec] d=24 h=21 hand0 WATER
 [exec] d=24 h=21 hand1 PASS
-[exec] d=24 h=21 hand2 PASS
+[exec] d=24 h=21 hand2 SOUTH
 [exec] d=24 h=21 hand3 PASS
 [exec] d=24 h=22 farmer PASS farmer done
-[exec] d=24 h=22 hand0 DIG
+[exec] d=24 h=22 hand0 HARVEST
 [exec] d=24 h=22 hand1 PASS
-[exec] d=24 h=22 hand2 PASS
+[exec] d=24 h=22 hand2 SOUTH
 [exec] d=24 h=22 hand3 PASS
 [exec] d=24 h=23 farmer PASS farmer done
 [exec] d=24 h=23 hand0 PASS
 [exec] d=24 h=23 hand1 PASS
-[exec] d=24 h=23 hand2 PASS
+[exec] d=24 h=23 hand2 NORTH
 [exec] d=24 h=23 hand3 PASS
-[planner] wsp zone=hire1 FEASIBLE obj=2154 time=0.004s bank=64114 empty=2 picks=2
-[planner] wsp zone=hire4 OPTIMAL obj=-0 time=0.002s bank=64114 empty=1 picks=0
-[planner] replan assign t8:WHEAT@0, t10:CARROT@1, t25:IDLE
-[planner] replan d=25 solver=zonewise_wsp shops=8 catalog=0 assign=2 locked=22
-[sell_dp] d=25 ms=1 quota=MELON=0 STRAWBERRY=8 MILK=1 WOOL=0 clamped=STRAWBERRY=8(from 6) inv_melon=9954
-[snap] d=25 h=0 money=64114 farmer_empty=0 hire1_empty=2 hire2_empty=1 hire3_empty=2 hire4_empty=2 shops=8 demand_CARROT=3 demand_EGG=2 demand_MELON=0 demand_MILK=3 demand_STRAWBERRY=4 demand_TOMATO=2 demand_WHEAT=5 demand_WOOL=2 CARROT=41 EGG=57 FERTILIZER=75 MELON=284 MILK=313 STRAWBERRY=265 TOMATO=84 WHEAT=47 WOOL=248
-[exec] d=25 h=0 market HIRE HIRE BUY_SEED WHEAT 5 SELL EGG 6 SELL FERTILIZER 10 SELL MILK 1 SELL STRAWBERRY 1
+[planner] wsp zone=hire3 OPTIMAL obj=1682 time=0.002s close0=60085 cons0=58430 open0=58452 empty=1 picks=1
+[planner] wsp zone=hire4 OPTIMAL obj=1682 time=0.002s close0=59905 cons0=58417 open0=58430 empty=1 picks=1
+[planner] replan assign t18:WHEAT@0, t22:WHEAT@0
+[planner] replan d=25 solver=zonewise_wsp shops=8 catalog=0 assign=2 locked=23
+[sell_dp] d=25 ms=1 quota=MELON=0 STRAWBERRY=7 MILK=3 WOOL=0 inv_melon=9960
+[snap] d=25 h=0 money=58474 farmer_empty=0 hire1_empty=1 hire2_empty=1 hire3_empty=2 hire4_empty=1 shops=8 demand_CARROT=3 demand_EGG=2 demand_MELON=0 demand_MILK=3 demand_STRAWBERRY=4 demand_TOMATO=2 demand_WHEAT=5 demand_WOOL=2 CARROT=42 EGG=60 FERTILIZER=78 MELON=283 MILK=284 STRAWBERRY=259 TOMATO=79 WHEAT=47 WOOL=247
+[exec] d=25 h=0 market HIRE HIRE BUY_SEED WHEAT 4 SELL EGG 6 SELL FERTILIZER 10 SELL MILK 1 SELL STRAWBERRY 1
 [exec] d=25 h=0 farmer PASS market-hour
-[exec] d=25 h=1 market HIRE HIRE SELL STRAWBERRY 1
+[exec] d=25 h=1 market HIRE HIRE SELL MILK 1 SELL STRAWBERRY 1
 [exec] d=25 h=1 farmer PICKUP WHEAT 3 farmer wheat
 [exec] d=25 h=1 hand0 WEST
 [exec] d=25 h=1 hand1 NORTH
-[exec] d=25 h=2 market SELL STRAWBERRY 1
+[exec] d=25 h=2 market SELL MILK 1 SELL STRAWBERRY 1
 [exec] d=25 h=2 farmer FEED farmer t1
-[exec] d=25 h=2 hand0 PICKUP WHEAT 2
+[exec] d=25 h=2 hand0 PICKUP WHEAT 3
 [exec] d=25 h=2 hand1 PICKUP WHEAT 2
 [exec] d=25 h=2 hand2 WEST
 [exec] d=25 h=2 hand3 NORTH
@@ -3229,7 +3168,7 @@
 [exec] d=25 h=3 hand0 WEST
 [exec] d=25 h=3 hand1 WEST
 [exec] d=25 h=3 hand2 PICKUP WHEAT 1
-[exec] d=25 h=3 hand3 PICKUP WHEAT 2
+[exec] d=25 h=3 hand3 PICKUP WHEAT 1
 [exec] d=25 h=4 market SELL STRAWBERRY 1
 [exec] d=25 h=4 farmer CARE farmer t1
 [exec] d=25 h=4 hand0 WEST
@@ -3237,31 +3176,29 @@
 [exec] d=25 h=4 hand2 WEST
 [exec] d=25 h=4 hand3 WEST
 [exec] d=25 h=5 market SELL STRAWBERRY 1
-[exec] d=25 h=5 farmer HARVEST farmer t1
+[exec] d=25 h=5 farmer COLLECT_FERTILIZER farmer t1
 [exec] d=25 h=5 hand0 WEST
 [exec] d=25 h=5 hand1 WEST
 [exec] d=25 h=5 hand2 WEST
 [exec] d=25 h=5 hand3 FEED
-[exec] d=25 h=6 market BUY_PRODUCT WHEAT 1 SELL STRAWBERRY 1
-[exec] d=25 h=6 farmer COLLECT_FERTILIZER farmer t1
+[exec] d=25 h=6 market SELL STRAWBERRY 1
+[exec] d=25 h=6 farmer NORTH farmer next
 [exec] d=25 h=6 hand0 WEST
 [exec] d=25 h=6 hand1 FEED
 [exec] d=25 h=6 hand2 FEED
 [exec] d=25 h=6 hand3 CARE
-[exec] d=25 h=7 market BUY_PRODUCT WHEAT 2 SELL STRAWBERRY 1
-[exec] d=25 h=7 farmer NORTH farmer next
+[exec] d=25 h=7 farmer FEED farmer t2
 [exec] d=25 h=7 hand0 FEED
 [exec] d=25 h=7 hand1 CARE
 [exec] d=25 h=7 hand2 CARE
 [exec] d=25 h=7 hand3 HARVEST
 [exec] d=25 h=8 market BUY_PRODUCT WHEAT 1
-[exec] d=25 h=8 farmer FEED farmer t2
+[exec] d=25 h=8 farmer CARE farmer t2
 [exec] d=25 h=8 hand0 CARE
 [exec] d=25 h=8 hand1 HARVEST
 [exec] d=25 h=8 hand2 HARVEST
 [exec] d=25 h=8 hand3 COLLECT_FERTILIZER
-[exec] d=25 h=9 market BUY_PRODUCT WHEAT 1
-[exec] d=25 h=9 farmer CARE farmer t2
+[exec] d=25 h=9 farmer HARVEST farmer t2
 [exec] d=25 h=9 hand0 HARVEST
 [exec] d=25 h=9 hand1 COLLECT_FERTILIZER
 [exec] d=25 h=9 hand2 COLLECT_FERTILIZER
@@ -3270,99 +3207,100 @@
 [exec] d=25 h=10 hand0 COLLECT_FERTILIZER
 [exec] d=25 h=10 hand1 NORTH
 [exec] d=25 h=10 hand2 NORTH
-[exec] d=25 h=10 hand3 WATER
+[exec] d=25 h=10 hand3 PLANT WHEAT
 [exec] d=25 h=11 farmer NORTH farmer next
 [exec] d=25 h=11 hand0 NORTH
 [exec] d=25 h=11 hand1 WATER
-[exec] d=25 h=11 hand2 PLANT WHEAT
-[exec] d=25 h=11 hand3 NORTH
+[exec] d=25 h=11 hand2 WATER
+[exec] d=25 h=11 hand3 WATER
 [exec] d=25 h=12 farmer WATER farmer t3
-[exec] d=25 h=12 hand0 FEED
-[exec] d=25 h=12 hand1 HARVEST
-[exec] d=25 h=12 hand2 WATER
-[exec] d=25 h=12 hand3 FEED
-[exec] d=25 h=13 market BUY_PRODUCT WHEAT 1
+[exec] d=25 h=12 hand0 PLANT WHEAT
+[exec] d=25 h=12 hand1 NORTH
+[exec] d=25 h=12 hand2 FERTILIZE
+[exec] d=25 h=12 hand3 NORTH
 [exec] d=25 h=13 farmer FERTILIZE farmer t3
-[exec] d=25 h=13 hand0 CARE
-[exec] d=25 h=13 hand1 NORTH
+[exec] d=25 h=13 hand0 WATER
+[exec] d=25 h=13 hand1 FEED
 [exec] d=25 h=13 hand2 NORTH
-[exec] d=25 h=13 hand3 COLLECT_FERTILIZER
+[exec] d=25 h=13 hand3 WATER
+[exec] d=25 h=14 market BUY_PRODUCT WHEAT 1
 [exec] d=25 h=14 farmer NORTH farmer next
-[exec] d=25 h=14 hand0 HARVEST
-[exec] d=25 h=14 hand1 WATER
-[exec] d=25 h=14 hand2 WATER
-[exec] d=25 h=14 hand3 NORTH
+[exec] d=25 h=14 hand0 NORTH
+[exec] d=25 h=14 hand1 CARE
+[exec] d=25 h=14 hand2 PLANT WHEAT
+[exec] d=25 h=14 hand3 FERTILIZE
 [exec] d=25 h=15 farmer FEED farmer t4
-[exec] d=25 h=15 hand0 COLLECT_FERTILIZER
-[exec] d=25 h=15 hand1 FERTILIZE
-[exec] d=25 h=15 hand2 NORTH
-[exec] d=25 h=15 hand3 PLANT WHEAT
-[exec] d=25 h=16 market BUY_PRODUCT WHEAT 1
+[exec] d=25 h=15 hand0 FEED
+[exec] d=25 h=15 hand1 HARVEST
+[exec] d=25 h=15 hand2 WATER
+[exec] d=25 h=15 hand3 NORTH
+[exec] d=25 h=16 market BUY_PRODUCT WHEAT 2
 [exec] d=25 h=16 farmer CARE farmer t4
-[exec] d=25 h=16 hand0 NORTH
-[exec] d=25 h=16 hand1 NORTH
-[exec] d=25 h=16 hand2 PLANT WHEAT
+[exec] d=25 h=16 hand0 CARE
+[exec] d=25 h=16 hand1 COLLECT_FERTILIZER
+[exec] d=25 h=16 hand2 NORTH
 [exec] d=25 h=16 hand3 WATER
 [exec] d=25 h=17 farmer HARVEST farmer t4
-[exec] d=25 h=17 hand0 PLANT WHEAT
-[exec] d=25 h=17 hand1 PLANT WHEAT
-[exec] d=25 h=17 hand2 WATER
-[exec] d=25 h=17 hand3 NORTH
+[exec] d=25 h=17 hand0 COLLECT_FERTILIZER
+[exec] d=25 h=17 hand1 NORTH
+[exec] d=25 h=17 hand2 PLANT WHEAT
+[exec] d=25 h=17 hand3 HARVEST
 [exec] d=25 h=18 farmer COLLECT_FERTILIZER farmer t4
-[exec] d=25 h=18 hand0 WATER
-[exec] d=25 h=18 hand1 WATER
-[exec] d=25 h=18 hand2 NORTH
-[exec] d=25 h=18 hand3 PASS
+[exec] d=25 h=18 hand0 NORTH
+[exec] d=25 h=18 hand1 PLANT WHEAT
+[exec] d=25 h=18 hand2 WATER
+[exec] d=25 h=18 hand3 NORTH
 [exec] d=25 h=19 farmer NORTH farmer next
-[exec] d=25 h=19 hand0 NORTH
-[exec] d=25 h=19 hand1 NORTH
-[exec] d=25 h=19 hand2 WATER
-[exec] d=25 h=19 hand3 PASS
+[exec] d=25 h=19 hand0 FEED
+[exec] d=25 h=19 hand1 WATER
+[exec] d=25 h=19 hand2 NORTH
+[exec] d=25 h=19 hand3 WATER
 [exec] d=25 h=20 farmer WATER farmer t5
-[exec] d=25 h=20 hand0 WATER
-[exec] d=25 h=20 hand1 FEED
+[exec] d=25 h=20 hand0 CARE
+[exec] d=25 h=20 hand1 NORTH
 [exec] d=25 h=20 hand2 HARVEST
 [exec] d=25 h=20 hand3 PASS
-[exec] d=25 h=21 farmer FERTILIZE farmer t5
-[exec] d=25 h=21 hand0 NORTH
-[exec] d=25 h=21 hand1 CARE
-[exec] d=25 h=21 hand2 PASS
+[exec] d=25 h=21 farmer HARVEST farmer t5
+[exec] d=25 h=21 hand0 COLLECT_FERTILIZER
+[exec] d=25 h=21 hand1 WATER
+[exec] d=25 h=21 hand2 DIG
 [exec] d=25 h=21 hand3 PASS
+[exec] d=25 h=22 market BUY_SEED CARROT 1
 [exec] d=25 h=22 farmer PASS farmer tile-done
-[exec] d=25 h=22 hand0 PASS
-[exec] d=25 h=22 hand1 COLLECT_FERTILIZER
+[exec] d=25 h=22 hand0 NORTH
+[exec] d=25 h=22 hand1 HARVEST
 [exec] d=25 h=22 hand2 PASS
 [exec] d=25 h=22 hand3 PASS
 [exec] d=25 h=23 farmer PASS farmer done
-[exec] d=25 h=23 hand0 PASS
+[exec] d=25 h=23 hand0 WATER
 [exec] d=25 h=23 hand1 PASS
-[exec] d=25 h=23 hand2 PASS
+[exec] d=25 h=23 hand2 SOUTH
 [exec] d=25 h=23 hand3 PASS
-[planner] wsp zone=hire2 OPTIMAL obj=636 time=0.002s bank=67252 empty=1 picks=1
-[planner] wsp zone=hire3 OPTIMAL obj=636 time=0.002s bank=67252 empty=1 picks=1
-[planner] wsp zone=hire4 OPTIMAL obj=-0 time=0.002s bank=67252 empty=1 picks=0
-[planner] replan assign t12:CARROT@0, t20:CARROT@0, t25:IDLE
-[planner] replan d=26 solver=zonewise_wsp shops=8 catalog=0 assign=2 locked=22
-[sell_dp] d=26 ms=1 quota=MELON=0 STRAWBERRY=0 MILK=12 WOOL=0 clamped=MILK=12(from 8) inv_melon=9946
-[snap] d=26 h=0 money=67252 farmer_empty=0 hire1_empty=1 hire2_empty=1 hire3_empty=1 hire4_empty=1 shops=8 demand_CARROT=3 demand_EGG=2 demand_MELON=0 demand_MILK=3 demand_STRAWBERRY=4 demand_TOMATO=2 demand_WHEAT=5 demand_WOOL=2 CARROT=41 EGG=58 FERTILIZER=73 MELON=285 MILK=319 STRAWBERRY=270 TOMATO=87 WHEAT=48 WOOL=249
-[exec] d=26 h=0 market HIRE HIRE BUY_SEED CARROT 3 SELL EGG 6 SELL FERTILIZER 7 SELL MILK 1
+[planner] wsp zone=hire2 OPTIMAL obj=652 time=0.002s close0=63694 cons0=62003 open0=62024 empty=1 picks=1
+[planner] wsp zone=hire3 OPTIMAL obj=652 time=0.002s close0=62347 cons0=61981 open0=62003 empty=1 picks=1
+[planner] wsp zone=hire4 OPTIMAL obj=652 time=0.002s close0=62324 cons0=61958 open0=61981 empty=1 picks=1
+[planner] replan assign t15:CARROT@0, t20:CARROT@0, t24:CARROT@0
+[planner] replan d=26 solver=zonewise_wsp shops=8 catalog=0 assign=3 locked=22
+[sell_dp] d=26 ms=1 quota=MELON=0 STRAWBERRY=4 MILK=12 WOOL=4 clamped=MILK=12(from 9) inv_melon=9952
+[snap] d=26 h=0 money=62025 farmer_empty=0 hire1_empty=0 hire2_empty=1 hire3_empty=1 hire4_empty=1 shops=8 demand_CARROT=3 demand_EGG=2 demand_MELON=0 demand_MILK=3 demand_STRAWBERRY=4 demand_TOMATO=2 demand_WHEAT=5 demand_WOOL=2 CARROT=42 EGG=61 FERTILIZER=76 MELON=284 MILK=291 STRAWBERRY=265 TOMATO=82 WHEAT=48 WOOL=247
+[exec] d=26 h=0 market HIRE HIRE BUY_SEED CARROT 2 SELL EGG 6 SELL FERTILIZER 7 SELL MILK 1 SELL STRAWBERRY 1 SELL WOOL 1
 [exec] d=26 h=0 farmer PASS market-hour
-[exec] d=26 h=1 market HIRE HIRE SELL MILK 1
+[exec] d=26 h=1 market HIRE HIRE SELL MILK 1 SELL STRAWBERRY 1 SELL WOOL 1
 [exec] d=26 h=1 farmer PICKUP WHEAT 3 farmer wheat
 [exec] d=26 h=1 hand0 WEST
 [exec] d=26 h=1 hand1 NORTH
-[exec] d=26 h=2 market SELL MILK 1
+[exec] d=26 h=2 market SELL MILK 1 SELL STRAWBERRY 1 SELL WOOL 1
 [exec] d=26 h=2 farmer FEED farmer t1
-[exec] d=26 h=2 hand0 PICKUP WHEAT 2
+[exec] d=26 h=2 hand0 PICKUP WHEAT 3
 [exec] d=26 h=2 hand1 PICKUP WHEAT 2
 [exec] d=26 h=2 hand2 WEST
 [exec] d=26 h=2 hand3 NORTH
-[exec] d=26 h=3 market SELL MILK 1
+[exec] d=26 h=3 market SELL MILK 1 SELL STRAWBERRY 1 SELL WOOL 1
 [exec] d=26 h=3 farmer PICKUP WHEAT 1 wheat
 [exec] d=26 h=3 hand0 WEST
 [exec] d=26 h=3 hand1 WEST
 [exec] d=26 h=3 hand2 PICKUP WHEAT 1
-[exec] d=26 h=3 hand3 PICKUP WHEAT 2
+[exec] d=26 h=3 hand3 PICKUP WHEAT 1
 [exec] d=26 h=4 market SELL MILK 1
 [exec] d=26 h=4 farmer CARE farmer t1
 [exec] d=26 h=4 hand0 WEST
@@ -3370,121 +3308,122 @@
 [exec] d=26 h=4 hand2 WEST
 [exec] d=26 h=4 hand3 WEST
 [exec] d=26 h=5 market SELL MILK 1
-[exec] d=26 h=5 farmer COLLECT_FERTILIZER farmer t1
+[exec] d=26 h=5 farmer HARVEST farmer t1
 [exec] d=26 h=5 hand0 WEST
 [exec] d=26 h=5 hand1 WEST
 [exec] d=26 h=5 hand2 WEST
 [exec] d=26 h=5 hand3 FEED
 [exec] d=26 h=6 market SELL MILK 1
-[exec] d=26 h=6 farmer NORTH farmer next
+[exec] d=26 h=6 farmer COLLECT_FERTILIZER farmer t1
 [exec] d=26 h=6 hand0 WEST
 [exec] d=26 h=6 hand1 FEED
 [exec] d=26 h=6 hand2 FEED
 [exec] d=26 h=6 hand3 CARE
 [exec] d=26 h=7 market SELL MILK 1
-[exec] d=26 h=7 farmer FEED farmer t2
+[exec] d=26 h=7 farmer NORTH farmer next
 [exec] d=26 h=7 hand0 FEED
 [exec] d=26 h=7 hand1 CARE
 [exec] d=26 h=7 hand2 CARE
 [exec] d=26 h=7 hand3 HARVEST
 [exec] d=26 h=8 market SELL MILK 1
-[exec] d=26 h=8 farmer CARE farmer t2
+[exec] d=26 h=8 farmer FEED farmer t2
 [exec] d=26 h=8 hand0 CARE
 [exec] d=26 h=8 hand1 HARVEST
 [exec] d=26 h=8 hand2 HARVEST
 [exec] d=26 h=8 hand3 COLLECT_FERTILIZER
 [exec] d=26 h=9 market SELL MILK 1
-[exec] d=26 h=9 farmer COLLECT_FERTILIZER farmer t2
+[exec] d=26 h=9 farmer CARE farmer t2
 [exec] d=26 h=9 hand0 COLLECT_FERTILIZER
 [exec] d=26 h=9 hand1 COLLECT_FERTILIZER
 [exec] d=26 h=9 hand2 COLLECT_FERTILIZER
 [exec] d=26 h=9 hand3 NORTH
 [exec] d=26 h=10 market SELL MILK 1
-[exec] d=26 h=10 farmer NORTH farmer next
+[exec] d=26 h=10 farmer COLLECT_FERTILIZER farmer t2
 [exec] d=26 h=10 hand0 NORTH
 [exec] d=26 h=10 hand1 NORTH
 [exec] d=26 h=10 hand2 NORTH
 [exec] d=26 h=10 hand3 WATER
 [exec] d=26 h=11 market SELL MILK 1
-[exec] d=26 h=11 farmer WATER farmer t3
-[exec] d=26 h=11 hand0 FEED
-[exec] d=26 h=11 hand1 PLANT CARROT
+[exec] d=26 h=11 farmer NORTH farmer next
+[exec] d=26 h=11 hand0 WATER
+[exec] d=26 h=11 hand1 HARVEST
 [exec] d=26 h=11 hand2 WATER
-[exec] d=26 h=11 hand3 FERTILIZE
-[exec] d=26 h=12 farmer HARVEST farmer t3
-[exec] d=26 h=12 hand0 CARE
-[exec] d=26 h=12 hand1 WATER
+[exec] d=26 h=11 hand3 NORTH
+[exec] d=26 h=12 farmer WATER farmer t3
+[exec] d=26 h=12 hand0 NORTH
+[exec] d=26 h=12 hand1 DIG
 [exec] d=26 h=12 hand2 NORTH
-[exec] d=26 h=12 hand3 NORTH
-[exec] d=26 h=13 farmer NORTH farmer next
-[exec] d=26 h=13 hand0 COLLECT_FERTILIZER
+[exec] d=26 h=12 hand3 WATER
+[exec] d=26 h=13 farmer HARVEST farmer t3
+[exec] d=26 h=13 hand0 FEED
 [exec] d=26 h=13 hand1 NORTH
 [exec] d=26 h=13 hand2 WATER
-[exec] d=26 h=13 hand3 FEED
-[exec] d=26 h=14 farmer FEED farmer t4
-[exec] d=26 h=14 hand0 NORTH
-[exec] d=26 h=14 hand1 WATER
+[exec] d=26 h=13 hand3 NORTH
+[exec] d=26 h=14 farmer NORTH farmer next
+[exec] d=26 h=14 hand0 CARE
+[exec] d=26 h=14 hand1 FEED
 [exec] d=26 h=14 hand2 NORTH
-[exec] d=26 h=14 hand3 HARVEST
-[exec] d=26 h=15 farmer CARE farmer t4
-[exec] d=26 h=15 hand0 WATER
-[exec] d=26 h=15 hand1 NORTH
+[exec] d=26 h=14 hand3 PLANT CARROT
+[exec] d=26 h=15 farmer FEED farmer t4
+[exec] d=26 h=15 hand0 HARVEST
+[exec] d=26 h=15 hand1 CARE
 [exec] d=26 h=15 hand2 WATER
-[exec] d=26 h=15 hand3 COLLECT_FERTILIZER
-[exec] d=26 h=16 farmer COLLECT_FERTILIZER farmer t4
-[exec] d=26 h=16 hand0 NORTH
-[exec] d=26 h=16 hand1 WATER
+[exec] d=26 h=15 hand3 WATER
+[exec] d=26 h=16 farmer CARE farmer t4
+[exec] d=26 h=16 hand0 COLLECT_FERTILIZER
+[exec] d=26 h=16 hand1 COLLECT_FERTILIZER
 [exec] d=26 h=16 hand2 NORTH
 [exec] d=26 h=16 hand3 NORTH
-[exec] d=26 h=17 farmer NORTH farmer next
-[exec] d=26 h=17 hand0 WATER
+[exec] d=26 h=17 farmer COLLECT_FERTILIZER farmer t4
+[exec] d=26 h=17 hand0 NORTH
 [exec] d=26 h=17 hand1 NORTH
 [exec] d=26 h=17 hand2 PLANT CARROT
 [exec] d=26 h=17 hand3 WATER
-[exec] d=26 h=18 farmer WATER farmer t5
-[exec] d=26 h=18 hand0 FERTILIZE
-[exec] d=26 h=18 hand1 FEED
+[exec] d=26 h=18 farmer NORTH farmer next
+[exec] d=26 h=18 hand0 FEED
+[exec] d=26 h=18 hand1 WATER
 [exec] d=26 h=18 hand2 WATER
-[exec] d=26 h=18 hand3 NORTH
-[exec] d=26 h=19 farmer HARVEST farmer t5
-[exec] d=26 h=19 hand0 NORTH
-[exec] d=26 h=19 hand1 CARE
+[exec] d=26 h=18 hand3 PASS
+[exec] d=26 h=19 farmer WATER farmer t5
+[exec] d=26 h=19 hand0 CARE
+[exec] d=26 h=19 hand1 NORTH
 [exec] d=26 h=19 hand2 PASS
 [exec] d=26 h=19 hand3 PASS
-[exec] d=26 h=20 farmer PASS farmer tile-done
-[exec] d=26 h=20 hand0 PLANT CARROT
-[exec] d=26 h=20 hand1 HARVEST
+[exec] d=26 h=20 farmer FERTILIZE farmer t5
+[exec] d=26 h=20 hand0 COLLECT_FERTILIZER
+[exec] d=26 h=20 hand1 PLANT CARROT
 [exec] d=26 h=20 hand2 PASS
 [exec] d=26 h=20 hand3 PASS
-[exec] d=26 h=21 farmer PASS farmer done
-[exec] d=26 h=21 hand0 WATER
-[exec] d=26 h=21 hand1 COLLECT_FERTILIZER
+[exec] d=26 h=21 farmer PASS farmer tile-done
+[exec] d=26 h=21 hand0 NORTH
+[exec] d=26 h=21 hand1 WATER
 [exec] d=26 h=21 hand2 PASS
 [exec] d=26 h=21 hand3 PASS
 [exec] d=26 h=22 farmer PASS farmer done
-[exec] d=26 h=22 hand0 PASS
+[exec] d=26 h=22 hand0 HARVEST
 [exec] d=26 h=22 hand1 PASS
 [exec] d=26 h=22 hand2 PASS
 [exec] d=26 h=22 hand3 PASS
 [exec] d=26 h=23 farmer PASS farmer done
-[exec] d=26 h=23 hand0 PASS
+[exec] d=26 h=23 hand0 DIG
 [exec] d=26 h=23 hand1 PASS
 [exec] d=26 h=23 hand2 PASS
 [exec] d=26 h=23 hand3 PASS
-[planner] wsp zone=hire4 OPTIMAL obj=-0 time=0.002s bank=71882 empty=1 picks=0
-[planner] replan assign t25:IDLE
-[planner] replan d=27 solver=zonewise_wsp shops=8 catalog=0 assign=0 locked=24
-[sell_dp] d=27 ms=0 quota=MELON=0 STRAWBERRY=4 MILK=1 WOOL=4 inv_melon=9938
-[snap] d=27 h=0 money=71882 farmer_empty=0 hire1_empty=0 hire2_empty=0 hire3_empty=0 hire4_empty=1 shops=8 demand_CARROT=3 demand_EGG=2 demand_MELON=0 demand_MILK=3 demand_STRAWBERRY=4 demand_TOMATO=2 demand_WHEAT=5 demand_WOOL=2 CARROT=41 EGG=59 FERTILIZER=72 MELON=286 MILK=323 STRAWBERRY=278 TOMATO=89 WHEAT=49 WOOL=249
-[exec] d=27 h=0 market HIRE HIRE BUY_PRODUCT WHEAT 1 SELL EGG 6 SELL FERTILIZER 8 SELL MILK 1 SELL STRAWBERRY 1 SELL WOOL 1
+[planner] wsp zone=hire1 OPTIMAL obj=-0 time=0.002s close0=71970 cons0=68430 open0=68431 empty=1 picks=0
+[planner] wsp zone=hire2 OPTIMAL obj=-0 time=0.002s close0=72341 cons0=68429 open0=68430 empty=1 picks=0
+[planner] replan assign t10:IDLE, t12:IDLE
+[planner] replan d=27 solver=zonewise_wsp shops=8 catalog=0 assign=0 locked=23
+[sell_dp] d=27 ms=0 quota=MELON=0 STRAWBERRY=5 MILK=3 WOOL=4 inv_melon=9944
+[snap] d=27 h=0 money=68431 farmer_empty=0 hire1_empty=1 hire2_empty=1 hire3_empty=0 hire4_empty=0 shops=8 demand_CARROT=3 demand_EGG=2 demand_MELON=0 demand_MILK=3 demand_STRAWBERRY=4 demand_TOMATO=2 demand_WHEAT=5 demand_WOOL=2 CARROT=42 EGG=62 FERTILIZER=75 MELON=285 MILK=295 STRAWBERRY=271 TOMATO=84 WHEAT=49 WOOL=248
+[exec] d=27 h=0 market HIRE HIRE SELL EGG 6 SELL FERTILIZER 9 SELL MILK 1 SELL STRAWBERRY 1 SELL WOOL 1
 [exec] d=27 h=0 farmer PASS market-hour
-[exec] d=27 h=1 market HIRE HIRE SELL STRAWBERRY 1 SELL WOOL 1
+[exec] d=27 h=1 market HIRE HIRE SELL MILK 1 SELL STRAWBERRY 1 SELL WOOL 1
 [exec] d=27 h=1 farmer PICKUP WHEAT 3 farmer wheat
 [exec] d=27 h=1 hand0 WEST
 [exec] d=27 h=1 hand1 NORTH
-[exec] d=27 h=2 market SELL STRAWBERRY 1 SELL WOOL 1
+[exec] d=27 h=2 market SELL MILK 1 SELL STRAWBERRY 1 SELL WOOL 1
 [exec] d=27 h=2 farmer FEED farmer t1
-[exec] d=27 h=2 hand0 PICKUP WHEAT 2
+[exec] d=27 h=2 hand0 PICKUP WHEAT 3
 [exec] d=27 h=2 hand1 PICKUP WHEAT 2
 [exec] d=27 h=2 hand2 WEST
 [exec] d=27 h=2 hand3 NORTH
@@ -3493,104 +3432,105 @@
 [exec] d=27 h=3 hand0 WEST
 [exec] d=27 h=3 hand1 WEST
 [exec] d=27 h=3 hand2 PICKUP WHEAT 1
-[exec] d=27 h=3 hand3 PICKUP WHEAT 2
+[exec] d=27 h=3 hand3 PICKUP WHEAT 1
+[exec] d=27 h=4 market SELL STRAWBERRY 1
 [exec] d=27 h=4 farmer CARE farmer t1
 [exec] d=27 h=4 hand0 WEST
 [exec] d=27 h=4 hand1 WEST
 [exec] d=27 h=4 hand2 WEST
 [exec] d=27 h=4 hand3 WEST
-[exec] d=27 h=5 farmer HARVEST farmer t1
+[exec] d=27 h=5 farmer COLLECT_FERTILIZER farmer t1
 [exec] d=27 h=5 hand0 WEST
 [exec] d=27 h=5 hand1 WEST
 [exec] d=27 h=5 hand2 WEST
 [exec] d=27 h=5 hand3 FEED
 [exec] d=27 h=6 market BUY_PRODUCT WHEAT 1
-[exec] d=27 h=6 farmer COLLECT_FERTILIZER farmer t1
+[exec] d=27 h=6 farmer NORTH farmer next
 [exec] d=27 h=6 hand0 WEST
 [exec] d=27 h=6 hand1 FEED
 [exec] d=27 h=6 hand2 FEED
 [exec] d=27 h=6 hand3 CARE
 [exec] d=27 h=7 market BUY_PRODUCT WHEAT 2
-[exec] d=27 h=7 farmer NORTH farmer next
+[exec] d=27 h=7 farmer FEED farmer t2
 [exec] d=27 h=7 hand0 FEED
 [exec] d=27 h=7 hand1 CARE
 [exec] d=27 h=7 hand2 CARE
 [exec] d=27 h=7 hand3 HARVEST
-[exec] d=27 h=8 market BUY_PRODUCT WHEAT 1
-[exec] d=27 h=8 farmer FEED farmer t2
+[exec] d=27 h=8 market BUY_PRODUCT WHEAT 2
+[exec] d=27 h=8 farmer CARE farmer t2
 [exec] d=27 h=8 hand0 CARE
 [exec] d=27 h=8 hand1 HARVEST
 [exec] d=27 h=8 hand2 HARVEST
 [exec] d=27 h=8 hand3 COLLECT_FERTILIZER
-[exec] d=27 h=9 market BUY_PRODUCT WHEAT 1
-[exec] d=27 h=9 farmer CARE farmer t2
+[exec] d=27 h=9 farmer COLLECT_FERTILIZER farmer t2
 [exec] d=27 h=9 hand0 HARVEST
 [exec] d=27 h=9 hand1 COLLECT_FERTILIZER
 [exec] d=27 h=9 hand2 COLLECT_FERTILIZER
 [exec] d=27 h=9 hand3 NORTH
-[exec] d=27 h=10 farmer COLLECT_FERTILIZER farmer t2
+[exec] d=27 h=10 farmer NORTH farmer next
 [exec] d=27 h=10 hand0 COLLECT_FERTILIZER
 [exec] d=27 h=10 hand1 NORTH
 [exec] d=27 h=10 hand2 NORTH
 [exec] d=27 h=10 hand3 WATER
-[exec] d=27 h=11 farmer NORTH farmer next
+[exec] d=27 h=11 farmer WATER farmer t3
 [exec] d=27 h=11 hand0 NORTH
-[exec] d=27 h=11 hand1 WATER
+[exec] d=27 h=11 hand1 NORTH
 [exec] d=27 h=11 hand2 WATER
-[exec] d=27 h=11 hand3 NORTH
-[exec] d=27 h=12 farmer WATER farmer t3
-[exec] d=27 h=12 hand0 FEED
-[exec] d=27 h=12 hand1 NORTH
-[exec] d=27 h=12 hand2 FERTILIZE
-[exec] d=27 h=12 hand3 FEED
-[exec] d=27 h=13 market BUY_PRODUCT WHEAT 2
-[exec] d=27 h=13 farmer NORTH farmer next
-[exec] d=27 h=13 hand0 CARE
-[exec] d=27 h=13 hand1 WATER
+[exec] d=27 h=11 hand3 FERTILIZE
+[exec] d=27 h=12 farmer NORTH farmer next
+[exec] d=27 h=12 hand0 WATER
+[exec] d=27 h=12 hand1 FEED
+[exec] d=27 h=12 hand2 HARVEST
+[exec] d=27 h=12 hand3 NORTH
+[exec] d=27 h=13 farmer FEED farmer t4
+[exec] d=27 h=13 hand0 FERTILIZE
+[exec] d=27 h=13 hand1 CARE
 [exec] d=27 h=13 hand2 NORTH
-[exec] d=27 h=13 hand3 COLLECT_FERTILIZER
-[exec] d=27 h=14 farmer FEED farmer t4
-[exec] d=27 h=14 hand0 HARVEST
+[exec] d=27 h=13 hand3 WATER
+[exec] d=27 h=14 market BUY_PRODUCT WHEAT 1
+[exec] d=27 h=14 farmer CARE farmer t4
+[exec] d=27 h=14 hand0 NORTH
 [exec] d=27 h=14 hand1 HARVEST
 [exec] d=27 h=14 hand2 WATER
-[exec] d=27 h=14 hand3 NORTH
-[exec] d=27 h=15 farmer CARE farmer t4
-[exec] d=27 h=15 hand0 COLLECT_FERTILIZER
-[exec] d=27 h=15 hand1 NORTH
-[exec] d=27 h=15 hand2 NORTH
-[exec] d=27 h=15 hand3 WATER
-[exec] d=27 h=16 farmer HARVEST farmer t4
-[exec] d=27 h=16 hand0 NORTH
-[exec] d=27 h=16 hand1 WATER
-[exec] d=27 h=16 hand2 WATER
-[exec] d=27 h=16 hand3 FERTILIZE
-[exec] d=27 h=17 farmer COLLECT_FERTILIZER farmer t4
-[exec] d=27 h=17 hand0 WATER
-[exec] d=27 h=17 hand1 FERTILIZE
-[exec] d=27 h=17 hand2 NORTH
+[exec] d=27 h=14 hand3 HARVEST
+[exec] d=27 h=15 farmer HARVEST farmer t4
+[exec] d=27 h=15 hand0 FEED
+[exec] d=27 h=15 hand1 COLLECT_FERTILIZER
+[exec] d=27 h=15 hand2 FERTILIZE
+[exec] d=27 h=15 hand3 NORTH
+[exec] d=27 h=16 farmer COLLECT_FERTILIZER farmer t4
+[exec] d=27 h=16 hand0 CARE
+[exec] d=27 h=16 hand1 NORTH
+[exec] d=27 h=16 hand2 NORTH
+[exec] d=27 h=16 hand3 WATER
+[exec] d=27 h=17 farmer NORTH farmer next
+[exec] d=27 h=17 hand0 COLLECT_FERTILIZER
+[exec] d=27 h=17 hand1 WATER
+[exec] d=27 h=17 hand2 WATER
 [exec] d=27 h=17 hand3 NORTH
-[exec] d=27 h=18 farmer NORTH farmer next
-[exec] d=27 h=18 hand0 FERTILIZE
-[exec] d=27 h=18 hand1 NORTH
-[exec] d=27 h=18 hand2 WATER
-[exec] d=27 h=18 hand3 PASS
-[exec] d=27 h=19 farmer WATER farmer t5
-[exec] d=27 h=19 hand0 NORTH
-[exec] d=27 h=19 hand1 FEED
-[exec] d=27 h=19 hand2 PASS
-[exec] d=27 h=19 hand3 PASS
+[exec] d=27 h=18 farmer WATER farmer t5
+[exec] d=27 h=18 hand0 NORTH
+[exec] d=27 h=18 hand1 FERTILIZE
+[exec] d=27 h=18 hand2 NORTH
+[exec] d=27 h=18 hand3 WATER
+[exec] d=27 h=19 farmer HARVEST farmer t5
+[exec] d=27 h=19 hand0 FEED
+[exec] d=27 h=19 hand1 NORTH
+[exec] d=27 h=19 hand2 WATER
+[exec] d=27 h=19 hand3 HARVEST
+[exec] d=27 h=20 market BUY_PRODUCT WHEAT 1
 [exec] d=27 h=20 farmer PASS farmer tile-done
-[exec] d=27 h=20 hand0 WATER
-[exec] d=27 h=20 hand1 CARE
+[exec] d=27 h=20 hand0 CARE
+[exec] d=27 h=20 hand1 WATER
 [exec] d=27 h=20 hand2 PASS
 [exec] d=27 h=20 hand3 PASS
 [exec] d=27 h=21 farmer PASS farmer done
-[exec] d=27 h=21 hand0 NORTH
-[exec] d=27 h=21 hand1 COLLECT_FERTILIZER
+[exec] d=27 h=21 hand0 COLLECT_FERTILIZER
+[exec] d=27 h=21 hand1 PASS
 [exec] d=27 h=21 hand2 PASS
 [exec] d=27 h=21 hand3 PASS
 [exec] d=27 h=22 farmer PASS farmer done
-[exec] d=27 h=22 hand0 WATER
+[exec] d=27 h=22 hand0 NORTH
 [exec] d=27 h=22 hand1 PASS
 [exec] d=27 h=22 hand2 PASS
 [exec] d=27 h=22 hand3 PASS
@@ -3599,21 +3539,23 @@
 [exec] d=27 h=23 hand1 PASS
 [exec] d=27 h=23 hand2 PASS
 [exec] d=27 h=23 hand3 PASS
-[planner] wsp zone=hire2 OPTIMAL obj=-0 time=0.002s bank=74838 empty=1 picks=0
-[planner] wsp zone=hire4 OPTIMAL obj=-0 time=0.002s bank=74838 empty=1 picks=0
-[planner] replan assign t13:IDLE, t25:IDLE
-[planner] replan d=28 solver=zonewise_wsp shops=8 catalog=0 assign=0 locked=23
-[sell_dp] d=28 ms=0 quota=MELON=0 STRAWBERRY=0 MILK=12 WOOL=0 clamped=MILK=12(from 8) inv_melon=9930
-[snap] d=28 h=0 money=74838 farmer_empty=0 hire1_empty=0 hire2_empty=1 hire3_empty=0 hire4_empty=1 shops=8 demand_CARROT=3 demand_EGG=2 demand_MELON=0 demand_MILK=3 demand_STRAWBERRY=4 demand_TOMATO=2 demand_WHEAT=5 demand_WOOL=2 CARROT=41 EGG=60 FERTILIZER=70 MELON=287 MILK=328 STRAWBERRY=284 TOMATO=92 WHEAT=50 WOOL=250
-[exec] d=28 h=0 market HIRE HIRE SELL EGG 6 SELL FERTILIZER 6 SELL MILK 1
+[planner] wsp zone=hire1 OPTIMAL obj=-0 time=0.002s close0=75973 cons0=72361 open0=72362 empty=1 picks=0
+[planner] wsp zone=hire2 OPTIMAL obj=-0 time=0.002s close0=72738 cons0=72360 open0=72361 empty=1 picks=0
+[planner] wsp zone=hire3 OPTIMAL obj=-0 time=0.002s close0=72736 cons0=72358 open0=72360 empty=1 picks=0
+[planner] wsp zone=hire4 OPTIMAL obj=-0 time=0.002s close0=72733 cons0=72355 open0=72358 empty=2 picks=0
+[planner] replan assign t10:IDLE, t12:IDLE, t17:IDLE, t23:IDLE, t25:IDLE
+[planner] replan d=28 solver=zonewise_wsp shops=8 catalog=0 assign=0 locked=20
+[sell_dp] d=28 ms=0 quota=MELON=0 STRAWBERRY=2 MILK=9 WOOL=0 clamped=MILK=9(from 7) inv_melon=9936
+[snap] d=28 h=0 money=72362 farmer_empty=0 hire1_empty=1 hire2_empty=1 hire3_empty=1 hire4_empty=2 shops=8 demand_CARROT=3 demand_EGG=2 demand_MELON=0 demand_MILK=3 demand_STRAWBERRY=4 demand_TOMATO=2 demand_WHEAT=5 demand_WOOL=2 CARROT=42 EGG=63 FERTILIZER=73 MELON=287 MILK=301 STRAWBERRY=278 TOMATO=87 WHEAT=50 WOOL=248
+[exec] d=28 h=0 market HIRE HIRE SELL EGG 6 SELL FERTILIZER 6 SELL MILK 1 SELL STRAWBERRY 1
 [exec] d=28 h=0 farmer PASS market-hour
-[exec] d=28 h=1 market HIRE HIRE SELL MILK 1
+[exec] d=28 h=1 market HIRE HIRE SELL MILK 1 SELL STRAWBERRY 1
 [exec] d=28 h=1 farmer PICKUP WHEAT 3 farmer wheat
 [exec] d=28 h=1 hand0 WEST
 [exec] d=28 h=1 hand1 NORTH
 [exec] d=28 h=2 market SELL MILK 1
 [exec] d=28 h=2 farmer FEED farmer t1
-[exec] d=28 h=2 hand0 PICKUP WHEAT 2
+[exec] d=28 h=2 hand0 PICKUP WHEAT 3
 [exec] d=28 h=2 hand1 PICKUP WHEAT 2
 [exec] d=28 h=2 hand2 WEST
 [exec] d=28 h=2 hand3 NORTH
@@ -3622,14 +3564,14 @@
 [exec] d=28 h=3 hand0 WEST
 [exec] d=28 h=3 hand1 WEST
 [exec] d=28 h=3 hand2 PICKUP WHEAT 1
-[exec] d=28 h=3 hand3 PICKUP WHEAT 2
+[exec] d=28 h=3 hand3 PICKUP WHEAT 1
 [exec] d=28 h=4 market SELL MILK 1
 [exec] d=28 h=4 farmer CARE farmer t1
 [exec] d=28 h=4 hand0 WEST
 [exec] d=28 h=4 hand1 WEST
 [exec] d=28 h=4 hand2 WEST
 [exec] d=28 h=4 hand3 WEST
-[exec] d=28 h=5 market SELL MILK 1
+[exec] d=28 h=5 market SELL WHEAT 3 SELL MILK 1
 [exec] d=28 h=5 farmer COLLECT_FERTILIZER farmer t1
 [exec] d=28 h=5 hand0 WEST
 [exec] d=28 h=5 hand1 WEST
@@ -3647,79 +3589,74 @@
 [exec] d=28 h=7 hand1 CARE
 [exec] d=28 h=7 hand2 CARE
 [exec] d=28 h=7 hand3 HARVEST
-[exec] d=28 h=8 market BUY_PRODUCT WHEAT 2 SELL MILK 1
+[exec] d=28 h=8 market SELL MILK 1
 [exec] d=28 h=8 farmer CARE farmer t2
 [exec] d=28 h=8 hand0 CARE
 [exec] d=28 h=8 hand1 HARVEST
 [exec] d=28 h=8 hand2 HARVEST
 [exec] d=28 h=8 hand3 COLLECT_FERTILIZER
-[exec] d=28 h=9 market SELL MILK 1
-[exec] d=28 h=9 farmer COLLECT_FERTILIZER farmer t2
+[exec] d=28 h=9 farmer HARVEST farmer t2
 [exec] d=28 h=9 hand0 COLLECT_FERTILIZER
 [exec] d=28 h=9 hand1 COLLECT_FERTILIZER
 [exec] d=28 h=9 hand2 COLLECT_FERTILIZER
 [exec] d=28 h=9 hand3 NORTH
-[exec] d=28 h=10 market SELL MILK 1
-[exec] d=28 h=10 farmer NORTH farmer next
+[exec] d=28 h=10 farmer COLLECT_FERTILIZER farmer t2
 [exec] d=28 h=10 hand0 NORTH
 [exec] d=28 h=10 hand1 NORTH
 [exec] d=28 h=10 hand2 NORTH
 [exec] d=28 h=10 hand3 WATER
-[exec] d=28 h=11 market SELL MILK 1
-[exec] d=28 h=11 farmer HARVEST farmer t3
-[exec] d=28 h=11 hand0 FEED
-[exec] d=28 h=11 hand1 WATER
-[exec] d=28 h=11 hand2 WATER
-[exec] d=28 h=11 hand3 HARVEST
-[exec] d=28 h=12 farmer DIG farmer t3
-[exec] d=28 h=12 hand0 CARE
-[exec] d=28 h=12 hand1 FERTILIZE
-[exec] d=28 h=12 hand2 NORTH
+[exec] d=28 h=11 farmer NORTH farmer next
+[exec] d=28 h=11 hand0 WATER
+[exec] d=28 h=11 hand1 NORTH
+[exec] d=28 h=11 hand2 NORTH
+[exec] d=28 h=11 hand3 NORTH
+[exec] d=28 h=12 farmer HARVEST farmer t3
+[exec] d=28 h=12 hand0 NORTH
+[exec] d=28 h=12 hand1 FEED
+[exec] d=28 h=12 hand2 WATER
 [exec] d=28 h=12 hand3 NORTH
-[exec] d=28 h=13 farmer NORTH farmer next
-[exec] d=28 h=13 hand0 COLLECT_FERTILIZER
-[exec] d=28 h=13 hand1 NORTH
-[exec] d=28 h=13 hand2 WATER
-[exec] d=28 h=13 hand3 FEED
-[exec] d=28 h=14 farmer FEED farmer t4
-[exec] d=28 h=14 hand0 NORTH
-[exec] d=28 h=14 hand1 NORTH
-[exec] d=28 h=14 hand2 NORTH
-[exec] d=28 h=14 hand3 HARVEST
-[exec] d=28 h=15 market BUY_PRODUCT WHEAT 1
-[exec] d=28 h=15 farmer CARE farmer t4
-[exec] d=28 h=15 hand0 WATER
-[exec] d=28 h=15 hand1 WATER
-[exec] d=28 h=15 hand2 WATER
-[exec] d=28 h=15 hand3 COLLECT_FERTILIZER
-[exec] d=28 h=16 farmer COLLECT_FERTILIZER farmer t4
-[exec] d=28 h=16 hand0 NORTH
-[exec] d=28 h=16 hand1 NORTH
-[exec] d=28 h=16 hand2 NORTH
-[exec] d=28 h=16 hand3 NORTH
-[exec] d=28 h=17 farmer NORTH farmer next
-[exec] d=28 h=17 hand0 WATER
-[exec] d=28 h=17 hand1 FEED
-[exec] d=28 h=17 hand2 WATER
-[exec] d=28 h=17 hand3 WATER
-[exec] d=28 h=18 market BUY_PRODUCT WHEAT 1
-[exec] d=28 h=18 farmer HARVEST farmer t5
-[exec] d=28 h=18 hand0 HARVEST
-[exec] d=28 h=18 hand1 CARE
-[exec] d=28 h=18 hand2 FERTILIZE
-[exec] d=28 h=18 hand3 NORTH
-[exec] d=28 h=19 farmer DIG farmer t5
-[exec] d=28 h=19 hand0 NORTH
-[exec] d=28 h=19 hand1 COLLECT_FERTILIZER
+[exec] d=28 h=13 farmer DIG farmer t3
+[exec] d=28 h=13 hand0 FEED
+[exec] d=28 h=13 hand1 CARE
+[exec] d=28 h=13 hand2 NORTH
+[exec] d=28 h=13 hand3 WATER
+[exec] d=28 h=14 farmer NORTH farmer next
+[exec] d=28 h=14 hand0 CARE
+[exec] d=28 h=14 hand1 COLLECT_FERTILIZER
+[exec] d=28 h=14 hand2 WATER
+[exec] d=28 h=14 hand3 FERTILIZE
+[exec] d=28 h=15 farmer FEED farmer t4
+[exec] d=28 h=15 hand0 HARVEST
+[exec] d=28 h=15 hand1 NORTH
+[exec] d=28 h=15 hand2 NORTH
+[exec] d=28 h=15 hand3 NORTH
+[exec] d=28 h=16 farmer CARE farmer t4
+[exec] d=28 h=16 hand0 COLLECT_FERTILIZER
+[exec] d=28 h=16 hand1 WATER
+[exec] d=28 h=16 hand2 WATER
+[exec] d=28 h=16 hand3 PASS
+[exec] d=28 h=17 farmer COLLECT_FERTILIZER farmer t4
+[exec] d=28 h=17 hand0 NORTH
+[exec] d=28 h=17 hand1 NORTH
+[exec] d=28 h=17 hand2 FERTILIZE
+[exec] d=28 h=17 hand3 PASS
+[exec] d=28 h=18 farmer NORTH farmer next
+[exec] d=28 h=18 hand0 FEED
+[exec] d=28 h=18 hand1 WATER
+[exec] d=28 h=18 hand2 PASS
+[exec] d=28 h=18 hand3 PASS
+[exec] d=28 h=19 farmer WATER farmer t5
+[exec] d=28 h=19 hand0 CARE
+[exec] d=28 h=19 hand1 FERTILIZE
 [exec] d=28 h=19 hand2 PASS
 [exec] d=28 h=19 hand3 PASS
 [exec] d=28 h=20 farmer PASS farmer tile-done
-[exec] d=28 h=20 hand0 WATER
+[exec] d=28 h=20 hand0 COLLECT_FERTILIZER
 [exec] d=28 h=20 hand1 PASS
 [exec] d=28 h=20 hand2 PASS
 [exec] d=28 h=20 hand3 PASS
 [exec] d=28 h=21 farmer PASS farmer done
-[exec] d=28 h=21 hand0 FERTILIZE
+[exec] d=28 h=21 hand0 NORTH
 [exec] d=28 h=21 hand1 PASS
 [exec] d=28 h=21 hand2 PASS
 [exec] d=28 h=21 hand3 PASS
@@ -3733,15 +3670,15 @@
 [exec] d=28 h=23 hand1 PASS
 [exec] d=28 h=23 hand2 PASS
 [exec] d=28 h=23 hand3 PASS
-[sell_dp] d=29 ms=0 quota=MELON=0 STRAWBERRY=4 MILK=1 WOOL=0 inv_melon=9922
-[snap] d=29 h=0 money=79353 farmer_empty=2 hire1_empty=1 hire2_empty=1 hire3_empty=0 hire4_empty=2 shops=8 demand_CARROT=3 demand_EGG=2 demand_MELON=0 demand_MILK=3 demand_STRAWBERRY=4 demand_TOMATO=2 demand_WHEAT=5 demand_WOOL=2 CARROT=41 EGG=60 FERTILIZER=69 MELON=288 MILK=331 STRAWBERRY=291 TOMATO=94 WHEAT=51 WOOL=250
-[exec] d=29 h=0 market HIRE HIRE SELL STRAWBERRY 4 SELL WHEAT 20 SELL FERTILIZER 7 SELL EGG 6 SELL MILK 1
+[sell_dp] d=29 ms=0 quota=MELON=0 STRAWBERRY=2 MILK=3 WOOL=4 inv_melon=9928
+[snap] d=29 h=0 money=76597 farmer_empty=1 hire1_empty=1 hire2_empty=1 hire3_empty=1 hire4_empty=2 shops=8 demand_CARROT=3 demand_EGG=2 demand_MELON=0 demand_MILK=3 demand_STRAWBERRY=4 demand_TOMATO=2 demand_WHEAT=5 demand_WOOL=2 CARROT=42 EGG=64 FERTILIZER=72 MELON=288 MILK=306 STRAWBERRY=284 TOMATO=89 WHEAT=51 WOOL=249
+[exec] d=29 h=0 market HIRE HIRE SELL WOOL 4 SELL MILK 3 SELL STRAWBERRY 2 SELL WHEAT 11 SELL FERTILIZER 7 SELL EGG 6
 [exec] d=29 h=0 farmer HARVEST farmer t1
 [exec] d=29 h=1 market HIRE HIRE
 [exec] d=29 h=1 farmer DROP drop
 [exec] d=29 h=1 hand0 WEST
 [exec] d=29 h=1 hand1 WEST
-[exec] d=29 h=2 market SELL MILK 3
+[exec] d=29 h=2 market SELL WOOL 4
 [exec] d=29 h=2 farmer COLLECT_FERTILIZER farmer t1
 [exec] d=29 h=2 hand0 WEST
 [exec] d=29 h=2 hand1 WEST
@@ -3758,7 +3695,7 @@
 [exec] d=29 h=4 hand1 NORTH
 [exec] d=29 h=4 hand2 WEST
 [exec] d=29 h=4 hand3 HARVEST
-[exec] d=29 h=5 farmer HARVEST farmer t2
+[exec] d=29 h=5 farmer COLLECT_FERTILIZER farmer t2
 [exec] d=29 h=5 hand0 WEST
 [exec] d=29 h=5 hand1 HARVEST
 [exec] d=29 h=5 hand2 HARVEST
@@ -3767,92 +3704,92 @@
 [exec] d=29 h=6 hand0 HARVEST
 [exec] d=29 h=6 hand1 NORTH
 [exec] d=29 h=6 hand2 NORTH
-[exec] d=29 h=6 hand3 NORTH
+[exec] d=29 h=6 hand3 WATER
 [exec] d=29 h=7 farmer NORTH farmer ->t4
 [exec] d=29 h=7 hand0 NORTH
-[exec] d=29 h=7 hand1 WATER
-[exec] d=29 h=7 hand2 WATER
-[exec] d=29 h=7 hand3 COLLECT_FERTILIZER
+[exec] d=29 h=7 hand1 NORTH
+[exec] d=29 h=7 hand2 NORTH
+[exec] d=29 h=7 hand3 HARVEST
 [exec] d=29 h=8 farmer HARVEST farmer t4
-[exec] d=29 h=8 hand0 HARVEST
+[exec] d=29 h=8 hand0 WATER
 [exec] d=29 h=8 hand1 HARVEST
-[exec] d=29 h=8 hand2 HARVEST
+[exec] d=29 h=8 hand2 WATER
 [exec] d=29 h=8 hand3 NORTH
-[exec] d=29 h=9 farmer SOUTH farmer ->shed
-[exec] d=29 h=9 hand0 NORTH
+[exec] d=29 h=9 farmer NORTH farmer ->t5
+[exec] d=29 h=9 hand0 HARVEST
 [exec] d=29 h=9 hand1 NORTH
-[exec] d=29 h=9 hand2 NORTH
-[exec] d=29 h=9 hand3 WATER
-[exec] d=29 h=10 farmer SOUTH farmer ->shed
-[exec] d=29 h=10 hand0 WATER
-[exec] d=29 h=10 hand1 NORTH
-[exec] d=29 h=10 hand2 WATER
-[exec] d=29 h=10 hand3 HARVEST
+[exec] d=29 h=9 hand2 HARVEST
+[exec] d=29 h=9 hand3 NORTH
+[exec] d=29 h=10 farmer HARVEST farmer t5
+[exec] d=29 h=10 hand0 NORTH
+[exec] d=29 h=10 hand1 WATER
+[exec] d=29 h=10 hand2 NORTH
+[exec] d=29 h=10 hand3 WATER
 [exec] d=29 h=11 farmer SOUTH farmer ->shed
-[exec] d=29 h=11 hand0 HARVEST
-[exec] d=29 h=11 hand1 WATER
-[exec] d=29 h=11 hand2 HARVEST
-[exec] d=29 h=11 hand3 EAST
-[exec] d=29 h=12 farmer DROP drop
+[exec] d=29 h=11 hand0 COLLECT_FERTILIZER
+[exec] d=29 h=11 hand1 HARVEST
+[exec] d=29 h=11 hand2 WATER
+[exec] d=29 h=11 hand3 HARVEST
+[exec] d=29 h=12 farmer SOUTH farmer ->shed
 [exec] d=29 h=12 hand0 NORTH
-[exec] d=29 h=12 hand1 HARVEST
-[exec] d=29 h=12 hand2 NORTH
-[exec] d=29 h=12 hand3 SOUTH
-[exec] d=29 h=13 market SELL MILK 3 SELL WOOL 6
-[exec] d=29 h=13 farmer NORTH farmer ->t2
-[exec] d=29 h=13 hand0 NORTH
-[exec] d=29 h=13 hand1 NORTH
-[exec] d=29 h=13 hand2 WATER
+[exec] d=29 h=12 hand1 NORTH
+[exec] d=29 h=12 hand2 HARVEST
+[exec] d=29 h=12 hand3 EAST
+[exec] d=29 h=13 farmer SOUTH farmer ->shed
+[exec] d=29 h=13 hand0 HARVEST
+[exec] d=29 h=13 hand1 WATER
+[exec] d=29 h=13 hand2 NORTH
 [exec] d=29 h=13 hand3 SOUTH
-[exec] d=29 h=14 farmer COLLECT_FERTILIZER farmer t2
-[exec] d=29 h=14 hand0 WATER
+[exec] d=29 h=14 farmer SOUTH farmer ->shed
+[exec] d=29 h=14 hand0 EAST
 [exec] d=29 h=14 hand1 HARVEST
-[exec] d=29 h=14 hand2 HARVEST
+[exec] d=29 h=14 hand2 WATER
 [exec] d=29 h=14 hand3 SOUTH
-[exec] d=29 h=15 farmer NORTH farmer ->t4
-[exec] d=29 h=15 hand0 HARVEST
+[exec] d=29 h=15 farmer DROP drop
+[exec] d=29 h=15 hand0 EAST
 [exec] d=29 h=15 hand1 EAST
-[exec] d=29 h=15 hand2 NORTH
-[exec] d=29 h=15 hand3 DROP
-[exec] d=29 h=16 market SELL EGG 2 SELL FERTILIZER 1 SELL WHEAT 6
+[exec] d=29 h=15 hand2 HARVEST
+[exec] d=29 h=15 hand3 SOUTH
+[exec] d=29 h=16 market SELL STRAWBERRY 2 SELL FERTILIZER 1 SELL MILK 3
 [exec] d=29 h=16 farmer NORTH farmer ->t4
 [exec] d=29 h=16 hand0 EAST
 [exec] d=29 h=16 hand1 EAST
-[exec] d=29 h=16 hand2 WATER
-[exec] d=29 h=16 hand3 WEST
-[exec] d=29 h=17 farmer COLLECT_FERTILIZER farmer t4
+[exec] d=29 h=16 hand2 EAST
+[exec] d=29 h=16 hand3 DROP
+[exec] d=29 h=17 market SELL EGG 2 SELL WHEAT 6 SELL CARROT 4
+[exec] d=29 h=17 farmer NORTH farmer ->t4
 [exec] d=29 h=17 hand0 EAST
 [exec] d=29 h=17 hand1 EAST
-[exec] d=29 h=17 hand2 HARVEST
-[exec] d=29 h=17 hand3 COLLECT_FERTILIZER
-[exec] d=29 h=18 farmer SOUTH farmer ->shed
-[exec] d=29 h=18 hand0 EAST
+[exec] d=29 h=17 hand2 EAST
+[exec] d=29 h=17 hand3 WEST
+[exec] d=29 h=18 farmer NORTH farmer ->t4
+[exec] d=29 h=18 hand0 SOUTH
 [exec] d=29 h=18 hand1 SOUTH
-[exec] d=29 h=18 hand2 EAST
-[exec] d=29 h=18 hand3 EAST
-[exec] d=29 h=19 farmer SOUTH farmer ->shed
-[exec] d=29 h=19 hand0 EAST
+[exec] d=29 h=18 hand2 SOUTH
+[exec] d=29 h=18 hand3 COLLECT_FERTILIZER
+[exec] d=29 h=19 farmer COLLECT_FERTILIZER farmer t4
+[exec] d=29 h=19 hand0 SOUTH
 [exec] d=29 h=19 hand1 SOUTH
-[exec] d=29 h=19 hand2 EAST
-[exec] d=29 h=19 hand3 DROP
-[exec] d=29 h=20 market SELL FERTILIZER 1
+[exec] d=29 h=19 hand2 SOUTH
+[exec] d=29 h=19 hand3 EAST
 [exec] d=29 h=20 farmer SOUTH farmer ->shed
 [exec] d=29 h=20 hand0 SOUTH
 [exec] d=29 h=20 hand1 SOUTH
 [exec] d=29 h=20 hand2 SOUTH
-[exec] d=29 h=20 hand3 PASS
-[exec] d=29 h=21 farmer DROP drop
-[exec] d=29 h=21 hand0 SOUTH
+[exec] d=29 h=20 hand3 DROP
+[exec] d=29 h=21 market SELL FERTILIZER 1
+[exec] d=29 h=21 farmer SOUTH farmer ->shed
+[exec] d=29 h=21 hand0 DROP
 [exec] d=29 h=21 hand1 SOUTH
 [exec] d=29 h=21 hand2 SOUTH
 [exec] d=29 h=21 hand3 PASS
-[exec] d=29 h=22 market SELL FERTILIZER 2
-[exec] d=29 h=22 farmer PASS farmer done
-[exec] d=29 h=22 hand0 SOUTH
+[exec] d=29 h=22 market SELL WHEAT 6 SELL FERTILIZER 1 SELL WOOL 6 SELL MILK 3
+[exec] d=29 h=22 farmer SOUTH farmer ->shed
+[exec] d=29 h=22 hand0 WEST
 [exec] d=29 h=22 hand1 DROP
-[exec] d=29 h=22 hand2 SOUTH
+[exec] d=29 h=22 hand2 DROP
 [exec] d=29 h=22 hand3 PASS
-Player 0: reward=86954.0, status=DONE
+Player 0: reward=86625.0, status=DONE
 Player 1: reward=0.0, status=DONE
 Smoke checks passed: hand2 BUILD_COOP/BUILD_PASTURE=1 PLACE=1, no early SELL WHEAT, day-0 productive
 Smoke test passed.

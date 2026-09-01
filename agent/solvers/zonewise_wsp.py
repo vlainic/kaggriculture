@@ -70,8 +70,29 @@ def _load_prestart() -> tuple[dict[int, list], bool, tuple[str, ...]]:
     return assigned, complete, solved
 
 
-def _zone_banks(starting_money: int) -> dict[str, int]:
-    return {w: starting_money for w in WORKERS}
+def _locked_conservative_handoff(
+    opening: list[int],
+    locked: dict,
+    horizon: int,
+    worker: str,
+    *,
+    charge_hire_daily: bool,
+) -> list[int]:
+    conservative: list[int] = []
+    hire = HAND_DAILY_COST.get(worker, 0) if charge_hire_daily else 0
+    locked_spend = locked.get("spend_by_day", [0] * horizon)
+    for d in range(horizon):
+        if worker in HAND_WORKERS:
+            start_d = opening[d] if d < len(opening) else opening[-1]
+        elif d == 0:
+            start_d = opening[0]
+        else:
+            start_d = opening[d] + (conservative[d - 1] - opening[0])
+        spend_d = locked_spend[d]
+        if charge_hire_daily and worker in HAND_WORKERS:
+            spend_d -= hire
+        conservative.append(start_d + spend_d)
+    return conservative
 
 
 def _is_prestart_solve(
@@ -224,8 +245,10 @@ def _stamp_placement(
             daily_harvest[product][hday] += yld
 
     cash_by_day = [0] * horizon
+    spend_by_day = [0] * horizon
     if start_day < horizon:
         cash_by_day[start_day] -= setup_cost
+        spend_by_day[start_day] -= setup_cost
     for _product, hday, yld in harvest_lines:
         if hday < horizon:
             cash_by_day[hday] += yld * unit_price
@@ -237,6 +260,7 @@ def _stamp_placement(
         "harvest_lines": harvest_lines,
         "harvest_units": harvest_units,
         "cash_by_day": cash_by_day,
+        "spend_by_day": spend_by_day,
         "occupied_days": frozenset(occupied),
         "daily_tile_ops": daily_tile_ops,
         "daily_animal_active": daily_animal_active,
@@ -334,12 +358,13 @@ def _solve_zone(
     empty_tiles: list[int],
     locked: dict,
     locked_counts: dict[str, int],
-    zone_bank: int,
+    opening_balances: list[int],
     w_open: int,
     f_open: int,
     max_time: float,
     charge_hire_daily: bool,
     track_shed: bool,
+    min_balance: int = 0,
     price_of: Callable[[str], int] | None = None,
 ):
     zone_empty = list(empty_tiles)
@@ -435,22 +460,56 @@ def _solve_zone(
             model.Add(w_vars[d + 1] == w_vars[d] - feed_d + wheat_d + bw)
             model.Add(f_vars[d + 1] == f_vars[d] - fert_d + collect_d + bf)
 
-    cum_terms: list = []
+    balance_vars: list = []
+    conservative_vars: list = []
     for d in range(horizon):
         day_terms = [locked["cash_by_day"][d]]
+        spend_terms = [locked["spend_by_day"][d]]
         for pi, pat in enumerate(patterns):
             cash = pat["cash_by_day"][d]
-            if not cash:
-                continue
-            for tile in zone_empty:
-                day_terms.append(x[pi, tile] * cash)
+            if cash:
+                for tile in zone_empty:
+                    day_terms.append(x[pi, tile] * cash)
+            spend = pat["spend_by_day"][d]
+            if spend:
+                for tile in zone_empty:
+                    spend_terms.append(x[pi, tile] * spend)
         if track_shed:
             day_terms.append(-WHEAT_PRICE * buy_w[d])
             day_terms.append(-FERT_PRICE * buy_f[d])
+            spend_terms.append(-WHEAT_PRICE * buy_w[d])
+            spend_terms.append(-FERT_PRICE * buy_f[d])
         if charge_hire_daily and worker in HAND_WORKERS:
             day_terms.append(-hire)
-        cum_terms.extend(day_terms)
-        model.Add(zone_bank + sum(cum_terms) >= 0)
+            spend_terms.append(-hire)
+
+        if worker in HAND_WORKERS:
+            prev = (
+                opening_balances[d]
+                if d < len(opening_balances)
+                else opening_balances[-1]
+            )
+        elif d == 0:
+            prev = opening_balances[0]
+        else:
+            prev = opening_balances[d] + (balance_vars[d - 1] - opening_balances[0])
+
+        bal_floor = min_balance if min_balance > 0 else 0
+        bal = model.NewIntVar(bal_floor, 200_000, f"balance_{worker}_{d}")
+        model.Add(bal == prev + (sum(day_terms) if day_terms else 0))
+        balance_vars.append(bal)
+
+        if worker in HAND_WORKERS:
+            start_d = prev
+        elif d == 0:
+            start_d = opening_balances[0]
+        else:
+            start_d = opening_balances[d] + (
+                conservative_vars[d - 1] - opening_balances[0]
+            )
+        cons = model.NewIntVar(-200_000, 200_000, f"cons_{worker}_{d}")
+        model.Add(cons == start_d + (sum(spend_terms) if spend_terms else 0))
+        conservative_vars.append(cons)
 
     zone_weights = [_pattern_weight(pat, locked_counts, price_of) for pat in patterns]
     obj_terms = [
@@ -475,7 +534,8 @@ def _solve_zone(
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         print(
             f"[planner] wsp zone={worker} status={solver.StatusName(status)} "
-            f"time={elapsed:.3f}s empty={zsize} bank={zone_bank}",
+            f"time={elapsed:.3f}s empty={zsize} "
+            f"open0={opening_balances[0] if opening_balances else 'N/A'}",
             flush=True,
         )
         return None
@@ -489,11 +549,18 @@ def _solve_zone(
     print(
         f"[planner] wsp zone={worker} {solver.StatusName(status)} "
         f"obj={solver.ObjectiveValue():.0f} time={elapsed:.3f}s "
-        f"bank={zone_bank} empty={zsize} picks={len(picked)}",
+        f"close0={int(solver.Value(balance_vars[0]))} "
+        f"cons0={int(solver.Value(conservative_vars[0]))} "
+        f"open0={opening_balances[0] if opening_balances else 'N/A'} "
+        f"empty={zsize} picks={len(picked)}",
         flush=True,
     )
 
-    return {"picked": picked}
+    return {
+        "picked": picked,
+        "balance": [int(solver.Value(b)) for b in balance_vars],
+        "conservative": [int(solver.Value(c)) for c in conservative_vars],
+    }
 
 
 def solve(
@@ -513,7 +580,7 @@ def solve(
     min_balance: int = 0,
     price_of: Callable[[str], int] | None = None,
 ) -> SolveResult:
-    del chains, cascade_reserve, min_balance
+    del chains, cascade_reserve
     if _is_prestart_solve(horizon, empty_tiles, empty_counts):
         assigned, complete, solved_workers = _load_prestart()
         print(
@@ -528,7 +595,7 @@ def solve(
 
     empty_set = set(empty_tiles)
     per_zone_time = max_time / max(1, len(WORKERS))
-    zone_banks = _zone_banks(starting_money)
+    opening = [starting_money] * horizon
     assigned: dict[int, list] = {}
     solved_workers: list[str] = []
     locked_harvest: dict[str, int] = {}
@@ -538,6 +605,13 @@ def solve(
         n_empty = empty_counts[worker]
         locked = locked_by_worker[worker]
         if n_empty == 0:
+            opening = _locked_conservative_handoff(
+                opening,
+                locked,
+                horizon,
+                worker,
+                charge_hire_daily=charge_hire_daily,
+            )
             solved_workers.append(worker)
             continue
 
@@ -556,21 +630,23 @@ def solve(
             empty_tiles=zone_empty,
             locked=locked,
             locked_counts=locked_harvest,
-            zone_bank=zone_banks[worker],
+            opening_balances=opening,
             w_open=w_open,
             f_open=f_open,
             max_time=per_zone_time,
             charge_hire_daily=charge_hire_daily,
             track_shed=track_shed,
+            min_balance=min_balance,
             price_of=price_of,
         )
         if res is None:
-            continue
+            break
 
         assigned.update(_decode_wsp_assignment(worker, empty_set, res["picked"]))
         for pick in res["picked"]:
             for prod, units in pick["pattern"]["harvest_units"].items():
                 locked_harvest[prod] = locked_harvest.get(prod, 0) + units
+        opening = res["conservative"]
         solved_workers.append(worker)
 
     return SolveResult(
