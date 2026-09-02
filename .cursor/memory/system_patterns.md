@@ -21,8 +21,8 @@ obs → executor.step
 ### Zone layouts (`agent/zoning.py`)
 
 - **`Layout` / `Zone` dataclasses** — coords, visit order (= route), preamble, `start_hour`, `net_tile_ops`, `is_hand`.
-- **Catalog:** `FOUR` (classic 3-hand snake) + `FIVE` (5 columns, 4 hands). **`CURRENT = FIVE`**. Do not delete old layouts — flip `CURRENT`.
-- Live FIVE ops **18/17/16/14/13** (synced to `two_lands.md` Aug 31).
+- **Catalog:** `FOUR` + `FIVE` + **`TWO`** (FIVE land1 + NE land2, 10 zones). **`CURRENT = TWO`** for twoland_wsp; flip to `FIVE` for one-land.
+- Live FIVE/TWO land1 ops **18/17/16/14/13**; land2 **16/14/13/12/11** (`two_lands.md`).
 - **`bind(layout)`** fills module aliases. Hire cash: fib sum of hands (FIVE=$7/day).
 - Spec notes: `data/five_zone_plan.md` (FIVE); `data/two_lands.md` (draft / notebook geometry).
 
@@ -44,7 +44,23 @@ obs → executor.step
 - **Replan:** `track_shed=True`; shed W/F seeded from obs; **`min_balance`** liquidity floor (hire + 3× feed).
 - **Dawn replan triage:** `_replan_eligible` empties + WEED only; locked = board + queue suffix; horizon = remaining days. INFEASIBLE → preserve (farmer-prefix partial apply).
 - **Zonewise solver:** sequential zone solves; handoff = **close balance**; `track_shed=True`; liquidity floor; stop cascade if farmer fails.
-- **WSP solver (`zonewise_wsp.py`):** atomic patterns; day-0 from `wsp_prestart.json`; replan from d≥3; handoff = **conservative** (start − spend, no harvest credit); `track_shed=False`; `min_balance=0`; break cascade on INFEASIBLE. **Not** full live bank per zone; **not** ops/78 slice on replan.
+- **WSP solver (`zonewise_wsp.py`):** atomic patterns; day-0 from `wsp_prestart.json`; replan from d≥3; conservative handoff; `track_shed=False`; break on INFEASIBLE.
+- **Two-land WSP (`twoland_wsp.py`):** same as WSP for land1; **probe day:** land1 + hire5 probe (5s) → `buy_land` if ≥$1k conservative; **buy morning / NE owned:** full cascade hire5–9 (15s); `$1k` charged on buy dawn opening.
+
+### Two-land flow (`twoland_wsp` + planner + market)
+
+```
+d≥3 replan (NE not owned):
+  solve land1 → probe hire5 → if feasible & cons≥1k: BUY_LAND_DAY = tomorrow
+  (no hire5 queues written on probe day)
+
+BUY_LAND_DAY dawn:
+  replan all zones until INFEASIBLE → NUM_ACTIVE_HIRES from solved prefix
+  market h=0: BUY_LAND + hire batches per two_lands.md
+
+NE owned:
+  full cascade each replan; update NUM_ACTIVE_HIRES
+```
 
 ### Planner catalog prices (`effective_price`)
 
@@ -93,9 +109,9 @@ obs → executor.step
 
 ```
 main.py → agent/executor.py → script.TILE_QUEUES
-agent/zoning.py           # FOUR / FIVE / CURRENT + bind()
-agent/planner.py          # zone-count CP-SAT + replan (cascade_reserve, liquidity floor)
-agent/solvers/            # monolithic + zonewise + zonewise_wsp; CURRENT_SOLVER dispatch
+agent/zoning.py           # FOUR / FIVE / TWO / CURRENT + bind()
+agent/planner.py          # BUY_LAND_DAY, NUM_ACTIVE_HIRES, zone-count CP-SAT + replan
+agent/solvers/            # monolithic + zonewise + zonewise_wsp + twoland_wsp
 agent/dp_catalog.py       # runtime WIS catalog (lags, inserts)
 agent/{script,workers,tile_ops,market,rollouts,animal_rollouts}.py
 data/crop_rollouts.json
@@ -104,5 +120,6 @@ data/animal_rollouts.json       # tile-only; notebooks / legacy
 data/handmade_dp_candidates.json  # notebooks / FOUR fallback
 data/two_lands.md
 experiments/OneL-Zonewise-CPSAT-{Handmade,DP}-Catalog.ipynb
-scripts/{smoke_test,smoke_and_submit,vendor_ortools}.sh
+scripts/{smoke_test,smoke_and_submit,vendor_ortools,download_submission_logs}.sh
+kaggle_logs/              # gitignored; episode replays from download script
 ```

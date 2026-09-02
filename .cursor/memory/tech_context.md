@@ -16,6 +16,7 @@
 
 ```bash
 bash scripts/smoke_test.sh   # copies crop_rollouts + animal_with_pickups + handmade_dp_candidates
+bash scripts/download_submission_logs.sh <submission_id>   # replays; --with-logs optional
 ```
 
 ```python
@@ -42,7 +43,8 @@ Agents never submit without explicit user request (`kaggle-submission.mdc`).
 | Ops cap | **`daily_tile_ops` + hire preamble** | No wheat/animal/fert side counters with pickups JSON |
 | Animals JSON | `animal_with_pickups.json` | |
 | Catalog | `dp_catalog.build_catalog` | `lags`, insert tolerance / max_variants |
-| Layout switch | `zoning.CURRENT` | `FOUR` or `FIVE` |
+| Layout switch | `zoning.CURRENT` | `FOUR`, `FIVE`, or **`TWO`** (50 tiles) |
+| Solver | `solvers.CURRENT_SOLVER` | **`twoland_wsp`** (default), `zonewise_wsp`, `zonewise`, `monolithic` |
 
 ## DP catalog knobs (`agent/dp_catalog.py`)
 
@@ -73,7 +75,8 @@ Agents never submit without explicit user request (`kaggle-submission.mdc`).
 | --- | --- |
 | `docs/project_overview.md` | Game rules |
 | `docs/two_land_approach.md` | Pickups ops lesson |
-| `data/two_lands.md` | LandOne geometry / ops draft |
+| `data/two_lands.md` | TWO layout geometry / hire batches |
+| `scripts/download_submission_logs.sh` | Bulk episode replays from Kaggle CLI |
 | `.cursor/skills/kaggriculture-domain` | Mechanics |
 | `.cursor/skills/kaggriculture-agent-conventions` | Agent conventions |
 

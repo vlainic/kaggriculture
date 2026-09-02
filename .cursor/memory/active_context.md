@@ -1,66 +1,57 @@
 # Active Context
 
-## Current focus (Sep 1, 2026)
+## Current focus (Sep 2, 2026)
 
-**WSP + conservative zone cash** on FIVE layout. `CURRENT_SOLVER = "zonewise_wsp"` in `agent/solvers/__init__.py` (flip to `"zonewise"` for DP-catalog chain backend).
+**Two-land WSP** on `TWO` layout (50 tiles, zones I–X). `CURRENT_SOLVER = "twoland_wsp"` in `agent/solvers/__init__.py`. One-land path: flip to `zonewise_wsp` + `CURRENT = FIVE`.
 
-### Just shipped (Aug 31 – Sep 1 session)
+### Just shipped (Sep 2 session)
 
-1. **Zonewise switch + executor hygiene** (plan: 90k path)
-   - `CURRENT_SOLVER` flippable: `zonewise` (~107k smoke) vs `zonewise_wsp` (~81–85k smoke).
-   - Replan `track_shed = (CURRENT_SOLVER != "zonewise_wsp")` — W/F ledger off for WSP only.
-   - **`price_of`** optional kw on all solver backends (fixes replan crash).
-   - Debug NDJSON stripped from executor/market/wsp.
+1. **Two-land WSP** ([`agent/solvers/twoland_wsp.py`](../../agent/solvers/twoland_wsp.py))
+   - Copy of `zonewise_wsp` + land-2 probe / buy flow.
+   - Day-0: `wsp_prestart.json` for **land 1 only** (25 tiles).
+   - **Probe day** (NE not owned, not buy morning): land1 cascade → always **hire5** probe (5s cap); if feasible and conservative ≥ $1k → `buy_land=True`; **no hire6–9**, no hire5 queue commit.
+   - **Buy morning** (`BUY_LAND_DAY == day`): charge $1k on opening; full cascade farmer→hire9; `apply_replan(write_all_solved=True)` for locked NE tiles.
+   - After NE owned: normal full cascade each replan.
 
-2. **Executor / market / tile_ops fixes** (solver-agnostic — lifted both backends)
-   - **FERT:** runtime inject via `_may_fertilize_today`; skip tape `FERTILIZE`; `fert_today` + zone ops cap.
-   - **Wheat:** dawn buy uses `wheat_feed_need + 1` slack; shed-adjacent pickup before snake (only when shed has stock); feed-wait shed pickup restored.
-   - **Replan:** WEED tiles eligible again (`_tile_empty_for_replan`).
-   - **Smoke:** `BUILD_*` prefix match in `scripts/smoke_test.sh`.
+2. **Layout TWO** ([`agent/zoning.py`](../../agent/zoning.py))
+   - FIVE + NE columns (tiles 26–50); hire5–9 per `data/two_lands.md` (ops 16/14/13/12/11).
+   - `CURRENT = TWO`; `LAND1_TILE_COUNT`, `LAND1_WORKERS` helpers.
 
-3. **WSP conservative cash handoff** ([`agent/solvers/zonewise_wsp.py`](../../agent/solvers/zonewise_wsp.py))
-   - **Removed** full live bank per zone (`_zone_banks`) — was economically wrong (5× shared cash).
-   - Patterns get **`spend_by_day`** (setup only); harvests stay on `cash_by_day`.
-   - Per-zone MIP: `opening_balances` + **balance** (harvests, ≥0) + **conservative** (spend only).
-   - Sequential cascade: `opening = [starting_money] * horizon`; after each zone **`opening = res["conservative"]`** (notebook formula, not zonewise `balance` handoff).
-   - Empty zones: `_locked_conservative_handoff`; INFEASIBLE → **break** (prefix apply only).
-   - Logs: `open0=` / `cons0=` / `close0=` stepping down farmer → hire4.
-   - Replan: farmer opens at live `me["money"]`; later zones get conservative leftover. **No ops-ratio slice** on replan (notebook day-0 ops/78 slice is prestart-only).
+3. **Planner glue** ([`agent/planner.py`](../../agent/planner.py))
+   - `BUY_LAND_DAY`, `NUM_ACTIVE_HIRES` (default 4).
+   - Probe replan `max_time=5.0`; buy morning / post-buy `max_time=15.0`.
+   - WSP replan from d≥3 unchanged.
 
-4. **Lint** — `WORKER_TILES` before `WORKERS` in zonewise_wsp imports (Ruff I001).
+4. **Market** ([`agent/market.py`](../../agent/market.py))
+   - Hire batches from `two_lands.md` (2@h0 for ≤2; 3→2+1; 5→2+3; 9→4+5; etc.).
+   - Active fib hire reserve (not full 9-hand $88).
+   - `BUY_LAND` at h=0 on `BUY_LAND_DAY`.
 
-### Solver comparison (smoke, same executor)
+5. **Kaggle episode download** ([`scripts/download_submission_logs.sh`](../../scripts/download_submission_logs.sh))
+   - Default: **replays only**; optional `--with-logs` (often 403 on ladder).
+   - Filters numeric episode IDs (Kaggle CSV footer line).
 
-| Backend | Replan catalog | Cash model | Smoke ~ |
+### Smoke (twoland_wsp, Sep 2)
+
+~**87k** vs random; probe ~d7 → `BUY_LAND` d8 → hire5–9 active when affordable.
+
+### Solver comparison
+
+| Backend | Layout | Land | Smoke ~ |
 | --- | --- | --- | --- |
-| `zonewise` | `dp_catalog` chains | close balance handoff + `track_shed=True` + liquidity floor | 107k |
-| `zonewise_wsp` | atomic patterns | **conservative** handoff + `track_shed=False` + `min_balance=0` | 81–85k |
+| `zonewise_wsp` | FIVE | 1 | 81–85k |
+| `twoland_wsp` | TWO | 1→2 probe+buy | **~87k** |
+| `zonewise` | FIVE | 1 | ~107k |
 
-### Pricing (agent)
+### Replan (WSP family)
 
-| When | `price_of` |
-| --- | --- |
-| Day-0 zonewise | i0 `base_price` |
-| Day-0 WSP | prestart JSON (full horizon) |
-| Replan WSP | live quote × glut factor in pattern weights |
-| Replan zonewise | live × `max(0.1, 1 + shop_demand − opp_tiles/10)` |
-
-### Replan
-
-- Horizon = `NUM_DAYS - day`.
-- Vars = `_replan_eligible` empties (+ WEED); rest locked.
-- WSP: replan from **d ≥ 3**; partial cascade OK if hire zone INFEASIBLE.
-- Zonewise: `track_shed=True`, liquidity floor; farmer-prefix partial apply.
-
-### Layout
-
-```python
-CURRENT = FIVE   # ops 18/17/16/14/13
-```
+- Horizon = `NUM_DAYS - day`; vars = empty/WEED; locked = board + queue suffix.
+- `track_shed=False`, `min_balance=0`, conservative handoff.
+- twoland: probe 5s / full 15s; partial cascade OK (prefix apply).
 
 ## Immediate next steps
 
-- Kaggle A/B: WSP conservative vs old full-bank (if baseline saved).
-- If hire4 INFEASIBLE on tight replans: tune locked spend or partial apply policy — do **not** restore full-bank-per-zone.
-- Optional: align live `zonewise.py` handoff to conservative (notebooks) vs current close-balance.
+- Kaggle A/B twoland vs one-land WSP on same seeds.
+- Tune hire9 INFEASIBLE late-season (partial prefix is working).
+- Use `download_submission_logs.sh` for live episode replays (not stdout logs).
 - Agents never submit without explicit ask.
