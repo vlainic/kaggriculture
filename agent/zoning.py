@@ -110,7 +110,7 @@ FIVE = Layout(
             tiles=(0, 1, 2, 3, 4),
             preamble=(),
             start_hour=0,
-            net_tile_ops=18,
+            net_tile_ops=15,
             is_hand=False,
         ),
         Zone(
@@ -118,7 +118,7 @@ FIVE = Layout(
             tiles=(5, 6, 7, 8, 9),
             preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS"),
             start_hour=1,
-            net_tile_ops=17,
+            net_tile_ops=14,
             is_hand=True,
         ),
         Zone(
@@ -126,7 +126,7 @@ FIVE = Layout(
             tiles=(10, 11, 12, 13, 14),
             preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS"),
             start_hour=1,
-            net_tile_ops=16,
+            net_tile_ops=15,
             is_hand=True,
         ),
         Zone(
@@ -134,7 +134,7 @@ FIVE = Layout(
             tiles=(15, 16, 17, 18, 19),
             preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS"),
             start_hour=2,
-            net_tile_ops=14,
+            net_tile_ops=21,
             is_hand=True,
         ),
         Zone(
@@ -142,7 +142,7 @@ FIVE = Layout(
             tiles=(20, 21, 22, 23, 24),
             preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS"),
             start_hour=2,
-            net_tile_ops=13,
+            net_tile_ops=12,
             is_hand=True,
         ),
     ),
@@ -170,7 +170,7 @@ TWO = Layout(
             tiles=(25, 26, 27, 28, 29),
             preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS"),
             start_hour=2,
-            net_tile_ops=16,
+            net_tile_ops=13,
             is_hand=True,
         ),
         Zone(
@@ -178,7 +178,7 @@ TWO = Layout(
             tiles=(30, 31, 32, 33, 34),
             preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS"),
             start_hour=2,
-            net_tile_ops=14,
+            net_tile_ops=22,
             is_hand=True,
         ),
         Zone(
@@ -186,7 +186,7 @@ TWO = Layout(
             tiles=(35, 36, 37, 38, 39),
             preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS"),
             start_hour=2,
-            net_tile_ops=13,
+            net_tile_ops=11,
             is_hand=True,
         ),
         Zone(
@@ -194,7 +194,7 @@ TWO = Layout(
             tiles=(40, 41, 42, 43, 44),
             preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS"),
             start_hour=2,
-            net_tile_ops=12,
+            net_tile_ops=10,
             is_hand=True,
         ),
         Zone(
