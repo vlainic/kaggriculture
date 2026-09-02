@@ -42,6 +42,7 @@ ZERO_DAILY_KEYS = (
 )
 
 _cached_queues: dict | None = None
+_last_solver_booked: dict[str, int] = {}
 
 
 def _load_json(name: str) -> dict | list:
@@ -603,6 +604,45 @@ def _active_hand_hires(solved_workers: tuple[str, ...]) -> int:
     return sum(1 for w in solved_workers if w != "farmer")
 
 
+def _booked_harvest_from_assigned(
+    assigned: dict[int, list],
+    horizon: int,
+    crops_data: dict,
+    animals_data: dict,
+) -> dict[str, int]:
+    booked: dict[str, int] = {}
+    for chain in assigned.values():
+        if not chain:
+            continue
+        for profile_key, start_day in chain:
+            label, profile_name = _parse_profile_key(profile_key)
+            kind, _spec, profile = _rollout_spec(
+                label, profile_name, crops_data, animals_data
+            )
+            product = _product_for_label(label, kind)
+            for age, yld in zip(profile["harvest_ages"], profile["yield_per_harvest"]):
+                if start_day + age < horizon:
+                    booked[product] = booked.get(product, 0) + yld
+    return booked
+
+
+def log_plan_drift(obs: dict, tile_queues: dict, tile_state: dict | None) -> None:
+    """Day-29 three-way gap: solver-booked vs shed (proxy for unsold harvest)."""
+    private = obs["private"]
+    shed = private.get("shed", {})
+    booked = _last_solver_booked
+    parts = []
+    products = sorted(set(booked) | set(shed))
+    for product in products:
+        if product not in rollouts.PRODUCT_NAMES and product != "FERTILIZER":
+            continue
+        b = booked.get(product, 0)
+        s = int(shed.get(product, 0))
+        parts.append(f"{product}:booked={b},shed={s}")
+    if parts:
+        print(f"[planner] drift d={obs['day']} {' '.join(parts)}", flush=True)
+
+
 def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None:
     global BUY_LAND_DAY, NUM_ACTIVE_HIRES
     day = obs["day"]
@@ -770,6 +810,14 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
             chain_to_queue_items,
             write_all_solved=buy_morning,
         )
+
+    global _last_solver_booked
+    _last_solver_booked = _booked_harvest_from_assigned(
+        result.assigned, horizon, crops_data, animals_data
+    )
+
+    if day == SEASON_LAST_DAY:
+        log_plan_drift(obs, tile_queues, tile_state)
 
     if replan_tiles:
         samples = []
