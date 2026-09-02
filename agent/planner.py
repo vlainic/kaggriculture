@@ -6,7 +6,12 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
+<<<<<<< HEAD
 from agent import animal_rollouts, dp_catalog, rollouts, solvers, zoning
+=======
+from agent import animal_rollouts, dp_catalog, pricing, rollouts, solvers, zoning
+from agent.solvers.types import SolveResult
+>>>>>>> c6b4fdf (Wave 3: forecast marginal pricing and GLUT removal in WSP pattern weights.)
 from agent.zoning import (
     LAND1_TILE_COUNT,
     LAND1_WORKERS,
@@ -40,6 +45,9 @@ ZERO_DAILY_KEYS = (
     "daily_collect",
     "daily_wheat",
 )
+
+SHOP_SELL_INTERVAL = 4
+TURNS_PER_DAY = 24
 
 _cached_queues: dict | None = None
 _last_solver_booked: dict[str, int] = {}
@@ -83,15 +91,32 @@ def effective_price(
     shops: list[str],
     i0_prices: dict[str, int],
     opp_tile_counts: dict[str, int] | None = None,
+    *,
+    market_inventory: dict[str, int] | None = None,
+    days_remaining: int = NUM_DAYS,
 ) -> int:
-    demand = rollouts.shop_demand_by_product(shops)
-    quoted = int(market_prices.get(product, i0_prices.get(product, 0)) or 0)
+    """Marginal unit value from pricing curve at forecast inventory."""
+    quoted_live = int(market_prices.get(product, i0_prices.get(product, 0)) or 0)
+    inv = int((market_inventory or {}).get(product, pricing.MARKET_PARAMS[product].i0))
+    daily_drain = (
+        rollouts.shop_demand_by_product(shops).get(product, 0)
+        * (TURNS_PER_DAY // SHOP_SELL_INTERVAL)
+    )
     opp = (opp_tile_counts or {}).get(product, 0)
-    # opp_bonus = 0.5 - opp / 10.0
-    opp_bonus = - opp / 10.0
-
-    price_factor = 1 + demand.get(product, 0) + opp_bonus
-    return int(quoted * max(0.1, price_factor))
+    opp_units = max(0, opp * max(1, days_remaining // 7))
+    forecast = pricing.forecast_inventory(
+        product,
+        inv,
+        daily_drain=daily_drain,
+        days_remaining=days_remaining,
+        opp_units=opp_units,
+    )
+    marginal = pricing.marginal_unit_price(product, forecast, 0, 1)
+    if quoted_live <= 0:
+        return marginal
+    low = int(quoted_live * 0.6)
+    high = int(quoted_live * 1.4)
+    return max(low, min(high, marginal))
 
 
 def make_price_of(
@@ -99,10 +124,19 @@ def make_price_of(
     shops: list[str],
     i0_prices: dict[str, int],
     opp_tile_counts: dict[str, int] | None = None,
+    *,
+    market_inventory: dict[str, int] | None = None,
+    days_remaining: int = NUM_DAYS,
 ) -> Callable[[str], int]:
     def price_of(product: str) -> int:
         return effective_price(
-            product, market_prices, shops, i0_prices, opp_tile_counts
+            product,
+            market_prices,
+            shops,
+            i0_prices,
+            opp_tile_counts,
+            market_inventory=market_inventory,
+            days_remaining=days_remaining,
         )
 
     return price_of
@@ -674,13 +708,21 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
 
     shops = obs.get("town", {}).get("unlocked_shops", [])
     market_prices = obs.get("market", {}).get("prices", {})
+    market_inventory = obs.get("market", {}).get("inventory", {})
 
     crops_data = _load_json("crop_rollouts.json")
     animals_data = animal_rollouts.data()
     i0 = _i0_prices(crops_data, animals_data)
     opp_farm = obs["farms"][1 - player]
     opp_counts = _opponent_product_tile_counts(opp_farm)
-    price_of = make_price_of(market_prices, shops, i0, opp_counts)
+    price_of = make_price_of(
+        market_prices,
+        shops,
+        i0,
+        opp_counts,
+        market_inventory=market_inventory,
+        days_remaining=horizon,
+    )
 
     if _wsp_solver():
         chains = []
@@ -767,6 +809,7 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
         price_of=price_of,
         land_owned=land_owned,
         buy_morning=buy_morning,
+        market_inventory=market_inventory,
     )
 
     if result.buy_land:
