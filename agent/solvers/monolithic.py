@@ -219,5 +219,6 @@ def apply_replan(
                 "pending_dig": False,
                 "dig_plant_ok": False,
                 "active": False,
+                "fert_today": False,
             }
     return len(replan_tiles)

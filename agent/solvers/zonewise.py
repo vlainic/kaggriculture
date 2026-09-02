@@ -198,8 +198,10 @@ def _solve_zone(
             start_d = opening_balances[d] + (
                 conservative_vars[d - 1] - opening_balances[0]
             )
-        cons = model.NewIntVar(-200_000, 200_000, f"cons_{worker}_{d}")
+        cons = model.NewIntVar(0, 200_000, f"cons_{worker}_{d}")
         model.Add(cons == start_d + (sum(spend_terms) if spend_terms else 0))
+        if min_balance > 0:
+            model.Add(cons >= min_balance)
         conservative_vars.append(cons)
 
     if min_close0 > 0:
@@ -373,10 +375,15 @@ def apply_replan(
                 continue
             chain = result.assigned.get(idx, [])
             if not chain and tile_queues.get(idx):
+                print(
+                    f"[planner] zone apply_replan t{idx + 1}: "
+                    f"preserve stale queue (empty chain)",
+                    flush=True,
+                )
                 continue
             tile_queues[idx] = chain_to_queue_items(chain, horizon)
             written += 1
-            if tile_state is not None and chain:
+            if tile_state is not None:
                 queue = tile_queues[idx]
                 first_lag = queue[0].start_lag if queue else 0
                 tile_state[idx] = {
@@ -386,5 +393,6 @@ def apply_replan(
                     "pending_dig": False,
                     "dig_plant_ok": False,
                     "active": False,
+                    "fert_today": False,
                 }
     return written

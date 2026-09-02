@@ -754,7 +754,7 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
     hire_reserve = max(0, hire_reserve)
     feed_reserve = wheat_feed * wheat_price
     liquidity_floor = hire_reserve + feed_reserve * 3
-    replan_min_balance = 0 if _wsp_solver() else liquidity_floor
+    replan_min_balance = liquidity_floor
     replan_max_time = 5.0 if (
         solvers.CURRENT_SOLVER == "twoland_wsp" and not land_owned and not buy_morning
     ) else 15.0
