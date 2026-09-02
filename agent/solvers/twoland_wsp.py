@@ -535,11 +535,13 @@ def _solve_zone(
     t0 = time.perf_counter()
     status = solver.Solve(model, callback)
     elapsed = time.perf_counter() - t0
+    n_patterns = len(patterns)
 
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         print(
             f"[planner] twoland_wsp zone={worker} status={solver.StatusName(status)} "
-            f"time={elapsed:.3f}s empty={zsize} "
+            f"time={elapsed:.3f}s empty={zsize} n_patterns={n_patterns} "
+            f"early_stopped={callback.stopped_early} written=0 "
             f"open0={opening_balances[0] if opening_balances else 'N/A'}",
             flush=True,
         )
@@ -557,7 +559,8 @@ def _solve_zone(
         f"close0={int(solver.Value(balance_vars[0]))} "
         f"cons0={int(solver.Value(conservative_vars[0]))} "
         f"open0={opening_balances[0] if opening_balances else 'N/A'} "
-        f"empty={zsize} picks={len(picked)}",
+        f"empty={zsize} picks={len(picked)} n_patterns={n_patterns} "
+        f"early_stopped={callback.stopped_early} written=1",
         flush=True,
     )
 
