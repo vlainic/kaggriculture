@@ -40,20 +40,27 @@
 | Replay self-play us_index | Both `TeamNames` = same name → `resolve_us_index` always 0 (rare) |
 | TwoLand conversion leaks | Sept 2 overhaul: E1 walk-to-shed, pricing, track_shed, fert pipeline |
 
-## Sep 2 session (Sept02 overhaul — all waves)
+## Sep 3 session (Sept02 overhaul — feat/sept02-all, waves 0–8 + §7)
 
-| Change | Result |
-| --- | --- |
-| Wave 0 instrumentation | PASS note counters, solver early_stopped logs, day-29 drift |
-| Wave 1 E1+P3 | pickup-first preambles, walk-to-shed, NUM_ACTIVE_HIRES after INFEASIBLE |
-| Wave 2 S2+S6 | conservative floor 0, negative handoff break, apply_replan state reset |
-| Wave 3 P1+P2+S3 | forecast-inventory effective_price, marginal glut pricing |
-| Wave 4 E2 | animal-first routes at dawn |
-| Wave 5 S1+E3+M1 | W/F handoff, track_shed=True, PICKUP_FERTILIZER, BUY FERTILIZER |
-| Wave 6 S4+S5 | PER_TILE_FLOOR early stop, weighted time, ROI land probe |
-| Wave 7 M2 | PRICE_FLOOR_RATIO 0.35, wool cap T//5 |
+3× smoke medians (`scripts/smoke_test.sh`, twoland_wsp vs random):
 
-## Sep 2 session (replay analysis + us_index fix)
+| Wave | Median | Notes |
+| --- | ---: | --- |
+| BASE (d35bff5) | **85,599** | 88,811 / 60,016 / 85,599 |
+| 0 instrumentation | ~77,882 | PASS counters, drift, tile_ops peaks |
+| 1 E1+§7.3+P3 | ~59,795 | geometry preambles; animal-preamble loop fix |
+| 2 S2+S6 | (stacked) | liquidity floor, cons≥0, apply_replan reset |
+| 3 P1+P2+S3 | (stacked) | marginal pricing, GLUT removal |
+| 4 E2+§7.5 | (stacked) | animal-first routes; formula net_tile_ops |
+| 5a/5b S1+E3+M1 | (stacked) | track_shed + hire-only min_balance; fert B1/B6 |
+| 6 S4+S5+§7.4 | (stacked) | weighted time, all-LAND2 ROI probe |
+| 7 M2 | (stacked) | PRICE_FLOOR_RATIO 0.35, wool T//5 |
+| 8 §7.1+§7.2 | (stacked) | layout builder, hand→zone map |
+| **Final merged** | **~34,398** | 30,341 / 34,398 / 35,706 — **regressed vs BASE** |
+
+Gate post-mortem: early farmer INFEASIBLE spikes with `track_shed=True` + spawn-agnostic preambles; tune hire_reserve / fert demand coupling before Kaggle A/B.
+
+## Sep 2 session (Sept02 overhaul — prior partial ladder)
 
 | Change | Result |
 | --- | --- |
