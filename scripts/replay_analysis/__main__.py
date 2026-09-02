@@ -14,6 +14,10 @@ if str(SCRIPTS) not in sys.path:
 from replay_analysis import analyze, summarize_dir  # noqa: E402
 
 
+def _progress(i: int, n: int, path: Path) -> None:
+    print(f"Analyzing {i}/{n} {path.name}", file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Analyze Kaggle kaggriculture replay JSON files.",
@@ -31,20 +35,31 @@ def main(argv: list[str] | None = None) -> int:
         "-o",
         "--output",
         default=None,
-        help="Output JSON path (batch mode only; default: <dir>/summary.json)",
+        help="Output JSON path (batch: default <dir>/<submission_id>.json)",
+    )
+    parser.add_argument(
+        "--include-events",
+        action="store_true",
+        help="Include per-unit sell events in output (large; needed for violin charts)",
     )
     args = parser.parse_args(argv)
 
     path = Path(args.path)
     if path.is_file():
-        report = analyze(path, us_name=args.us_name)
+        report = analyze(path, us_name=args.us_name, include_events=True)
         out = args.output or path.with_suffix(".analysis.json")
         with open(out, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2)
         print(f"Wrote {out}")
         return 0
 
-    summary = summarize_dir(path, us_name=args.us_name, out_path=args.output)
+    summary = summarize_dir(
+        path,
+        us_name=args.us_name,
+        out_path=args.output,
+        include_events=args.include_events,
+        on_progress=_progress,
+    )
     print(
         f"Analyzed {summary['n_episodes']} episode(s) → {summary.get('summary_path')}"
     )

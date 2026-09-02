@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from agent.pricing import quoted  # noqa: E402
+from agent.pricing import MARKET_PARAMS, quoted  # noqa: E402
 
 from replay_analysis.load import Replay, StepRecord
 from replay_analysis.metrics import _inventory_totals, _merge_inv, _total_private_stock
@@ -151,13 +151,17 @@ def simulate_sells(replay: Replay) -> dict[str, Any]:
             # Same snapshot quote for all units sold this round (README rule).
             round_prices: dict[str, int] = {}
             for prod in products:
-                if prod and prod not in round_prices:
+                if prod and prod not in round_prices and prod in MARKET_PARAMS:
                     round_prices[prod] = quoted(prod, inv.get(prod, 10_000))
 
             any_sold = False
             for p, state in enumerate(states):
                 prod = state.current_product()
                 if not prod:
+                    continue
+                if prod not in MARKET_PARAMS:
+                    unfilled[p][prod] += 1
+                    state.advance()
                     continue
                 if stock[p].get(prod, 0) <= 0:
                     unfilled[p][prod] += 1
