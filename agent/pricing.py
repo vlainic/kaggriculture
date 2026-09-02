@@ -182,7 +182,7 @@ def allowed_sell_qty(
             return stock
         cap = max_sell_per_day
         if product == "WOOL":
-            cap = min(cap, max(4, MARKET_PARAMS["WOOL"].t // 8))
+            cap = min(cap, max(4, MARKET_PARAMS["WOOL"].t // 5))
         return max(dp_quota, min(stock, cap))
 
     cap = max_sell_per_day if mode == "drip" else stock
