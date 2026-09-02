@@ -41,39 +41,40 @@ obs → executor.step
 - **Yields:** zip `harvest_ages` → `yield_per_harvest`.
 - **Ops (with pickups JSON):** **`daily_tile_ops` only** (+ hire preamble if any animal active). Do **not** add `daily_wheat_pickup` / `daily_animal_place` / `daily_fert_pickup` or extra `build_day += 1` — those double-count PICKUP/BUILD already in the tape.
 - **Cash / W/F (day-0):** balance chain, shed ledgers, hire daily; **`cascade_reserve`** enforces `min_close0` for downstream zones.
-- **Replan:** `track_shed=True`; shed W/F seeded from obs; **`min_balance`** liquidity floor (hire + 3× feed).
+- **Replan:** `track_shed=True`; shed W/F seeded from obs; **`min_balance`** = liquidity floor (hire + 3× feed); W/F handoff via `w_levels[1]`/`f_levels[1]` between zones.
 - **Dawn replan triage:** `_replan_eligible` empties + WEED only; locked = board + queue suffix; horizon = remaining days. INFEASIBLE → preserve (farmer-prefix partial apply).
-- **Zonewise solver:** sequential zone solves; handoff = **close balance**; `track_shed=True`; liquidity floor; stop cascade if farmer fails.
-- **WSP solver (`zonewise_wsp.py`):** atomic patterns; day-0 from `wsp_prestart.json`; replan from d≥3; conservative handoff; `track_shed=False`; break on INFEASIBLE.
-- **Two-land WSP (`twoland_wsp.py`):** same as WSP for land1; **probe day:** land1 + hire5 probe (5s) → `buy_land` if ≥$1k conservative; **buy morning / NE owned:** full cascade hire5–9 (15s); `$1k` charged on buy dawn opening.
+- **Zonewise solver:** sequential zone solves; handoff = **close balance**; `track_shed=True`; liquidity floor; stop cascade if `open0 < 0`.
+- **WSP solver (`zonewise_wsp.py`):** atomic patterns; day-0 from `wsp_prestart.json`; replan from d≥3; conservative handoff floored at 0; `track_shed=True` on replan; marginal `pricing.quoted` glut model; break on INFEASIBLE / negative handoff.
+- **Two-land WSP (`twoland_wsp.py`):** land1 cascade + **ROI probe** on hire5–9 (0.3s/zone); buy if `probe_value > cost` and `cons≥$1k`; buy morning full cascade (15s); `$1k` on buy dawn opening.
 
 ### Two-land flow (`twoland_wsp` + planner + market)
 
 ```
 d≥3 replan (NE not owned):
-  solve land1 → probe hire5 → if feasible & cons≥1k: BUY_LAND_DAY = tomorrow
-  (no hire5 queues written on probe day)
+  solve land1 → probe hire5–9 → ROI test → BUY_LAND_DAY = tomorrow
+  (no land2 queues written on probe day)
 
 BUY_LAND_DAY dawn:
-  replan all zones until INFEASIBLE → NUM_ACTIVE_HIRES from solved prefix
+  replan all zones until INFEASIBLE → NUM_ACTIVE_HIRES after INFEASIBLE gate
   market h=0: BUY_LAND + hire batches per two_lands.md
 
 NE owned:
-  full cascade each replan; update NUM_ACTIVE_HIRES
+  full cascade each replan; update NUM_ACTIVE_HIRES (non-empty zones only)
 ```
 
 ### Planner catalog prices (`effective_price`)
 
 - **Day 0:** i0 quoted, empty shops, no opponent.
-- **Dawn replan:** live × `max(0.1, 1 + shop_demand − opp_tiles/10)`.
+- **Dawn replan:** `pricing.marginal_unit_price` at forecast inventory (town drain + opp units); capped ±40% vs live quote.
 - Same `price_of` for catalog generation and stamp cash.
 
 ### Executor + fert + feed (runtime, not CP-SAT)
 
-- Snake routes; BUILD only if animal in inv; PLACE same day needs wheat.
-- FERTILIZE via `_may_fertilize_today` after WATER; skip tape FERT; `fert_today` + zone ops cap.
-- Wheat: dawn `feed_need + 1`; shed-adjacent pickup before route (if shed has stock); feed-wait pickup at tile.
-- Market: sell DP + 50% floor; **WOOL daily cap** `max(4, T//8)`.
+- Snake routes; **animal-first route order** at dawn; BUILD only if animal in inv; PLACE same day needs wheat.
+- Preamble: **pickup-first** (WHEAT/ANIMALS/FERTILIZER); walk-to-shed if not adjacent (never `pre-wait-shed` PASS).
+- FERTILIZE via `_may_fertilize_today` after WATER (no `zone_has_animal` gate); `fert_today` + zone ops cap.
+- Wheat/fert: dawn pickup in preamble + `_shed_pickup`; `BUY_PRODUCT` for wheat and fertilizer.
+- Market: sell DP + **35% floor**; **WOOL daily cap** `max(4, T//5)`.
 
 ### Engine facts
 
@@ -102,6 +103,10 @@ NE owned:
 15. **Day-stride thin without pinning best insert** — drops argmax chains.
 16. **Forced wheat/carrot prefix before high-value insert** — fights greedy early animal/extra.
 17. **Smoke `PLACE ≤ BUILD+1`.**
+18. **Batch aggregate with fixed `us_index`** — Kaggle seats vary per episode; use `g["us_index"]` in `_aggregate()`, not `games[0].us_index`.
+19. **Trust batch `reward_us` before us_index fix** — ~50% of episodes had opponent scores in aggregate rollups.
+20. **Blind movement before `PICKUP_*` in zone preamble** — `pre-wait-shed` absorbing PASS; always pickup-first + walk-to-shed fallback.
+21. **Hand-tuned price multipliers** (`GLUT_CAPS`, `1 + shop_demand`, `−opp/10`) — use `pricing.marginal_unit_price` at forecast inventory instead.
 
 ---
 
@@ -120,6 +125,8 @@ data/animal_rollouts.json       # tile-only; notebooks / legacy
 data/handmade_dp_candidates.json  # notebooks / FOUR fallback
 data/two_lands.md
 experiments/OneL-Zonewise-CPSAT-{Handmade,DP}-Catalog.ipynb
-scripts/{smoke_test,smoke_and_submit,vendor_ortools,download_submission_logs}.sh
-kaggle_logs/              # gitignored; episode replays from download script
+scripts/{smoke_test,smoke_and_submit,vendor_ortools,download_submission_logs,summarize_replays}.sh
+scripts/replay_analysis/   # load, metrics, sells, kpi, plot; python -m replay_analysis
+experiments/replay_analysis.ipynb
+kaggle_logs/              # gitignored; <id>/replays/ + <id>.json batch summary
 ```

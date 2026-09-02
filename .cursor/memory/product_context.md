@@ -18,8 +18,8 @@ Compete on Kaggriculture with an autonomous agent that beats typical heuristic/L
 
 1. **Import:** bind `zoning.CURRENT` (**FIVE**); `dp_catalog.build_catalog` at i0; stamp with `animal_with_pickups`; CP-SAT zone counts with shed W/F + hire cash (20s). Ops = `daily_tile_ops` (+ hire preamble).
 2. **Decode:** animals on route-first tiles, IDLE middle, crops last.
-3. **Dawn replan (day ≥ 1):** remaining horizon; lock non-empty / waiting-PLACE; assign DP chains to empty tiles; live prices × demand/opp; **no W/F shed ledger**; cash ≥ 0 + ops. INFEASIBLE → keep queues.
-4. **Runtime:** snake; fert after WATER; stay on unfed pastures. Market: 50% floor + premium DP; wheat reserved; 2+2 hire on FIVE.
+3. **Dawn replan (day ≥ 1):** remaining horizon; lock non-empty / waiting-PLACE; assign to empty tiles; forecast-inventory pricing; **W/F shed ledger**; liquidity floor on conservative handoff. INFEASIBLE → keep queues.
+4. **Runtime:** snake; animal-first routes; pickup-first preambles; fert after WATER; `BUY_PRODUCT` wheat+fert. Market: 35% floor + premium DP; wool cap T//5; 2+2 hire on FIVE.
 
 ## Known product gap
 

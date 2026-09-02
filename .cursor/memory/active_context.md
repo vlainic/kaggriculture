@@ -31,6 +31,19 @@
    - Default: **replays only**; optional `--with-logs` (often 403 on ladder).
    - Filters numeric episode IDs (Kaggle CSV footer line).
 
+6. **Replay analysis pipeline** ([`scripts/replay_analysis/`](../../scripts/replay_analysis/), Sep 2 evening)
+   - Per-game: tiles, passes, yield (potential/harvested/sold), money, drift, KPIs (executor / market / planner).
+   - Batch: `scripts/summarize_replays.sh <submission_id> --us-name "Milos Vlainic"` → `kaggle_logs/<id>/<id>.json`.
+   - Single-game charts: `experiments/replay_analysis.ipynb` + `plot_game()` (needs `--include-events` for violins).
+   - **Critical fix:** batch `aggregate` / `episode_table` must use **per-game** `g["us_index"]` (Kaggle seat 0 or 1 varies ~50/50). Pinning game-0 seat silently mixed opponent data into all rollups.
+   - Validated A/B (corrected): ONE 55934103 win **42.1%** mean **64k**; TWO 55938405 win **51.2%** mean **71k** → TwoLand **+11% bank, +9pp win**.
+
+### Replay analysis findings (Sep 2, from 55934103 vs 55938405)
+
+- TwoLand +61% land-turns but only +11% bank — conversion leaks: hand3 ~98% idle post-NE buy (static hand→zone binding), wrong crops on marginal land (69% wheat/carrot/tomato), care collapse (weeds 69× OneLand, egg harvest gap 24%).
+- Market is **supply-constrained**, not glutted; wool price rose with volume; remove residual glut caps.
+- Agent fixes deferred — analysis-only session; see `.cursor/logs.txt` and `docs/twoland/Sept02_overhaul.md`.
+
 ### Smoke (twoland_wsp, Sep 2)
 
 ~**87k** vs random; probe ~d7 → `BUY_LAND` d8 → hire5–9 active when affordable.
@@ -46,12 +59,11 @@
 ### Replan (WSP family)
 
 - Horizon = `NUM_DAYS - day`; vars = empty/WEED; locked = board + queue suffix.
-- `track_shed=False`, `min_balance=0`, conservative handoff.
-- twoland: probe 5s / full 15s; partial cascade OK (prefix apply).
+- `track_shed=True`, `min_balance=liquidity_floor`, conservative handoff floored at 0.
+- twoland: probe ROI on hire5–9 / full 15s cascade post-buy; partial cascade OK (prefix apply).
 
 ## Immediate next steps
 
-- Kaggle A/B twoland vs one-land WSP on same seeds.
-- Tune hire9 INFEASIBLE late-season (partial prefix is working).
-- Use `download_submission_logs.sh` for live episode replays (not stdout logs).
+- **Live A/B:** Wave 0–7 overhaul shipped locally — validate hand3 PASS, weeds, bank on ladder.
+- Kaggle A/B twoland vs one-land WSP on same seeds (use corrected `55934103.json` / `55938405.json`).
 - Agents never submit without explicit ask.

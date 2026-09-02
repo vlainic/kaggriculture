@@ -17,6 +17,8 @@
 ```bash
 bash scripts/smoke_test.sh   # copies crop_rollouts + animal_with_pickups + handmade_dp_candidates
 bash scripts/download_submission_logs.sh <submission_id>   # replays; --with-logs optional
+bash scripts/summarize_replays.sh <submission_id> --us-name "Your Name"   # → kaggle_logs/<id>/<id>.json
+cd scripts && python -m replay_analysis ../kaggle_logs/<id>/replays/episode-*.json   # single game
 ```
 
 ```python
@@ -38,7 +40,8 @@ Agents never submit without explicit user request (`kaggle-submission.mdc`).
 | --- | --- | --- |
 | `num_workers` | 8 | |
 | `max_time_in_seconds` | 20 import / **15 replan** | |
-| `track_shed` | True day-0 / **False replan** | |
+| `track_shed` | **True** on replan | W/F handoff between zones |
+| `replan_min_balance` | **liquidity floor** | hire reserve + 3× feed |
 | `OBJECTIVE_GOOD_ENOUGH` | 80_000 | |
 | Ops cap | **`daily_tile_ops` + hire preamble** | No wheat/animal/fert side counters with pickups JSON |
 | Animals JSON | `animal_with_pickups.json` | |
@@ -67,6 +70,8 @@ Agents never submit without explicit user request (`kaggle-submission.mdc`).
 
 - Logs: `[planner]`, `[exec]`, `[snap]`, `Player 0: reward=`
 - Gantt: zonewise notebooks
+- **Replay analysis:** `kaggle_logs/<id>/<id>.json` — `aggregate.episode_table`, `aggregate.kpi`, per-game `drift`, `kpi.*`
+- Replay obs timing: `obs[i]` is post-`action[i]`; sold units from stock delta `obs[i-1]→obs[i]`
 - `docs/two_land_approach.md` — pickups / ops double-count history
 
 ## Key docs
@@ -77,6 +82,9 @@ Agents never submit without explicit user request (`kaggle-submission.mdc`).
 | `docs/two_land_approach.md` | Pickups ops lesson |
 | `data/two_lands.md` | TWO layout geometry / hire batches |
 | `scripts/download_submission_logs.sh` | Bulk episode replays from Kaggle CLI |
+| `scripts/summarize_replays.sh` | Batch replay analysis → `<id>.json` |
+| `scripts/replay_analysis/` | Replay metrics/KPI module |
+| `experiments/replay_analysis.ipynb` | Single-episode charts |
 | `.cursor/skills/kaggriculture-domain` | Mechanics |
 | `.cursor/skills/kaggriculture-agent-conventions` | Agent conventions |
 

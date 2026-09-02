@@ -13,6 +13,7 @@
 | **Dawn replan** | Lock commitments; WSP conservative cascade; INFEASIBLE → break |
 | **Layout catalog** | `FOUR` + `FIVE` + **`TWO`** (50 tiles); **`CURRENT = TWO`** |
 | **Episode download** | `scripts/download_submission_logs.sh` (replays default) |
+| **Replay analysis** | `scripts/replay_analysis/` + `scripts/summarize_replays.sh` → `<id>.json` |
 | **Competition submission** | Local smoke only unless user asks |
 
 ## What works
@@ -24,7 +25,9 @@
 | TWO layout | Zones I–X; land1 = FIVE geometry; land2 NE snakes |
 | WSP conservative cascade | Unchanged from Sep 1 one-land work |
 | download_submission_logs.sh | Replays bulk; `--with-logs` optional; skips CSV footer junk |
-| `kaggle_logs/` | Gitignored |
+| replay_analysis + summarize_replays.sh | Batch JSON per submission; KPIs; slim default (no sell events) |
+| Corrected A/B ONE vs TWO | 55934103: 42.1% / 64k; 55938405: 51.2% / 71k (per-game us_index) |
+| `kaggle_logs/` | Gitignored; `<submission_id>/<submission_id>.json` |
 
 ## Known issues
 
@@ -34,6 +37,32 @@
 | Kaggle agent logs API | 403 on ladder episodes; replays work |
 | WSP vs zonewise gap | ~87k twoland vs ~107k zonewise one-land |
 | hire5 probe UNKNOWN | Occasional 5s timeout; retry next dawn |
+| Replay self-play us_index | Both `TeamNames` = same name → `resolve_us_index` always 0 (rare) |
+| TwoLand conversion leaks | Sept 2 overhaul: E1 walk-to-shed, pricing, track_shed, fert pipeline |
+
+## Sep 2 session (Sept02 overhaul — all waves)
+
+| Change | Result |
+| --- | --- |
+| Wave 0 instrumentation | PASS note counters, solver early_stopped logs, day-29 drift |
+| Wave 1 E1+P3 | pickup-first preambles, walk-to-shed, NUM_ACTIVE_HIRES after INFEASIBLE |
+| Wave 2 S2+S6 | conservative floor 0, negative handoff break, apply_replan state reset |
+| Wave 3 P1+P2+S3 | forecast-inventory effective_price, marginal glut pricing |
+| Wave 4 E2 | animal-first routes at dawn |
+| Wave 5 S1+E3+M1 | W/F handoff, track_shed=True, PICKUP_FERTILIZER, BUY FERTILIZER |
+| Wave 6 S4+S5 | PER_TILE_FLOOR early stop, weighted time, ROI land probe |
+| Wave 7 M2 | PRICE_FLOOR_RATIO 0.35, wool cap T//5 |
+
+## Sep 2 session (replay analysis + us_index fix)
+
+| Change | Result |
+| --- | --- |
+| `scripts/replay_analysis/` (metrics, sells, kpi, plot) | Per-game + batch JSON; executor/market/planner KPIs |
+| `sold_units()` from stock deltas | Fixed undercount vs ~80k bank |
+| `potential_yield` replant key | `(player,x,y,planted_day)` not tile-only |
+| `summarize_replays.sh` | `kaggle_logs/<id>/<id>.json`; slim batch (no events) |
+| `_aggregate()` per-game `us_index` | Fixed 50% opponent contamination in rollups |
+| A/B 55934103 vs 55938405 | TwoLand +11% bank, +9pp win (corrected) |
 
 ## Sep 2 session (two-land WSP + download script)
 
@@ -53,11 +82,10 @@
 
 ## What's left
 
-1. Kaggle A/B twoland vs one-land on matched episodes
+1. **Agent fixes from replay KPIs:** hand3→zone routing, marginal crop mix, SW buy timing
 2. Reduce late hire9 INFEASIBLE without over-hiring day 0
-3. Analyze live replays from `download_submission_logs.sh`
-4. Lands 3–4 out of scope for now
-5. Do not Kaggle submit without ask
+3. Lands 3–4 out of scope for now
+4. Do not Kaggle submit without ask
 
 ## Do not do unless asked
 
