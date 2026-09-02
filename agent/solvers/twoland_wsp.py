@@ -11,7 +11,7 @@ from pathlib import Path
 
 from ortools.sat.python import cp_model
 
-from agent import animal_rollouts
+from agent import animal_rollouts, pricing
 from agent.solvers.common import decode_sort_key
 from agent.solvers.types import SolveResult
 from agent.zoning import (
@@ -36,14 +36,7 @@ OBJ_EARLY_STOP = 5_000
 CROP_PROFILES = ("no_fert", "with_fert")
 ANIMAL_PROFILES = ("no_care", "with_care")
 PROFILE_SUFFIXES = ("no_fert", "with_fert", "no_care", "with_care")
-GLUT_CAPS = {
-    "MELON": {"count_div": 52},
-    "STRAWBERRY": {"count_div": 20},
-    "MILK": {"count_div": 25},
-    "WOOL": {"count_div": 19},
-}
-GLUT_PRODUCTS = tuple(GLUT_CAPS)
-GLUT_FACTOR_MIN = 0.01
+GLUT_PRODUCTS = ("MELON", "STRAWBERRY", "MILK", "WOOL")
 
 _PRESTART_PATH = Path(__file__).resolve().parent / "wsp_prestart.json"
 _DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
@@ -158,27 +151,43 @@ def _empty_daily_harvest(horizon: int) -> dict[str, list[int]]:
     return {p: [0] * horizon for p in GLUT_PRODUCTS}
 
 
-def _glut_price_factor(product: str, count: int) -> float:
-    spec = GLUT_CAPS.get(product)
-    if spec is None:
-        return 1.0
-    return max(GLUT_FACTOR_MIN, 1.0 - count / spec["count_div"])
+def _seed_locked_harvest(
+    locked_by_worker: dict[str, dict],
+    market_inv: dict[str, int] | None = None,
+) -> dict[str, int]:
+    """Seed booked volume from locked tile daily harvest vectors."""
+    del market_inv
+    counts: dict[str, int] = {}
+    for locked in locked_by_worker.values():
+        for product in GLUT_PRODUCTS:
+            daily = locked.get("daily_harvest", {}).get(product)
+            if daily:
+                counts[product] = counts.get(product, 0) + sum(daily)
+    return counts
 
 
-def _glut_unit_price(base: int, product: str, count: int) -> int:
-    return max(1, int(round(base * _glut_price_factor(product, count))))
+def _marginal_glut_price(
+    product: str,
+    already_booked: int,
+    market_inv: dict[str, int] | None,
+) -> int:
+    inv = int((market_inv or {}).get(product, pricing.MARKET_PARAMS[product].i0))
+    return pricing.marginal_unit_price(product, inv, already_booked, 1)
 
 
 def _pattern_weight(
     pat,
     locked_counts: dict[str, int],
     price_of: Callable[[str], int],
+    market_inv: dict[str, int] | None = None,
 ) -> int:
+    del price_of
     rev = 0
+    booked = dict(locked_counts)
     for product, _hday, yld in pat["harvest_lines"]:
-        count = locked_counts.get(product, 0)
-        unit = _glut_unit_price(price_of(product), product, count)
+        unit = _marginal_glut_price(product, booked.get(product, 0), market_inv)
         rev += yld * unit
+        booked[product] = booked.get(product, 0) + yld
     return rev - pat["setup_cost"]
 
 
@@ -371,6 +380,7 @@ def _solve_zone(
     track_shed: bool,
     min_balance: int = 0,
     price_of: Callable[[str], int] | None = None,
+    market_inv: dict[str, int] | None = None,
 ):
     zone_empty = list(empty_tiles)
     zsize = len(zone_empty)
@@ -516,7 +526,9 @@ def _solve_zone(
         model.Add(cons == start_d + (sum(spend_terms) if spend_terms else 0))
         conservative_vars.append(cons)
 
-    zone_weights = [_pattern_weight(pat, locked_counts, price_of) for pat in patterns]
+    zone_weights = [
+        _pattern_weight(pat, locked_counts, price_of, market_inv) for pat in patterns
+    ]
     obj_terms = [
         zone_weights[pi] * x[pi, tile]
         for pi, _pat in enumerate(patterns)
@@ -589,6 +601,7 @@ def solve(
     price_of: Callable[[str], int] | None = None,
     land_owned: bool = False,
     buy_morning: bool = False,
+    market_inventory: dict[str, int] | None = None,
 ) -> SolveResult:
     del chains, cascade_reserve
     if _is_prestart_solve(horizon, empty_tiles, empty_counts):
@@ -620,7 +633,7 @@ def solve(
 
     assigned: dict[int, list] = {}
     solved_workers: list[str] = []
-    locked_harvest: dict[str, int] = {}
+    locked_harvest = _seed_locked_harvest(locked_by_worker, market_inventory)
     patterns = build_patterns(horizon, price_of)
     buy_land = False
 
@@ -669,6 +682,7 @@ def solve(
             track_shed=track_shed,
             min_balance=min_balance,
             price_of=price_of,
+            market_inv=market_inventory,
         )
         if res is None:
             if probe_mode and worker == LAND2_PROBE_WORKER:
