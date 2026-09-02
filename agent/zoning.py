@@ -6,6 +6,10 @@ from dataclasses import dataclass
 
 _SHED_DOOR = (4, 4)
 _SHED_ADJACENT = frozenset({(4, 4), (5, 4), (4, 5), (5, 5)})
+TURNS_PER_DAY = 24
+SHED_TRIP_RESERVE = 2
+# Farthest shed-adjacent spawn when farmer occupies the door (two_lands.md).
+_WORST_HAND_SPAWN = (5, 4)
 
 
 @dataclass(frozen=True)
@@ -112,15 +116,7 @@ FIVE = Layout(
         Zone(
             name="hire1",
             tiles=(5, 6, 7, 8, 9),
-            preamble=(
-                "WEST",
-                "PICKUP_WHEAT",
-                "PICKUP_ANIMALS",
-                "WEST",
-                "WEST",
-                "WEST",
-                "WEST",
-            ),
+            preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS"),
             start_hour=1,
             net_tile_ops=17,
             is_hand=True,
@@ -128,14 +124,7 @@ FIVE = Layout(
         Zone(
             name="hire2",
             tiles=(10, 11, 12, 13, 14),
-            preamble=(
-                "NORTH",
-                "PICKUP_WHEAT",
-                "PICKUP_ANIMALS",
-                "WEST",
-                "WEST",
-                "WEST",
-            ),
+            preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS"),
             start_hour=1,
             net_tile_ops=16,
             is_hand=True,
@@ -143,7 +132,7 @@ FIVE = Layout(
         Zone(
             name="hire3",
             tiles=(15, 16, 17, 18, 19),
-            preamble=("WEST", "PICKUP_WHEAT", "PICKUP_ANIMALS", "WEST", "WEST"),
+            preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS"),
             start_hour=2,
             net_tile_ops=14,
             is_hand=True,
@@ -151,7 +140,7 @@ FIVE = Layout(
         Zone(
             name="hire4",
             tiles=(20, 21, 22, 23, 24),
-            preamble=("NORTH", "PICKUP_WHEAT", "PICKUP_ANIMALS", "WEST"),
+            preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS"),
             start_hour=2,
             net_tile_ops=13,
             is_hand=True,
@@ -187,7 +176,7 @@ TWO = Layout(
         Zone(
             name="hire6",
             tiles=(30, 31, 32, 33, 34),
-            preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS", "EAST"),
+            preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS"),
             start_hour=2,
             net_tile_ops=14,
             is_hand=True,
@@ -195,7 +184,7 @@ TWO = Layout(
         Zone(
             name="hire7",
             tiles=(35, 36, 37, 38, 39),
-            preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS", "EAST", "EAST"),
+            preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS"),
             start_hour=2,
             net_tile_ops=13,
             is_hand=True,
@@ -203,7 +192,7 @@ TWO = Layout(
         Zone(
             name="hire8",
             tiles=(40, 41, 42, 43, 44),
-            preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS", "EAST", "EAST", "EAST"),
+            preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS"),
             start_hour=2,
             net_tile_ops=12,
             is_hand=True,
@@ -211,14 +200,7 @@ TWO = Layout(
         Zone(
             name="hire9",
             tiles=(45, 46, 47, 48, 49),
-            preamble=(
-                "PICKUP_WHEAT",
-                "PICKUP_ANIMALS",
-                "EAST",
-                "EAST",
-                "EAST",
-                "EAST",
-            ),
+            preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS"),
             start_hour=2,
             net_tile_ops=11,
             is_hand=True,
@@ -233,6 +215,68 @@ LAND1_WORKERS: tuple[str, ...] = tuple(z.name for z in FIVE.zones)
 LAND2_WORKERS: tuple[str, ...] = tuple(z.name for z in TWO.zones if z.name not in LAND1_WORKERS)
 
 CURRENT: Layout = TWO
+
+
+def _manhattan(a: tuple[int, int], b: tuple[int, int]) -> int:
+    return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+
+def _route_move_cost(
+    tiles: tuple[int, ...], coords: tuple[tuple[int, int], ...]
+) -> int:
+    if not tiles:
+        return 0
+    first = coords[tiles[0]]
+    return _manhattan(_WORST_HAND_SPAWN, first)
+
+
+def _walk_steps_to_first_tile(
+    zone: Zone, coords: tuple[tuple[int, int], ...]
+) -> tuple[str, ...]:
+    """Cardinal walk from shed door to the zone's first route tile after pickup."""
+    if not zone.is_hand or not zone.tiles:
+        return ()
+    fx, fy = coords[zone.tiles[0]]
+    x, y = _SHED_DOOR
+    steps: list[str] = []
+    while x > fx:
+        steps.append("WEST")
+        x -= 1
+    while x < fx:
+        steps.append("EAST")
+        x += 1
+    while y > fy:
+        steps.append("SOUTH")
+        y -= 1
+    while y < fy:
+        steps.append("NORTH")
+        y += 1
+    return tuple(steps)
+
+
+def _spawn_agnostic_preamble(
+    zone: Zone, coords: tuple[tuple[int, int], ...]
+) -> tuple[str, ...]:
+    """§7.3: pickup-first only; executor walks to shed then first route tile."""
+    if not zone.is_hand:
+        return zone.preamble
+    pickups = tuple(s for s in zone.preamble if s.startswith("PICKUP_"))
+    if not pickups:
+        pickups = ("PICKUP_WHEAT", "PICKUP_ANIMALS")
+    return pickups
+
+
+def _formula_net_tile_ops(
+    zone: Zone, coords: tuple[tuple[int, int], ...]
+) -> int:
+    """§7.5: 24 − preamble − walk-to-zone − shed-trip reserve − start_hour."""
+    if not zone.is_hand:
+        return zone.net_tile_ops
+    preamble = _spawn_agnostic_preamble(zone, coords)
+    move = len(_walk_steps_to_first_tile(zone, coords))
+    overhead = len(preamble) + SHED_TRIP_RESERVE
+    del move  # included in preamble length
+    return max(8, TURNS_PER_DAY - zone.start_hour - overhead)
 
 
 def _fib_hire_cost(n: int) -> int:
@@ -281,7 +325,10 @@ def bind(layout: Layout) -> None:
 
     WORKER_TILES = {z.name: list(z.tiles) for z in layout.zones}
     WORKER_ROUTES = {z.name: list(z.tiles) for z in layout.zones}
-    PREAMBLE = {z.name: list(z.preamble) for z in layout.zones}
+    PREAMBLE = {
+        z.name: list(_spawn_agnostic_preamble(z, layout.coords))
+        for z in layout.zones
+    }
     HAND_START_HOUR = {z.name: z.start_hour for z in layout.zones if z.is_hand}
     NET_TILE_OPS = {z.name: z.net_tile_ops for z in layout.zones}
 
