@@ -73,8 +73,6 @@ def _may_fertilize_today(
     inv = _inv_at(private, inv_idx)
     if inv.get("FERTILIZER", 0) <= 0:
         return False
-    if not zone_has_animal(me, tile_idx):
-        return False
     return crop_needs_fertilize_by_age(tile, day)
 
 
