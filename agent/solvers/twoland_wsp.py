@@ -555,6 +555,13 @@ def _solve_zone(
             if solver.Value(x[pi, tile]) == 1:
                 picked.append({"tile": tile, "pattern": pat})
 
+    w_levels = (
+        [int(solver.Value(w_vars[d])) for d in range(horizon + 1)] if track_shed else []
+    )
+    f_levels = (
+        [int(solver.Value(f_vars[d])) for d in range(horizon + 1)] if track_shed else []
+    )
+
     print(
         f"[planner] twoland_wsp zone={worker} {solver.StatusName(status)} "
         f"obj={solver.ObjectiveValue():.0f} time={elapsed:.3f}s "
@@ -570,6 +577,8 @@ def _solve_zone(
         "picked": picked,
         "balance": [int(solver.Value(b)) for b in balance_vars],
         "conservative": [int(solver.Value(c)) for c in conservative_vars],
+        "w_levels": w_levels,
+        "f_levels": f_levels,
     }
 
 
@@ -625,6 +634,8 @@ def solve(
     locked_harvest: dict[str, int] = {}
     patterns = build_patterns(horizon, price_of)
     buy_land = False
+    w_levels = [0] * (horizon + 1)
+    f_levels = [0] * (horizon + 1)
 
     for worker in worker_list:
         if probe_mode and worker == LAND2_PROBE_WORKER:
@@ -652,6 +663,9 @@ def solve(
         if worker == WORKERS[0] and track_shed:
             w_open = w_open0
             f_open = f_open0
+        elif worker != WORKERS[0] and track_shed:
+            w_open = w_levels[1]
+            f_open = f_levels[1]
         else:
             w_open = 0
             f_open = 0
@@ -702,6 +716,9 @@ def solve(
             )
             solved_workers.append(worker)
             break
+        if track_shed:
+            w_levels = res["w_levels"]
+            f_levels = res["f_levels"]
         solved_workers.append(worker)
 
     complete = len(solved_workers) == len(WORKERS) and not probe_mode
