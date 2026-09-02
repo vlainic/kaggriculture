@@ -6,7 +6,7 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
-from agent import animal_rollouts, dp_catalog, pricing, rollouts, solvers, zoning
+from agent import animal_rollouts, dp_catalog, pricing, rollouts, solvers, workers, zoning
 from agent.solvers.types import SolveResult
 from agent.zoning import (
     LAND1_TILE_COUNT,
@@ -791,7 +791,12 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
     hire_reserve = max(0, hire_reserve)
     feed_reserve = wheat_feed * wheat_price
     liquidity_floor = hire_reserve + feed_reserve * 3
-    replan_min_balance = liquidity_floor
+    if _wsp_solver():
+        replan_min_balance = hire_reserve
+        replan_track_shed = True
+    else:
+        replan_min_balance = liquidity_floor
+        replan_track_shed = True
     replan_max_time = 5.0 if (
         solvers.CURRENT_SOLVER == "twoland_wsp" and not land_owned and not buy_morning
     ) else 15.0
@@ -807,7 +812,7 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
         w_open0=w_open0,
         f_open0=f_open0,
         min_balance=replan_min_balance,
-        track_shed=not _wsp_solver(),
+        track_shed=replan_track_shed,
         price_of=price_of,
         land_owned=land_owned,
         buy_morning=buy_morning,
@@ -835,6 +840,7 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
         hires = _active_hand_hires(result)
         if hires > 0:
             NUM_ACTIVE_HIRES = max(4, hires)
+        workers.refresh_hand_zone_map(HAND_WORKERS[:NUM_ACTIVE_HIRES])
 
     if result.buy_land and not buy_morning and not land_owned:
         n_written = solvers.apply_replan(

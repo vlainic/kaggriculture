@@ -110,7 +110,7 @@ FIVE = Layout(
             tiles=(0, 1, 2, 3, 4),
             preamble=(),
             start_hour=0,
-            net_tile_ops=15,
+            net_tile_ops=18,
             is_hand=False,
         ),
         Zone(
@@ -118,7 +118,7 @@ FIVE = Layout(
             tiles=(5, 6, 7, 8, 9),
             preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS"),
             start_hour=1,
-            net_tile_ops=14,
+            net_tile_ops=17,
             is_hand=True,
         ),
         Zone(
@@ -126,7 +126,7 @@ FIVE = Layout(
             tiles=(10, 11, 12, 13, 14),
             preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS"),
             start_hour=1,
-            net_tile_ops=15,
+            net_tile_ops=16,
             is_hand=True,
         ),
         Zone(
@@ -134,7 +134,7 @@ FIVE = Layout(
             tiles=(15, 16, 17, 18, 19),
             preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS"),
             start_hour=2,
-            net_tile_ops=21,
+            net_tile_ops=14,
             is_hand=True,
         ),
         Zone(
@@ -142,7 +142,7 @@ FIVE = Layout(
             tiles=(20, 21, 22, 23, 24),
             preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS"),
             start_hour=2,
-            net_tile_ops=12,
+            net_tile_ops=13,
             is_hand=True,
         ),
     ),
@@ -170,7 +170,7 @@ TWO = Layout(
             tiles=(25, 26, 27, 28, 29),
             preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS"),
             start_hour=2,
-            net_tile_ops=13,
+            net_tile_ops=16,
             is_hand=True,
         ),
         Zone(
@@ -178,7 +178,7 @@ TWO = Layout(
             tiles=(30, 31, 32, 33, 34),
             preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS"),
             start_hour=2,
-            net_tile_ops=22,
+            net_tile_ops=14,
             is_hand=True,
         ),
         Zone(
@@ -186,7 +186,7 @@ TWO = Layout(
             tiles=(35, 36, 37, 38, 39),
             preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS"),
             start_hour=2,
-            net_tile_ops=11,
+            net_tile_ops=13,
             is_hand=True,
         ),
         Zone(
@@ -194,7 +194,7 @@ TWO = Layout(
             tiles=(40, 41, 42, 43, 44),
             preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS"),
             start_hour=2,
-            net_tile_ops=10,
+            net_tile_ops=12,
             is_hand=True,
         ),
         Zone(
@@ -262,7 +262,7 @@ def _spawn_agnostic_preamble(
         return zone.preamble
     pickups = tuple(s for s in zone.preamble if s.startswith("PICKUP_"))
     if not pickups:
-        pickups = ("PICKUP_WHEAT", "PICKUP_ANIMALS")
+        pickups = ("PICKUP_WHEAT", "PICKUP_ANIMALS", "PICKUP_FERTILIZER")
     return pickups + _walk_steps_to_first_tile(zone, coords)
 
 
@@ -277,6 +277,15 @@ def _formula_net_tile_ops(
     overhead = len(preamble) + SHED_TRIP_RESERVE
     del move  # included in preamble length
     return max(8, TURNS_PER_DAY - zone.start_hour - overhead)
+
+
+def layout_from_land1_and_quadrants(
+    land1: Layout, extra_quadrants: tuple[str, ...]
+) -> Layout:
+    """§7.1: build multi-land layout from one-land base + purchased quadrants."""
+    if land1 is FIVE and extra_quadrants == ("NE",):
+        return TWO
+    raise ValueError(f"unsupported layout composition: {extra_quadrants}")
 
 
 def _fib_hire_cost(n: int) -> int:
@@ -330,7 +339,9 @@ def bind(layout: Layout) -> None:
         for z in layout.zones
     }
     HAND_START_HOUR = {z.name: z.start_hour for z in layout.zones if z.is_hand}
-    NET_TILE_OPS = {z.name: z.net_tile_ops for z in layout.zones}
+    NET_TILE_OPS = {
+        z.name: _formula_net_tile_ops(z, layout.coords) for z in layout.zones
+    }
 
     hand_costs: dict[str, int] = {}
     a, b = 1, 1

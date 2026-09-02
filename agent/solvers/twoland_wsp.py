@@ -35,6 +35,7 @@ MAX_BUY = NUM_TILES * NUM_DAYS
 OBJ_EARLY_STOP = 5_000
 PER_TILE_FLOOR = 400
 PROBE_ZONE_TIME = 0.3
+ROI_MARGIN = 1.0
 
 _PROBE_CACHE: dict | None = None
 
@@ -635,17 +636,18 @@ def solve(
 
     probe_mode = not land_owned and not buy_morning
     if probe_mode:
-        worker_list = list(LAND1_WORKERS) + [LAND2_PROBE_WORKER]
+        worker_list = list(LAND1_WORKERS) + list(LAND2_WORKERS)
     else:
         worker_list = list(WORKERS)
 
     empty_set = set(empty_tiles)
     if probe_mode:
-        empty_set.update(WORKER_TILES[LAND2_PROBE_WORKER])
+        for w in LAND2_WORKERS:
+            empty_set.update(WORKER_TILES[w])
 
     zone_weights_time = []
     for worker in worker_list:
-        if probe_mode and worker == LAND2_PROBE_WORKER:
+        if probe_mode and worker in LAND2_WORKERS:
             n_empty = len(WORKER_TILES[worker])
         else:
             n_empty = empty_counts.get(worker, 0)
@@ -663,13 +665,17 @@ def solve(
     buy_land = False
     w_levels = [0] * (horizon + 1)
     f_levels = [0] * (horizon + 1)
+    probe_value = 0
+    probe_cost = LAND2_BUY_COST
+    probe_assigned: dict[int, list] = {}
+    probe_cons_left = 0
     probe_affordable = starting_money >= LAND2_BUY_COST
 
     for wi, worker in enumerate(worker_list):
         per_zone_time = max_time * zone_weights_time[wi] / weight_sum
-        if probe_mode and worker == LAND2_PROBE_WORKER:
+        if probe_mode and worker in LAND2_WORKERS:
             if not probe_affordable:
-                break
+                continue
             per_zone_time = min(PROBE_ZONE_TIME, per_zone_time)
             n_empty = len(WORKER_TILES[worker])
         else:
@@ -697,7 +703,7 @@ def solve(
             solved_workers.append(worker)
             continue
 
-        if probe_mode and worker == LAND2_PROBE_WORKER:
+        if probe_mode and worker in LAND2_WORKERS:
             zone_empty = list(WORKER_TILES[worker])
         else:
             zone_empty = [idx for idx in WORKER_TILES[worker] if idx in empty_set]
@@ -729,27 +735,40 @@ def solve(
             market_inv=market_inventory,
         )
         if res is None:
-            if probe_mode and worker == LAND2_PROBE_WORKER:
-                break
+            if probe_mode and worker in LAND2_WORKERS:
+                continue
             break
 
-        if probe_mode and worker == LAND2_PROBE_WORKER:
-            cons = res["conservative"]
-            leftover = cons[1] if len(cons) > 1 else cons[0]
-            if leftover >= LAND2_BUY_COST:
-                buy_land = True
-                probe_assigned = _decode_wsp_assignment(
-                    worker, empty_set, res["picked"]
+        if probe_mode and worker in LAND2_WORKERS:
+            zone_obj = sum(
+                _pattern_weight(p["pattern"], locked_harvest, price_of, market_inventory)
+                for p in res["picked"]
+            )
+            probe_value += zone_obj
+            probe_cost += HAND_DAILY_COST.get(worker, 0) * horizon
+            probe_assigned.update(
+                _decode_wsp_assignment(worker, empty_set, res["picked"])
+            )
+            probe_cons_left = (
+                res["conservative"][1]
+                if len(res["conservative"]) > 1
+                else res["conservative"][0]
+            )
+            if worker == LAND2_WORKERS[-1]:
+                buy_land = (
+                    probe_value > probe_cost * ROI_MARGIN
+                    and probe_cons_left >= LAND2_BUY_COST
                 )
-                _PROBE_CACHE = {"assigned": probe_assigned}
-                print(
-                    f"[planner] twoland_wsp probe hire5 ok cons_left={leftover} "
-                    f"buy_land tomorrow",
-                    flush=True,
-                )
-            break
+                if buy_land:
+                    _PROBE_CACHE = {"assigned": dict(probe_assigned)}
+                    print(
+                        f"[planner] twoland_wsp probe ok value={probe_value} "
+                        f"cost={probe_cost} cons_left={probe_cons_left} buy_land tomorrow",
+                        flush=True,
+                    )
+            continue
 
-        if buy_morning and worker in LAND2_WORKERS:
+        if buy_morning and not land_owned and worker in LAND2_WORKERS and _PROBE_CACHE:
             _PROBE_CACHE = None
 
         assigned.update(_decode_wsp_assignment(worker, empty_set, res["picked"]))
@@ -769,6 +788,9 @@ def solve(
             w_levels = res["w_levels"]
             f_levels = res["f_levels"]
         solved_workers.append(worker)
+
+    if buy_morning:
+        _PROBE_CACHE = None
 
     complete = len(solved_workers) == len(WORKERS) and not probe_mode
     return SolveResult(
