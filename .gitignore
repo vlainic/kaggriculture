@@ -6,3 +6,4 @@ build/
 submission.tar.gz
 # .cursor/
 submissions/
+kaggle_logs/
