@@ -19,6 +19,7 @@ from agent.zoning import (
     HAND_WORKERS,
     LAND1_TILE_COUNT,
     LAND1_WORKERS,
+    LAND2_WORKERS,
     NET_TILE_OPS,
     NUM_TILES,
     WORKER_TILES,
@@ -32,6 +33,10 @@ WHEAT_PRICE = 25
 FERT_PRICE = 100
 MAX_BUY = NUM_TILES * NUM_DAYS
 OBJ_EARLY_STOP = 5_000
+PER_TILE_FLOOR = 400
+PROBE_ZONE_TIME = 0.3
+
+_PROBE_CACHE: dict | None = None
 
 CROP_PROFILES = ("no_fert", "with_fert")
 ANIMAL_PROFILES = ("no_care", "with_care")
@@ -532,7 +537,7 @@ def _solve_zone(
     solver = cp_model.CpSolver()
     solver.parameters.num_workers = 8
     solver.parameters.max_time_in_seconds = max_time
-    early_target = OBJ_EARLY_STOP * horizon / NUM_DAYS
+    early_target = PER_TILE_FLOOR * zsize * horizon / NUM_DAYS
     callback = _ObjEarlyStop(early_target)
     t0 = time.perf_counter()
     status = solver.Solve(model, callback)
@@ -601,6 +606,7 @@ def solve(
     land_owned: bool = False,
     buy_morning: bool = False,
 ) -> SolveResult:
+    global _PROBE_CACHE
     del chains, cascade_reserve
     if _is_prestart_solve(horizon, empty_tiles, empty_counts):
         assigned, complete, solved_workers = _load_prestart()
@@ -624,7 +630,15 @@ def solve(
     if probe_mode:
         empty_set.update(WORKER_TILES[LAND2_PROBE_WORKER])
 
-    per_zone_time = max_time / max(1, len(worker_list))
+    zone_weights_time = []
+    for worker in worker_list:
+        if probe_mode and worker == LAND2_PROBE_WORKER:
+            n_empty = len(WORKER_TILES[worker])
+        else:
+            n_empty = empty_counts.get(worker, 0)
+        zone_weights_time.append(max(1, n_empty * horizon))
+    weight_sum = sum(zone_weights_time) or 1
+
     opening = [starting_money] * horizon
     if buy_morning and not land_owned:
         opening[0] -= LAND2_BUY_COST
@@ -636,9 +650,14 @@ def solve(
     buy_land = False
     w_levels = [0] * (horizon + 1)
     f_levels = [0] * (horizon + 1)
+    probe_affordable = starting_money >= LAND2_BUY_COST
 
-    for worker in worker_list:
+    for wi, worker in enumerate(worker_list):
+        per_zone_time = max_time * zone_weights_time[wi] / weight_sum
         if probe_mode and worker == LAND2_PROBE_WORKER:
+            if not probe_affordable:
+                break
+            per_zone_time = min(PROBE_ZONE_TIME, per_zone_time)
             n_empty = len(WORKER_TILES[worker])
         else:
             n_empty = empty_counts.get(worker, 0)
@@ -653,6 +672,15 @@ def solve(
                 worker,
                 charge_hire_daily=charge_hire_daily,
             )
+            solved_workers.append(worker)
+            continue
+
+        if buy_morning and not land_owned and worker in LAND2_WORKERS and _PROBE_CACHE:
+            cached = _PROBE_CACHE.get("assigned", {})
+            zone_tiles = set(WORKER_TILES[worker])
+            for idx, chain in cached.items():
+                if idx in zone_tiles:
+                    assigned[idx] = chain
             solved_workers.append(worker)
             continue
 
@@ -696,12 +724,19 @@ def solve(
             leftover = cons[1] if len(cons) > 1 else cons[0]
             if leftover >= LAND2_BUY_COST:
                 buy_land = True
+                probe_assigned = _decode_wsp_assignment(
+                    worker, empty_set, res["picked"]
+                )
+                _PROBE_CACHE = {"assigned": probe_assigned}
                 print(
                     f"[planner] twoland_wsp probe hire5 ok cons_left={leftover} "
                     f"buy_land tomorrow",
                     flush=True,
                 )
             break
+
+        if buy_morning and worker in LAND2_WORKERS:
+            _PROBE_CACHE = None
 
         assigned.update(_decode_wsp_assignment(worker, empty_set, res["picked"]))
         for pick in res["picked"]:
