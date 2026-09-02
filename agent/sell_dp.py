@@ -30,7 +30,7 @@ HOLD_COST = 2
 DP_HORIZON = 8
 MAX_SELL_PER_DAY = 24
 REPLAN_TIME_BUDGET_S = 0.080
-PRICE_FLOOR_RATIO = 0.5
+PRICE_FLOOR_RATIO = 0.35
 LIQUIDATE_FROM_DAY = 27
 
 _ALL_SHOPS = tuple(rollouts.SHOP_PRODUCT_DEMAND.keys())
@@ -250,7 +250,7 @@ def _floor_active(abs_day: int) -> bool:
 
 def _premium_daily_cap(product: str) -> int:
     if product == "WOOL":
-        return max(4, pricing.MARKET_PARAMS["WOOL"].t // 8)
+        return max(4, pricing.MARKET_PARAMS["WOOL"].t // 5)
     return MAX_SELL_PER_DAY
 
 
