@@ -161,7 +161,78 @@ FIVE = Layout(
     shed_adjacent=_SHED_ADJACENT,
 )
 
-CURRENT: Layout = FIVE
+# Tile grid (x, y) — land 1 = FIVE; land 2 = NE columns x=5..9 (50 tiles total)
+#  25 20 15 10  5 30 35 40 45 50
+#  24 19 14  9  4 29 34 39 44 49
+#  23 18 13  8  3 28 33 38 43 48
+#  22 17 12  7  2 27 32 37 42 47
+#  21 16 11  6  1 26 31 36 41 46
+TWO = Layout(
+    coords=FIVE.coords + (
+        (5, 4), (5, 3), (5, 2), (5, 1), (5, 0),  # 26-30 hire5 / zone VI
+        (6, 4), (6, 3), (6, 2), (6, 1), (6, 0),  # 31-35 hire6 / VII
+        (7, 4), (7, 3), (7, 2), (7, 1), (7, 0),  # 36-40 hire7 / VIII
+        (8, 4), (8, 3), (8, 2), (8, 1), (8, 0),  # 41-45 hire8 / IX
+        (9, 4), (9, 3), (9, 2), (9, 1), (9, 0),  # 46-50 hire9 / X
+    ),
+    zones=FIVE.zones + (
+        Zone(
+            name="hire5",
+            tiles=(25, 26, 27, 28, 29),
+            preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS"),
+            start_hour=2,
+            net_tile_ops=16,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire6",
+            tiles=(30, 31, 32, 33, 34),
+            preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS", "EAST"),
+            start_hour=2,
+            net_tile_ops=14,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire7",
+            tiles=(35, 36, 37, 38, 39),
+            preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS", "EAST", "EAST"),
+            start_hour=2,
+            net_tile_ops=13,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire8",
+            tiles=(40, 41, 42, 43, 44),
+            preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS", "EAST", "EAST", "EAST"),
+            start_hour=2,
+            net_tile_ops=12,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire9",
+            tiles=(45, 46, 47, 48, 49),
+            preamble=(
+                "PICKUP_WHEAT",
+                "PICKUP_ANIMALS",
+                "EAST",
+                "EAST",
+                "EAST",
+                "EAST",
+            ),
+            start_hour=2,
+            net_tile_ops=11,
+            is_hand=True,
+        ),
+    ),
+    shed_door=_SHED_DOOR,
+    shed_adjacent=_SHED_ADJACENT,
+)
+
+LAND1_TILE_COUNT = len(FIVE.coords)
+LAND1_WORKERS: tuple[str, ...] = tuple(z.name for z in FIVE.zones)
+LAND2_WORKERS: tuple[str, ...] = tuple(z.name for z in TWO.zones if z.name not in LAND1_WORKERS)
+
+CURRENT: Layout = TWO
 
 
 def _fib_hire_cost(n: int) -> int:

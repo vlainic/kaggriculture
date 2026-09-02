@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 
-from agent import animal_rollouts, pricing, rollouts, script, sell_dp, workers, zoning
+from agent import animal_rollouts, planner, pricing, rollouts, script, sell_dp, workers, zoning
 from agent.script import TILE_QUEUES, QueueItem
 
 MAX_ORDERS = 10
@@ -15,7 +15,55 @@ LIVESTOCK = frozenset(animal_rollouts.animal_names())
 PREMIUM_DRIP = frozenset(sell_dp.PREMIUM_PRODUCTS)
 STAPLE_DUMP = frozenset(sell_dp.STAPLE_PRODUCTS)
 DRIP_PER_HOUR = 1
-HIRE_COST = zoning.HIRE_DAILY_COST
+
+
+def _land2_owned(me: dict) -> bool:
+    return "NE" in me.get("unlocked_quadrants", [])
+
+
+def _target_hires(me: dict, day: int) -> int:
+    if _land2_owned(me):
+        return planner.NUM_ACTIVE_HIRES
+    if planner.BUY_LAND_DAY is not None and day >= planner.BUY_LAND_DAY:
+        return planner.NUM_ACTIVE_HIRES
+    return 4
+
+
+def _hire_batches(target: int) -> tuple[int, int]:
+    if target <= 2:
+        return (target, 0)
+    if target == 3:
+        return (2, 1)
+    if target == 4:
+        return (2, 2)
+    if target == 5:
+        return (2, 3)
+    if target == 7:
+        return (3, 4)
+    if target == 9:
+        return (4, 5)
+    h0 = target // 2
+    h1 = target - h0
+    return (h0, h1)
+
+
+def _hires_this_hour(hour: int, target: int, current_hands: int) -> int:
+    if current_hands >= target:
+        return 0
+    h0, h1 = _hire_batches(target)
+    if hour == 0:
+        return min(h0, target - current_hands)
+    if hour == 1:
+        return min(h1, target - current_hands)
+    return 0
+
+
+def _active_hire_reserve(target_hires: int, current_hands: int) -> int:
+    reserve = 0
+    for i in range(current_hands, target_hires):
+        if i < len(workers.HAND_WORKERS):
+            reserve += zoning.HAND_DAILY_COST.get(workers.HAND_WORKERS[i], 0)
+    return reserve
 
 
 def _tile_at(me: dict, idx: int):
@@ -172,10 +220,19 @@ def build_orders(
     orders: list[list] = []
     dawn = empty_at_dawn if empty_at_dawn is not None else set()
 
+    target_hires = _target_hires(me, day)
     if hour in (0, 1):
-        hires_needed = min(2, workers.NUM_HIRES - len(me["hands"]))
+        hires_needed = _hires_this_hour(hour, target_hires, len(me["hands"]))
         for _ in range(hires_needed):
             orders.append(["HIRE"])
+
+    if (
+        hour == 0
+        and planner.BUY_LAND_DAY is not None
+        and day == planner.BUY_LAND_DAY
+        and not _land2_owned(me)
+    ):
+        orders.insert(0, ["BUY_LAND"])
 
     needed_seeds, needed_animals, wheat_need = needed_buys(
         me, private, day, tile_state, dawn
@@ -189,7 +246,7 @@ def build_orders(
     money = int(me["money"])
     wheat_price = int(prices.get("WHEAT", 0) or 25)
     feed_reserve = wheat_reserve * wheat_price
-    hire_reserve = HIRE_COST * max(0, workers.NUM_HIRES - len(me["hands"]))
+    hire_reserve = _active_hire_reserve(target_hires, len(me["hands"]))
     spendable = max(0, money - feed_reserve - hire_reserve)
 
     if hour == 0 and day < script.SEASON_LAST_DAY:
@@ -382,6 +439,12 @@ def defer_farmer_hour0(hour: int, orders: list[list], me: dict, day: int) -> boo
     if len(me["hands"]) < 2:
         return True
     for order in orders:
-        if order and order[0] in ("BUY_SEED", "BUY_ANIMAL", "BUY_PRODUCT", "HIRE"):
+        if order and order[0] in (
+            "BUY_SEED",
+            "BUY_ANIMAL",
+            "BUY_PRODUCT",
+            "HIRE",
+            "BUY_LAND",
+        ):
             return True
     return False
