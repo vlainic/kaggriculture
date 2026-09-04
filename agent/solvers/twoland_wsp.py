@@ -692,6 +692,14 @@ def solve(
             for prod, units in pick["pattern"]["harvest_units"].items():
                 locked_harvest[prod] = locked_harvest.get(prod, 0) + units
         opening = res["conservative"]
+        if opening[0] < 0:
+            print(
+                f"[planner] twoland_wsp zone={worker} handoff open0={opening[0]} < 0, "
+                f"stop cascade",
+                flush=True,
+            )
+            solved_workers.append(worker)
+            break
         solved_workers.append(worker)
 
     complete = len(solved_workers) == len(WORKERS) and not probe_mode
@@ -724,10 +732,15 @@ def apply_replan(
                 continue
             chain = result.assigned.get(idx, [])
             if not chain and tile_queues.get(idx):
+                print(
+                    f"[planner] twoland_wsp apply_replan t{idx + 1}: "
+                    f"preserve stale queue (empty chain)",
+                    flush=True,
+                )
                 continue
             tile_queues[idx] = chain_to_queue_items(chain, horizon)
             written += 1
-            if tile_state is not None and chain:
+            if tile_state is not None:
                 queue = tile_queues[idx]
                 first_lag = queue[0].start_lag if queue else 0
                 tile_state[idx] = {

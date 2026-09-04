@@ -675,10 +675,15 @@ def apply_replan(
                 continue
             chain = result.assigned.get(idx, [])
             if not chain and tile_queues.get(idx):
+                print(
+                    f"[planner] zonewise_wsp apply_replan t{idx + 1}: "
+                    f"preserve stale queue (empty chain)",
+                    flush=True,
+                )
                 continue
             tile_queues[idx] = chain_to_queue_items(chain, horizon)
             written += 1
-            if tile_state is not None and chain:
+            if tile_state is not None:
                 queue = tile_queues[idx]
                 first_lag = queue[0].start_lag if queue else 0
                 tile_state[idx] = {
