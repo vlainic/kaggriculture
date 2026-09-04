@@ -7,7 +7,6 @@ from collections.abc import Callable
 from pathlib import Path
 
 from agent import animal_rollouts, dp_catalog, rollouts, solvers, zoning
-from agent.solvers.types import SolveResult
 from agent.zoning import (
     LAND1_TILE_COUNT,
     LAND1_WORKERS,
@@ -601,14 +600,8 @@ def _land2_owned(me: dict) -> bool:
     return "NE" in me.get("unlocked_quadrants", [])
 
 
-def _active_hand_hires(result: SolveResult) -> int:
-    count = 0
-    for worker in result.solved_workers:
-        if worker == "farmer":
-            continue
-        if any(result.assigned.get(i) for i in WORKER_TILES.get(worker, [])):
-            count += 1
-    return count
+def _active_hand_hires(solved_workers: tuple[str, ...]) -> int:
+    return sum(1 for w in solved_workers if w != "farmer")
 
 
 def _booked_harvest_from_assigned(
@@ -783,6 +776,11 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
             flush=True,
         )
 
+    if buy_morning or land_owned:
+        hires = _active_hand_hires(result.solved_workers)
+        if hires > 0:
+            NUM_ACTIVE_HIRES = max(4, hires)
+
     if not result.complete and (
         not result.solved_workers or result.solved_workers[0] != WORKERS[0]
     ):
@@ -792,11 +790,6 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
             flush=True,
         )
         return
-
-    if buy_morning or land_owned:
-        hires = _active_hand_hires(result)
-        if hires > 0:
-            NUM_ACTIVE_HIRES = max(4, hires)
 
     if result.buy_land and not buy_morning and not land_owned:
         n_written = solvers.apply_replan(

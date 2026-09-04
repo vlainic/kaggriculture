@@ -564,10 +564,7 @@ class Executor:
                 self._preamble_idx[worker] += 1
                 return self._preamble_action(worker, me, private, fx, fy)
             if (fx, fy) not in workers.SHED_ADJACENT:
-                return (
-                    [_step_toward(fx, fy, *workers.SHED_DOOR)],
-                    f"{worker} pre->shed",
-                )
+                return ["PASS"], f"{worker} pre-wait-shed"
             n = min(need, private["shed"].get("WHEAT", 0))
             if n > 0:
                 self._preamble_idx[worker] += 1
@@ -583,14 +580,7 @@ class Executor:
                 self._preamble_idx[worker] += 1
                 return self._preamble_action(worker, me, private, fx, fy)
             if (fx, fy) not in workers.SHED_ADJACENT:
-                return (
-                    [_step_toward(fx, fy, *workers.SHED_DOOR)],
-                    f"{worker} pre->shed",
-                )
-            if int(private["shed"].get(label, 0)) <= 0:
-                self._preamble_idx[worker] += 1
-                return self._preamble_action(worker, me, private, fx, fy)
-            self._preamble_idx[worker] += 1
+                return ["PASS"], f"{worker} pre-wait-shed"
             return ["PICKUP", label, 1], f"{worker} pre-animal"
 
         self._preamble_idx[worker] += 1

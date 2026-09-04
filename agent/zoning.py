@@ -269,13 +269,12 @@ def _spawn_agnostic_preamble(
 def _formula_net_tile_ops(
     zone: Zone, coords: tuple[tuple[int, int], ...]
 ) -> int:
-    """§7.5: 24 − preamble − walk-to-zone − shed-trip reserve − start_hour."""
+    """§7.5: 24 − start_hour − pickup preamble − walk-to-zone − shed-trip reserve."""
     if not zone.is_hand:
         return zone.net_tile_ops
     preamble = _spawn_agnostic_preamble(zone, coords)
-    move = len(_walk_steps_to_first_tile(zone, coords))
-    overhead = len(preamble) + SHED_TRIP_RESERVE
-    del move  # included in preamble length
+    walk = len(_walk_steps_to_first_tile(zone, coords))
+    overhead = len(preamble) + walk + SHED_TRIP_RESERVE
     return max(8, TURNS_PER_DAY - zone.start_hour - overhead)
 
 
@@ -330,7 +329,9 @@ def bind(layout: Layout) -> None:
         for z in layout.zones
     }
     HAND_START_HOUR = {z.name: z.start_hour for z in layout.zones if z.is_hand}
-    NET_TILE_OPS = {z.name: z.net_tile_ops for z in layout.zones}
+    NET_TILE_OPS = {
+        z.name: _formula_net_tile_ops(z, layout.coords) for z in layout.zones
+    }
 
     hand_costs: dict[str, int] = {}
     a, b = 1, 1
