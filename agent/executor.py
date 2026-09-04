@@ -11,14 +11,6 @@ _TILE_OP_VERBS = frozenset({
     "PLANT", "WATER", "FERTILIZE", "HARVEST", "FEED", "CARE", "DIG", "PLACE",
     "BUILD_COOP", "BUILD_PASTURE", "COLLECT_FERTILIZER", "PICKUP", "DROP",
 })
-_ON_TILE_OP_VERBS = _TILE_OP_VERBS - frozenset({"PICKUP", "DROP"})
-
-
-_PASS_NOTE_KEYS = frozenset({
-    "pre-wait-shed", "done", "feed-wait", "wait", "tile-done", "no-hand",
-    "market-hour", "pre->shed",
-})
-_STUCK_NOTE_KEYS = frozenset({"pre-wait-shed", "feed-wait", "pre->shed", "wait"})
 
 
 def _log(msg: str) -> None:
@@ -77,15 +69,6 @@ class Executor:
         self._empty_at_dawn: set[int] = set()
         self._day0_productive = False
         self._tile_ops_today = {w: 0 for w in workers.WORKERS}
-        self._tile_ops_peak = {w: 0 for w in workers.WORKERS}
-        self._tile_ops_on_tile_today = {w: 0 for w in workers.WORKERS}
-        self._tile_ops_on_tile_peak = {w: 0 for w in workers.WORKERS}
-        self._note_counts: dict[str, dict[str, int]] = {
-            w: {} for w in workers.WORKERS
-        }
-        self._pass_streak = {w: 0 for w in workers.WORKERS}
-        self._route_order: dict[str, list[int]] = {}
-        self._current_day = 0
         for idx in range(workers.NUM_TILES):
             queue = script.TILE_QUEUES.get(idx, [])
             first_lag = queue[0].start_lag if queue else 0
@@ -105,7 +88,6 @@ class Executor:
         private = obs["private"]
         day = obs["day"]
         hour = obs["hour"]
-        self._current_day = day
 
         if hour == 0:
             self._on_new_day(me, day)
@@ -137,26 +119,16 @@ class Executor:
             farmer = ["PASS"]
             hands = [["PASS"] for _ in me["hands"]]
             note = "market-hour"
-            self._record_worker_note("farmer", farmer, note)
-            for i in range(len(me["hands"])):
-                self._record_worker_note(
-                    workers.worker_for_hand_idx(i), ["PASS"], "market-hour"
-                )
-            hand_results: list[tuple[list, str]] = []
         else:
             farmer, note = self._worker_action(
                 "farmer", me, private, day, hour, harvest_only
             )
-            self._record_worker_note("farmer", farmer, note)
-            hand_results = []
-            for i in range(len(me["hands"])):
-                worker = workers.worker_for_hand_idx(i)
-                act, hnote = self._worker_action(
-                    worker, me, private, day, hour, harvest_only
-                )
-                hand_results.append((act, hnote))
-                self._record_worker_note(worker, act, hnote)
-            hands = [act for act, _ in hand_results]
+            hands = [
+                self._worker_action(
+                    workers.worker_for_hand_idx(i), me, private, day, hour, harvest_only
+                )[0]
+                for i in range(len(me["hands"]))
+            ]
 
         if orders:
             _log(f"[exec] d={day} h={hour} market {' '.join(_fmt(o) for o in orders)}")
@@ -169,38 +141,16 @@ class Executor:
                 if act and act[0] == "PLANT":
                     self._day0_productive = True
         _log(f"[exec] d={day} h={hour} farmer {_fmt(farmer)}" + (f" {note}" if note else ""))
-        if market.defer_farmer_hour0(hour, orders, me, day):
-            for i, act in enumerate(hands):
-                _log(f"[exec] d={day} h={hour} hand{i} {_fmt(act)} market-hour")
-        else:
-            for i, (act, hnote) in enumerate(hand_results):
-                _log(
-                    f"[exec] d={day} h={hour} hand{i} {_fmt(act)}"
-                    + (f" {hnote}" if hnote else "")
-                )
+        for i, act in enumerate(hands):
+            _log(f"[exec] d={day} h={hour} hand{i} {_fmt(act)}")
 
         return {"farmer": farmer, "hands": hands, "market": orders}
 
     def _on_new_day(self, me: dict, day: int) -> None:
-        if day > 0:
-            parts = " ".join(
-                f"{w}={self._tile_ops_today.get(w, 0)}" for w in workers.WORKERS
-            )
-            _log(f"[exec] tile_ops d={day - 1} {parts}")
-            for w in workers.WORKERS:
-                self._tile_ops_peak[w] = max(
-                    self._tile_ops_peak.get(w, 0),
-                    self._tile_ops_today.get(w, 0),
-                )
-                self._tile_ops_on_tile_peak[w] = max(
-                    self._tile_ops_on_tile_peak.get(w, 0),
-                    self._tile_ops_on_tile_today.get(w, 0),
-                )
         for w in workers.WORKERS:
             self._route_idx[w] = 0
             self._preamble_idx[w] = 0
             self._tile_ops_today[w] = 0
-            self._tile_ops_on_tile_today[w] = 0
 
         for idx in range(workers.NUM_TILES):
             st = self._tile_state[idx]
@@ -230,19 +180,8 @@ class Executor:
         self._empty_at_dawn = {
             idx for idx in range(workers.NUM_TILES) if _tile_at(me, idx) is None
         }
-        self._refresh_animal_first_routes(me)
         if day >= script.SEASON_LAST_DAY:
             self._endgame_done = {w: set() for w in workers.WORKERS}
-        if day == script.SEASON_LAST_DAY:
-            self._dump_note_counts()
-            peak = " ".join(
-                f"{w}={self._tile_ops_peak.get(w, 0)}" for w in workers.WORKERS
-            )
-            on_peak = " ".join(
-                f"{w}={self._tile_ops_on_tile_peak.get(w, 0)}" for w in workers.WORKERS
-            )
-            _log(f"[exec] tile_ops_peak {peak}")
-            _log(f"[exec] tile_ops_on_tile_peak {on_peak}")
 
     def _log_snap(self, obs: dict, me: dict, day: int, hour: int) -> None:
         shops = obs.get("town", {}).get("unlocked_shops", [])
@@ -276,62 +215,6 @@ class Executor:
     def _bump_tile_op(self, worker: str, action: list) -> None:
         if action and action[0] in _TILE_OP_VERBS:
             self._tile_ops_today[worker] = self._tile_ops_today.get(worker, 0) + 1
-        if action and action[0] in _ON_TILE_OP_VERBS:
-            self._tile_ops_on_tile_today[worker] = (
-                self._tile_ops_on_tile_today.get(worker, 0) + 1
-            )
-
-    def _pass_note_key(self, note: str) -> str:
-        if not note:
-            return "pass"
-        token = note.rsplit(" ", 1)[-1]
-        return token if token in _PASS_NOTE_KEYS else token
-
-    def _record_worker_note(self, worker: str, action: list, note: str) -> None:
-        if action and action[0] == "PASS":
-            key = self._pass_note_key(note)
-            counts = self._note_counts.setdefault(worker, {})
-            counts[key] = counts.get(key, 0) + 1
-            self._pass_streak[worker] = self._pass_streak.get(worker, 0) + 1
-            if key in _STUCK_NOTE_KEYS and self._pass_streak[worker] > 8:
-                _log(f"[exec] WARN {worker} stuck: {note}")
-        else:
-            self._pass_streak[worker] = 0
-
-    def _dump_note_counts(self) -> None:
-        parts = []
-        for worker in workers.WORKERS:
-            counts = self._note_counts.get(worker, {})
-            if not counts:
-                continue
-            inner = " ".join(f"{k}={v}" for k, v in sorted(counts.items()))
-            parts.append(f"{worker}[{inner}]")
-        if parts:
-            _log(f"[exec] pass_notes {' '.join(parts)}")
-
-    def _tile_animal_priority(self, idx: int, me: dict) -> bool:
-        tile = _tile_at(me, idx)
-        if isinstance(tile, dict) and tile.get("animal"):
-            return True
-        st = self._tile_state.get(idx, {})
-        qi = st.get("queue_idx", 0)
-        queue = script.TILE_QUEUES.get(idx, [])
-        if qi < len(queue) and queue[qi].kind == "animal":
-            return True
-        for item in queue[qi:]:
-            if item.kind == "animal":
-                return True
-        return False
-
-    def _refresh_animal_first_routes(self, me: dict) -> None:
-        for worker in workers.WORKERS:
-            tiles = workers.WORKER_TILES[worker]
-            animal_first = [t for t in tiles if self._tile_animal_priority(t, me)]
-            crop_rest = [t for t in tiles if t not in animal_first]
-            self._route_order[worker] = animal_first + crop_rest
-
-    def _worker_route(self, worker: str) -> list[int]:
-        return self._route_order.get(worker) or workers.WORKER_ROUTES[worker]
 
     def _emit_action(
         self,
@@ -391,7 +274,7 @@ class Executor:
                         worker, ["PICKUP", "WHEAT", n], f"{worker} wheat"
                     )
 
-        route = self._worker_route(worker)
+        route = workers.WORKER_ROUTES[worker]
         if self._route_idx[worker] >= len(route):
             if self._zone_pending(worker, me, private, day, inv_idx, harvest_only):
                 self._route_idx[worker] = 0
@@ -592,10 +475,7 @@ class Executor:
                 self._preamble_idx[worker] += 1
                 return self._preamble_action(worker, me, private, fx, fy)
             if (fx, fy) not in workers.SHED_ADJACENT:
-                return (
-                    [_step_toward(fx, fy, *workers.SHED_DOOR)],
-                    f"{worker} pre->shed",
-                )
+                return ["PASS"], f"{worker} pre-wait-shed"
             n = min(need, private["shed"].get("WHEAT", 0))
             if n > 0:
                 self._preamble_idx[worker] += 1
@@ -611,34 +491,8 @@ class Executor:
                 self._preamble_idx[worker] += 1
                 return self._preamble_action(worker, me, private, fx, fy)
             if (fx, fy) not in workers.SHED_ADJACENT:
-                return (
-                    [_step_toward(fx, fy, *workers.SHED_DOOR)],
-                    f"{worker} pre->shed",
-                )
-            if int(private["shed"].get(label, 0)) <= 0:
-                self._preamble_idx[worker] += 1
-                return self._preamble_action(worker, me, private, fx, fy)
-            self._preamble_idx[worker] += 1
+                return ["PASS"], f"{worker} pre-wait-shed"
             return ["PICKUP", label, 1], f"{worker} pre-animal"
-
-        if step == "PICKUP_FERTILIZER":
-            need = script.fert_pickup_needed(
-                me, worker, self._tile_state, private, day=self._current_day
-            )
-            if need <= 0:
-                self._preamble_idx[worker] += 1
-                return self._preamble_action(worker, me, private, fx, fy)
-            if (fx, fy) not in workers.SHED_ADJACENT:
-                return (
-                    [_step_toward(fx, fy, *workers.SHED_DOOR)],
-                    f"{worker} pre->shed",
-                )
-            n = min(need, int(private["shed"].get("FERTILIZER", 0)))
-            if n > 0:
-                self._preamble_idx[worker] += 1
-                return ["PICKUP", "FERTILIZER", n], f"{worker} pre-fert"
-            self._preamble_idx[worker] += 1
-            return self._preamble_action(worker, me, private, fx, fy)
 
         self._preamble_idx[worker] += 1
         return [step], f"{worker} pre"
@@ -678,14 +532,6 @@ class Executor:
         )
         if label:
             return ["PICKUP", label, 1], "animal"
-
-        fert_need = script.fert_pickup_needed(
-            me, worker, self._tile_state, private, day=self._current_day
-        )
-        if fert_need > 0:
-            n = min(fert_need, int(private["shed"].get("FERTILIZER", 0)))
-            if n > 0:
-                return ["PICKUP", "FERTILIZER", n], "fert"
         return None
 
     def _drop_if_adjacent(

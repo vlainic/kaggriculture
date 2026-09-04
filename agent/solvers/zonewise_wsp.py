@@ -11,7 +11,7 @@ from pathlib import Path
 
 from ortools.sat.python import cp_model
 
-from agent import animal_rollouts, pricing
+from agent import animal_rollouts
 from agent.solvers.common import decode_sort_key
 from agent.solvers.types import SolveResult
 from agent.zoning import (
@@ -32,7 +32,14 @@ OBJ_EARLY_STOP = 5_000
 CROP_PROFILES = ("no_fert", "with_fert")
 ANIMAL_PROFILES = ("no_care", "with_care")
 PROFILE_SUFFIXES = ("no_fert", "with_fert", "no_care", "with_care")
-GLUT_PRODUCTS = ("MELON", "STRAWBERRY", "MILK", "WOOL")
+GLUT_CAPS = {
+    "MELON": {"count_div": 52},
+    "STRAWBERRY": {"count_div": 20},
+    "MILK": {"count_div": 25},
+    "WOOL": {"count_div": 19},
+}
+GLUT_PRODUCTS = tuple(GLUT_CAPS)
+GLUT_FACTOR_MIN = 0.01
 
 _PRESTART_PATH = Path(__file__).resolve().parent / "wsp_prestart.json"
 _DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
@@ -146,28 +153,27 @@ def _empty_daily_harvest(horizon: int) -> dict[str, list[int]]:
     return {p: [0] * horizon for p in GLUT_PRODUCTS}
 
 
-def _marginal_glut_price(
-    product: str,
-    already_booked: int,
-    market_inv: dict[str, int] | None,
-) -> int:
-    inv = int((market_inv or {}).get(product, pricing.MARKET_PARAMS[product].i0))
-    return pricing.marginal_unit_price(product, inv, already_booked, 1)
+def _glut_price_factor(product: str, count: int) -> float:
+    spec = GLUT_CAPS.get(product)
+    if spec is None:
+        return 1.0
+    return max(GLUT_FACTOR_MIN, 1.0 - count / spec["count_div"])
+
+
+def _glut_unit_price(base: int, product: str, count: int) -> int:
+    return max(1, int(round(base * _glut_price_factor(product, count))))
 
 
 def _pattern_weight(
     pat,
     locked_counts: dict[str, int],
     price_of: Callable[[str], int],
-    market_inv: dict[str, int] | None = None,
 ) -> int:
-    del price_of
     rev = 0
-    booked = dict(locked_counts)
     for product, _hday, yld in pat["harvest_lines"]:
-        unit = _marginal_glut_price(product, booked.get(product, 0), market_inv)
+        count = locked_counts.get(product, 0)
+        unit = _glut_unit_price(price_of(product), product, count)
         rev += yld * unit
-        booked[product] = booked.get(product, 0) + yld
     return rev - pat["setup_cost"]
 
 
@@ -272,7 +278,7 @@ def build_patterns(horizon: int, price_of: Callable[[str], int]) -> list:
     patterns = []
     pid = 0
     for crop_name, crop_spec in crops_data["crops"].items():
-        for profile_name in ("no_fert",):
+        for profile_name in CROP_PROFILES:
             if profile_name not in crop_spec:
                 continue
             profile_key = f"{crop_name}_{profile_name}"
@@ -505,9 +511,7 @@ def _solve_zone(
         model.Add(cons == start_d + (sum(spend_terms) if spend_terms else 0))
         conservative_vars.append(cons)
 
-    zone_weights = [
-        _pattern_weight(pat, locked_counts, price_of, None) for pat in patterns
-    ]
+    zone_weights = [_pattern_weight(pat, locked_counts, price_of) for pat in patterns]
     obj_terms = [
         zone_weights[pi] * x[pi, tile]
         for pi, _pat in enumerate(patterns)
@@ -671,15 +675,10 @@ def apply_replan(
                 continue
             chain = result.assigned.get(idx, [])
             if not chain and tile_queues.get(idx):
-                print(
-                    f"[planner] wsp apply_replan t{idx + 1}: "
-                    f"preserve stale queue (empty chain)",
-                    flush=True,
-                )
                 continue
             tile_queues[idx] = chain_to_queue_items(chain, horizon)
             written += 1
-            if tile_state is not None:
+            if tile_state is not None and chain:
                 queue = tile_queues[idx]
                 first_lag = queue[0].start_lag if queue else 0
                 tile_state[idx] = {

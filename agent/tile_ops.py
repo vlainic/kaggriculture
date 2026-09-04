@@ -65,14 +65,15 @@ def _may_fertilize_today(
     private: dict,
     inv_idx: int,
     *,
-    profile: str,
     fert_today: bool,
     zone_ops_remaining: int,
 ) -> bool:
-    if profile != "with_fert" or fert_today or zone_ops_remaining <= 0:
+    if fert_today or zone_ops_remaining <= 0:
         return False
     inv = _inv_at(private, inv_idx)
     if inv.get("FERTILIZER", 0) <= 0:
+        return False
+    if not zone_has_animal(me, tile_idx):
         return False
     return crop_needs_fertilize_by_age(tile, day)
 
@@ -323,7 +324,6 @@ def _crop_action(
                 tile_idx,
                 private,
                 inv_idx,
-                profile=profile,
                 fert_today=fert_today,
                 zone_ops_remaining=zone_ops_remaining,
             ):

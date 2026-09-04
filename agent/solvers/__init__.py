@@ -49,7 +49,6 @@ def solve(
     price_of: Callable[[str], int] | None = None,
     land_owned: bool = False,
     buy_morning: bool = False,
-    market_inventory: dict | None = None,
 ) -> SolveResult:
     kwargs = {
         "horizon": horizon,
@@ -70,8 +69,6 @@ def solve(
     if CURRENT_SOLVER == "twoland_wsp":
         kwargs["land_owned"] = land_owned
         kwargs["buy_morning"] = buy_morning
-        if market_inventory is not None:
-            kwargs["market_inventory"] = market_inventory
     return _backend().solve(chains, **kwargs)
 
 

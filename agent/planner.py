@@ -6,8 +6,7 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
-from agent import animal_rollouts, dp_catalog, pricing, rollouts, solvers, workers, zoning
-from agent.solvers.types import SolveResult
+from agent import animal_rollouts, dp_catalog, rollouts, solvers, zoning
 from agent.zoning import (
     LAND1_TILE_COUNT,
     LAND1_WORKERS,
@@ -42,11 +41,7 @@ ZERO_DAILY_KEYS = (
     "daily_wheat",
 )
 
-SHOP_SELL_INTERVAL = 4
-TURNS_PER_DAY = 24
-
 _cached_queues: dict | None = None
-_last_solver_booked: dict[str, int] = {}
 
 
 def _load_json(name: str) -> dict | list:
@@ -87,32 +82,15 @@ def effective_price(
     shops: list[str],
     i0_prices: dict[str, int],
     opp_tile_counts: dict[str, int] | None = None,
-    *,
-    market_inventory: dict[str, int] | None = None,
-    days_remaining: int = NUM_DAYS,
 ) -> int:
-    """Marginal unit value from pricing curve at forecast inventory."""
-    quoted_live = int(market_prices.get(product, i0_prices.get(product, 0)) or 0)
-    inv = int((market_inventory or {}).get(product, pricing.MARKET_PARAMS[product].i0))
-    daily_drain = (
-        rollouts.shop_demand_by_product(shops).get(product, 0)
-        * (TURNS_PER_DAY // SHOP_SELL_INTERVAL)
-    )
+    demand = rollouts.shop_demand_by_product(shops)
+    quoted = int(market_prices.get(product, i0_prices.get(product, 0)) or 0)
     opp = (opp_tile_counts or {}).get(product, 0)
-    opp_units = max(0, opp * max(1, days_remaining // 7))
-    forecast = pricing.forecast_inventory(
-        product,
-        inv,
-        daily_drain=daily_drain,
-        days_remaining=days_remaining,
-        opp_units=opp_units,
-    )
-    marginal = pricing.marginal_unit_price(product, forecast, 0, 1)
-    if quoted_live <= 0:
-        return marginal
-    low = int(quoted_live * 0.6)
-    high = int(quoted_live * 1.4)
-    return max(low, min(high, marginal))
+    # opp_bonus = 0.5 - opp / 10.0
+    opp_bonus = - opp / 10.0
+
+    price_factor = 1 + demand.get(product, 0) + opp_bonus
+    return int(quoted * max(0.1, price_factor))
 
 
 def make_price_of(
@@ -120,19 +98,10 @@ def make_price_of(
     shops: list[str],
     i0_prices: dict[str, int],
     opp_tile_counts: dict[str, int] | None = None,
-    *,
-    market_inventory: dict[str, int] | None = None,
-    days_remaining: int = NUM_DAYS,
 ) -> Callable[[str], int]:
     def price_of(product: str) -> int:
         return effective_price(
-            product,
-            market_prices,
-            shops,
-            i0_prices,
-            opp_tile_counts,
-            market_inventory=market_inventory,
-            days_remaining=days_remaining,
+            product, market_prices, shops, i0_prices, opp_tile_counts
         )
 
     return price_of
@@ -630,53 +599,8 @@ def _land2_owned(me: dict) -> bool:
     return "NE" in me.get("unlocked_quadrants", [])
 
 
-def _active_hand_hires(result: SolveResult) -> int:
-    count = 0
-    for worker in result.solved_workers:
-        if worker == "farmer":
-            continue
-        if any(result.assigned.get(i) for i in WORKER_TILES.get(worker, [])):
-            count += 1
-    return count
-
-
-def _booked_harvest_from_assigned(
-    assigned: dict[int, list],
-    horizon: int,
-    crops_data: dict,
-    animals_data: dict,
-) -> dict[str, int]:
-    booked: dict[str, int] = {}
-    for chain in assigned.values():
-        if not chain:
-            continue
-        for profile_key, start_day in chain:
-            label, profile_name = _parse_profile_key(profile_key)
-            kind, _spec, profile = _rollout_spec(
-                label, profile_name, crops_data, animals_data
-            )
-            product = _product_for_label(label, kind)
-            for age, yld in zip(profile["harvest_ages"], profile["yield_per_harvest"]):
-                if start_day + age < horizon:
-                    booked[product] = booked.get(product, 0) + yld
-    return booked
-
-
-def log_plan_drift(obs: dict, tile_queues: dict, tile_state: dict | None) -> None:
-    """Day-29 three-way gap: solver-booked vs shed (proxy for unsold harvest)."""
-    private = obs["private"]
-    shed = private.get("shed", {})
-    booked = _last_solver_booked
-    parts = []
-    products = sorted(set(booked) | set(shed))
-    for product in products:
-        if product not in rollouts.PRODUCT_NAMES and product != "FERTILIZER":
-            continue
-        b = booked.get(product, 0)
-        s = int(shed.get(product, 0))
-        parts.append(f"{product}:booked={b},shed={s}")
-    if parts:
-        print(f"[planner] drift d={obs['day']} {' '.join(parts)}", flush=True)
+def _active_hand_hires(solved_workers: tuple[str, ...]) -> int:
+    return sum(1 for w in solved_workers if w != "farmer")
 
 
 def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None:
@@ -710,21 +634,13 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
 
     shops = obs.get("town", {}).get("unlocked_shops", [])
     market_prices = obs.get("market", {}).get("prices", {})
-    market_inventory = obs.get("market", {}).get("inventory", {})
 
     crops_data = _load_json("crop_rollouts.json")
     animals_data = animal_rollouts.data()
     i0 = _i0_prices(crops_data, animals_data)
     opp_farm = obs["farms"][1 - player]
     opp_counts = _opponent_product_tile_counts(opp_farm)
-    price_of = make_price_of(
-        market_prices,
-        shops,
-        i0,
-        opp_counts,
-        market_inventory=market_inventory,
-        days_remaining=horizon,
-    )
+    price_of = make_price_of(market_prices, shops, i0, opp_counts)
 
     if _wsp_solver():
         chains = []
@@ -791,12 +707,7 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
     hire_reserve = max(0, hire_reserve)
     feed_reserve = wheat_feed * wheat_price
     liquidity_floor = hire_reserve + feed_reserve * 3
-    if _wsp_solver():
-        replan_min_balance = 0
-        replan_track_shed = False
-    else:
-        replan_min_balance = liquidity_floor
-        replan_track_shed = True
+    replan_min_balance = 0 if _wsp_solver() else liquidity_floor
     replan_max_time = 5.0 if (
         solvers.CURRENT_SOLVER == "twoland_wsp" and not land_owned and not buy_morning
     ) else 15.0
@@ -812,11 +723,10 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
         w_open0=w_open0,
         f_open0=f_open0,
         min_balance=replan_min_balance,
-        track_shed=replan_track_shed,
+        track_shed=not _wsp_solver(),
         price_of=price_of,
         land_owned=land_owned,
         buy_morning=buy_morning,
-        market_inventory=market_inventory,
     )
 
     if result.buy_land:
@@ -825,6 +735,11 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
             f"[planner] replan d={day} land2 probe ok BUY_LAND_DAY={BUY_LAND_DAY}",
             flush=True,
         )
+
+    if buy_morning or land_owned:
+        hires = _active_hand_hires(result.solved_workers)
+        if hires > 0:
+            NUM_ACTIVE_HIRES = max(4, hires)
 
     if not result.complete and (
         not result.solved_workers or result.solved_workers[0] != WORKERS[0]
@@ -835,12 +750,6 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
             flush=True,
         )
         return
-
-    if buy_morning or land_owned:
-        hires = _active_hand_hires(result)
-        if hires > 0:
-            NUM_ACTIVE_HIRES = max(4, hires)
-        workers.refresh_hand_zone_map(HAND_WORKERS[:NUM_ACTIVE_HIRES])
 
     if result.buy_land and not buy_morning and not land_owned:
         n_written = solvers.apply_replan(
@@ -861,14 +770,6 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
             chain_to_queue_items,
             write_all_solved=buy_morning,
         )
-
-    global _last_solver_booked
-    _last_solver_booked = _booked_harvest_from_assigned(
-        result.assigned, horizon, crops_data, animals_data
-    )
-
-    if day == SEASON_LAST_DAY:
-        log_plan_drift(obs, tile_queues, tile_state)
 
     if replan_tiles:
         samples = []

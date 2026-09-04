@@ -11,7 +11,7 @@ from pathlib import Path
 
 from ortools.sat.python import cp_model
 
-from agent import animal_rollouts, pricing
+from agent import animal_rollouts
 from agent.solvers.common import decode_sort_key
 from agent.solvers.types import SolveResult
 from agent.zoning import (
@@ -19,7 +19,6 @@ from agent.zoning import (
     HAND_WORKERS,
     LAND1_TILE_COUNT,
     LAND1_WORKERS,
-    LAND2_WORKERS,
     NET_TILE_OPS,
     NUM_TILES,
     WORKER_TILES,
@@ -33,16 +32,18 @@ WHEAT_PRICE = 25
 FERT_PRICE = 100
 MAX_BUY = NUM_TILES * NUM_DAYS
 OBJ_EARLY_STOP = 5_000
-PER_TILE_FLOOR = 400
-PROBE_ZONE_TIME = 0.3
-ROI_MARGIN = 1.0
-
-_PROBE_CACHE: dict | None = None
 
 CROP_PROFILES = ("no_fert", "with_fert")
 ANIMAL_PROFILES = ("no_care", "with_care")
 PROFILE_SUFFIXES = ("no_fert", "with_fert", "no_care", "with_care")
-GLUT_PRODUCTS = ("MELON", "STRAWBERRY", "MILK", "WOOL")
+GLUT_CAPS = {
+    "MELON": {"count_div": 52},
+    "STRAWBERRY": {"count_div": 20},
+    "MILK": {"count_div": 25},
+    "WOOL": {"count_div": 19},
+}
+GLUT_PRODUCTS = tuple(GLUT_CAPS)
+GLUT_FACTOR_MIN = 0.01
 
 _PRESTART_PATH = Path(__file__).resolve().parent / "wsp_prestart.json"
 _DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
@@ -157,43 +158,27 @@ def _empty_daily_harvest(horizon: int) -> dict[str, list[int]]:
     return {p: [0] * horizon for p in GLUT_PRODUCTS}
 
 
-def _seed_locked_harvest(
-    locked_by_worker: dict[str, dict],
-    market_inv: dict[str, int] | None = None,
-) -> dict[str, int]:
-    """Seed booked volume from locked tile daily harvest vectors."""
-    del market_inv
-    counts: dict[str, int] = {}
-    for locked in locked_by_worker.values():
-        for product in GLUT_PRODUCTS:
-            daily = locked.get("daily_harvest", {}).get(product)
-            if daily:
-                counts[product] = counts.get(product, 0) + sum(daily)
-    return counts
+def _glut_price_factor(product: str, count: int) -> float:
+    spec = GLUT_CAPS.get(product)
+    if spec is None:
+        return 1.0
+    return max(GLUT_FACTOR_MIN, 1.0 - count / spec["count_div"])
 
 
-def _marginal_glut_price(
-    product: str,
-    already_booked: int,
-    market_inv: dict[str, int] | None,
-) -> int:
-    inv = int((market_inv or {}).get(product, pricing.MARKET_PARAMS[product].i0))
-    return pricing.marginal_unit_price(product, inv, already_booked, 1)
+def _glut_unit_price(base: int, product: str, count: int) -> int:
+    return max(1, int(round(base * _glut_price_factor(product, count))))
 
 
 def _pattern_weight(
     pat,
     locked_counts: dict[str, int],
     price_of: Callable[[str], int],
-    market_inv: dict[str, int] | None = None,
 ) -> int:
-    del price_of
     rev = 0
-    booked = dict(locked_counts)
     for product, _hday, yld in pat["harvest_lines"]:
-        unit = _marginal_glut_price(product, booked.get(product, 0), market_inv)
+        count = locked_counts.get(product, 0)
+        unit = _glut_unit_price(price_of(product), product, count)
         rev += yld * unit
-        booked[product] = booked.get(product, 0) + yld
     return rev - pat["setup_cost"]
 
 
@@ -298,7 +283,7 @@ def build_patterns(horizon: int, price_of: Callable[[str], int]) -> list:
     patterns = []
     pid = 0
     for crop_name, crop_spec in crops_data["crops"].items():
-        for profile_name in ("no_fert",):
+        for profile_name in CROP_PROFILES:
             if profile_name not in crop_spec:
                 continue
             profile_key = f"{crop_name}_{profile_name}"
@@ -386,7 +371,6 @@ def _solve_zone(
     track_shed: bool,
     min_balance: int = 0,
     price_of: Callable[[str], int] | None = None,
-    market_inv: dict[str, int] | None = None,
 ):
     zone_empty = list(empty_tiles)
     zsize = len(zone_empty)
@@ -532,9 +516,7 @@ def _solve_zone(
         model.Add(cons == start_d + (sum(spend_terms) if spend_terms else 0))
         conservative_vars.append(cons)
 
-    zone_weights = [
-        _pattern_weight(pat, locked_counts, price_of, market_inv) for pat in patterns
-    ]
+    zone_weights = [_pattern_weight(pat, locked_counts, price_of) for pat in patterns]
     obj_terms = [
         zone_weights[pi] * x[pi, tile]
         for pi, _pat in enumerate(patterns)
@@ -548,18 +530,16 @@ def _solve_zone(
     solver = cp_model.CpSolver()
     solver.parameters.num_workers = 8
     solver.parameters.max_time_in_seconds = max_time
-    early_target = PER_TILE_FLOOR * zsize * horizon / NUM_DAYS
+    early_target = OBJ_EARLY_STOP * horizon / NUM_DAYS
     callback = _ObjEarlyStop(early_target)
     t0 = time.perf_counter()
     status = solver.Solve(model, callback)
     elapsed = time.perf_counter() - t0
-    n_patterns = len(patterns)
 
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         print(
             f"[planner] twoland_wsp zone={worker} status={solver.StatusName(status)} "
-            f"time={elapsed:.3f}s empty={zsize} n_patterns={n_patterns} "
-            f"early_stopped={callback.stopped_early} written=0 "
+            f"time={elapsed:.3f}s empty={zsize} "
             f"open0={opening_balances[0] if opening_balances else 'N/A'}",
             flush=True,
         )
@@ -571,21 +551,13 @@ def _solve_zone(
             if solver.Value(x[pi, tile]) == 1:
                 picked.append({"tile": tile, "pattern": pat})
 
-    w_levels = (
-        [int(solver.Value(w_vars[d])) for d in range(horizon + 1)] if track_shed else []
-    )
-    f_levels = (
-        [int(solver.Value(f_vars[d])) for d in range(horizon + 1)] if track_shed else []
-    )
-
     print(
         f"[planner] twoland_wsp zone={worker} {solver.StatusName(status)} "
         f"obj={solver.ObjectiveValue():.0f} time={elapsed:.3f}s "
         f"close0={int(solver.Value(balance_vars[0]))} "
         f"cons0={int(solver.Value(conservative_vars[0]))} "
         f"open0={opening_balances[0] if opening_balances else 'N/A'} "
-        f"empty={zsize} picks={len(picked)} n_patterns={n_patterns} "
-        f"early_stopped={callback.stopped_early} written=1",
+        f"empty={zsize} picks={len(picked)}",
         flush=True,
     )
 
@@ -593,8 +565,6 @@ def _solve_zone(
         "picked": picked,
         "balance": [int(solver.Value(b)) for b in balance_vars],
         "conservative": [int(solver.Value(c)) for c in conservative_vars],
-        "w_levels": w_levels,
-        "f_levels": f_levels,
     }
 
 
@@ -616,9 +586,7 @@ def solve(
     price_of: Callable[[str], int] | None = None,
     land_owned: bool = False,
     buy_morning: bool = False,
-    market_inventory: dict[str, int] | None = None,
 ) -> SolveResult:
-    global _PROBE_CACHE
     del chains, cascade_reserve
     if _is_prestart_solve(horizon, empty_tiles, empty_counts):
         assigned, complete, solved_workers = _load_prestart()
@@ -634,47 +602,27 @@ def solve(
 
     probe_mode = not land_owned and not buy_morning
     if probe_mode:
-        worker_list = list(LAND1_WORKERS) + list(LAND2_WORKERS)
+        worker_list = list(LAND1_WORKERS) + [LAND2_PROBE_WORKER]
     else:
         worker_list = list(WORKERS)
 
     empty_set = set(empty_tiles)
     if probe_mode:
-        for w in LAND2_WORKERS:
-            empty_set.update(WORKER_TILES[w])
+        empty_set.update(WORKER_TILES[LAND2_PROBE_WORKER])
 
-    zone_weights_time = []
-    for worker in worker_list:
-        if probe_mode and worker in LAND2_WORKERS:
-            n_empty = len(WORKER_TILES[worker])
-        else:
-            n_empty = empty_counts.get(worker, 0)
-        zone_weights_time.append(max(1, n_empty * horizon))
-    weight_sum = sum(zone_weights_time) or 1
-
+    per_zone_time = max_time / max(1, len(worker_list))
     opening = [starting_money] * horizon
     if buy_morning and not land_owned:
         opening[0] -= LAND2_BUY_COST
 
     assigned: dict[int, list] = {}
     solved_workers: list[str] = []
-    locked_harvest = _seed_locked_harvest(locked_by_worker, market_inventory)
+    locked_harvest: dict[str, int] = {}
     patterns = build_patterns(horizon, price_of)
     buy_land = False
-    w_levels = [0] * (horizon + 1)
-    f_levels = [0] * (horizon + 1)
-    probe_value = 0
-    probe_cost = LAND2_BUY_COST
-    probe_assigned: dict[int, list] = {}
-    probe_cons_left = 0
-    probe_affordable = starting_money >= LAND2_BUY_COST
 
-    for wi, worker in enumerate(worker_list):
-        per_zone_time = max_time * zone_weights_time[wi] / weight_sum
-        if probe_mode and worker in LAND2_WORKERS:
-            if not probe_affordable:
-                continue
-            per_zone_time = min(PROBE_ZONE_TIME, per_zone_time)
+    for worker in worker_list:
+        if probe_mode and worker == LAND2_PROBE_WORKER:
             n_empty = len(WORKER_TILES[worker])
         else:
             n_empty = empty_counts.get(worker, 0)
@@ -692,25 +640,13 @@ def solve(
             solved_workers.append(worker)
             continue
 
-        if buy_morning and not land_owned and worker in LAND2_WORKERS and _PROBE_CACHE:
-            cached = _PROBE_CACHE.get("assigned", {})
-            zone_tiles = set(WORKER_TILES[worker])
-            for idx, chain in cached.items():
-                if idx in zone_tiles:
-                    assigned[idx] = chain
-            solved_workers.append(worker)
-            continue
-
-        if probe_mode and worker in LAND2_WORKERS:
+        if probe_mode and worker == LAND2_PROBE_WORKER:
             zone_empty = list(WORKER_TILES[worker])
         else:
             zone_empty = [idx for idx in WORKER_TILES[worker] if idx in empty_set]
         if worker == WORKERS[0] and track_shed:
             w_open = w_open0
             f_open = f_open0
-        elif worker != WORKERS[0] and track_shed:
-            w_open = w_levels[1]
-            f_open = f_levels[1]
         else:
             w_open = 0
             f_open = 0
@@ -730,65 +666,30 @@ def solve(
             track_shed=track_shed,
             min_balance=min_balance,
             price_of=price_of,
-            market_inv=market_inventory,
         )
         if res is None:
-            if probe_mode and worker in LAND2_WORKERS:
-                continue
+            if probe_mode and worker == LAND2_PROBE_WORKER:
+                break
             break
 
-        if probe_mode and worker in LAND2_WORKERS:
-            zone_obj = sum(
-                _pattern_weight(p["pattern"], locked_harvest, price_of, market_inventory)
-                for p in res["picked"]
-            )
-            probe_value += zone_obj
-            probe_cost += HAND_DAILY_COST.get(worker, 0) * horizon
-            probe_assigned.update(
-                _decode_wsp_assignment(worker, empty_set, res["picked"])
-            )
-            probe_cons_left = (
-                res["conservative"][1]
-                if len(res["conservative"]) > 1
-                else res["conservative"][0]
-            )
-            if worker == LAND2_WORKERS[-1]:
-                buy_land = (
-                    probe_value > probe_cost * ROI_MARGIN
-                    and probe_cons_left >= LAND2_BUY_COST
+        if probe_mode and worker == LAND2_PROBE_WORKER:
+            cons = res["conservative"]
+            leftover = cons[1] if len(cons) > 1 else cons[0]
+            if leftover >= LAND2_BUY_COST:
+                buy_land = True
+                print(
+                    f"[planner] twoland_wsp probe hire5 ok cons_left={leftover} "
+                    f"buy_land tomorrow",
+                    flush=True,
                 )
-                if buy_land:
-                    _PROBE_CACHE = {"assigned": dict(probe_assigned)}
-                    print(
-                        f"[planner] twoland_wsp probe ok value={probe_value} "
-                        f"cost={probe_cost} cons_left={probe_cons_left} buy_land tomorrow",
-                        flush=True,
-                    )
-            continue
-
-        if buy_morning and not land_owned and worker in LAND2_WORKERS and _PROBE_CACHE:
-            _PROBE_CACHE = None
+            break
 
         assigned.update(_decode_wsp_assignment(worker, empty_set, res["picked"]))
         for pick in res["picked"]:
             for prod, units in pick["pattern"]["harvest_units"].items():
                 locked_harvest[prod] = locked_harvest.get(prod, 0) + units
         opening = res["conservative"]
-        if opening[0] < 0:
-            print(
-                f"[planner] twoland_wsp zone={worker} handoff open0={opening[0]} < 0, "
-                f"stop cascade",
-                flush=True,
-            )
-            solved_workers.append(worker)
-            break
-        if track_shed:
-            w_levels = res["w_levels"]
-            f_levels = res["f_levels"]
         solved_workers.append(worker)
-
-    if buy_morning:
-        _PROBE_CACHE = None
 
     complete = len(solved_workers) == len(WORKERS) and not probe_mode
     return SolveResult(
@@ -820,15 +721,10 @@ def apply_replan(
                 continue
             chain = result.assigned.get(idx, [])
             if not chain and tile_queues.get(idx):
-                print(
-                    f"[planner] twoland_wsp apply_replan t{idx + 1}: "
-                    f"preserve stale queue (empty chain)",
-                    flush=True,
-                )
                 continue
             tile_queues[idx] = chain_to_queue_items(chain, horizon)
             written += 1
-            if tile_state is not None:
+            if tile_state is not None and chain:
                 queue = tile_queues[idx]
                 first_lag = queue[0].start_lag if queue else 0
                 tile_state[idx] = {
