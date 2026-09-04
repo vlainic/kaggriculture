@@ -329,9 +329,8 @@ def bind(layout: Layout) -> None:
         for z in layout.zones
     }
     HAND_START_HOUR = {z.name: z.start_hour for z in layout.zones if z.is_hand}
-    NET_TILE_OPS = {
-        z.name: _formula_net_tile_ops(z, layout.coords) for z in layout.zones
-    }
+    # Pin hand-calibrated caps from layout (two_lands.md); formula omits intra-zone route laps.
+    NET_TILE_OPS = {z.name: z.net_tile_ops for z in layout.zones}
 
     hand_costs: dict[str, int] = {}
     a, b = 1, 1

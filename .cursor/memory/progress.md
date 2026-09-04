@@ -60,6 +60,27 @@
 
 Gate post-mortem: early farmer INFEASIBLE spikes with `track_shed=True` + spawn-agnostic preambles; tune hire_reserve / fert demand coupling before Kaggle A/B.
 
+## Sep 4 session (Sept02 regression recovery — corrected re-ladder)
+
+Root cause confirmed: `cons >= min_balance` on spend-only conservative ledger + `track_shed=True` on WSP replan (W/F buys in `spend_terms`).
+
+3× smoke medians after recovery (`scripts/smoke_test.sh`, twoland_wsp vs random):
+
+| Step | Median | Notes |
+| --- | ---: | --- |
+| d35bff5 BASE | **~79,013** | single run post-reset |
+| Hotfix (cons unbounded, track_shed off) | ~33,123 | stacked features still broken |
+| W0–2 + formula net_tile_ops fix | **63,968** | 54,613 / 63,968 / 64,898 |
+| W3 marginal pricing | **71,302** | 65,890 / 71,302 / 73,626 |
+| W4 animal-first | **73,026** | 62,472 / 73,026 / 76,617 |
+| W5a W/F handoff | **68,707** | 54,874 / 68,707 / 71,607 |
+| W5b track_shed + fert | **~27–34k** | **deferred** — enable breaks cascade even with hire-only min_balance and W/F off conservative spend |
+| **Recovery final (0–5a)** | **~68,707** | commit `0278e01`; competitive vs pre-overhaul, below BASE ~79k |
+
+Fixes landed: pickup-only §7.3 + `_formula_net_tile_ops` in `bind()`; unbounded `cons` + runtime `open0<0` break only; S6 `fert_today` reset; marginal pricing; animal-first routes; 5a `w_levels`/`f_levels` handoff with `track_shed=False` on replan.
+
+Still open: Wave 5b ledger (`track_shed=True`, hire_reserve on balance only) without conservative W/F spend coupling; Waves 6–8 ROI probe / M2 / hand map without regression.
+
 ## Sep 2 session (Sept02 overhaul — prior partial ladder)
 
 | Change | Result |
