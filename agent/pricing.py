@@ -179,12 +179,12 @@ def allowed_sell_qty(
             return stock
         cap = max_sell_per_day
         if product == "WOOL":
-            cap = min(cap, max(4, MARKET_PARAMS["WOOL"].t // 5))
+            cap = min(cap, max(4, MARKET_PARAMS["WOOL"].t // 8))
         return max(dp_quota, min(stock, cap))
 
     cap = max_sell_per_day if mode == "drip" else stock
     if product == "WOOL":
-        cap = min(cap, max(4, MARKET_PARAMS["WOOL"].t // 5))
+        cap = min(cap, max(4, MARKET_PARAMS["WOOL"].t // 8))
     headroom = max_units_above_floor(product, market_inv, min(stock, cap), floor_ratio)
     if headroom <= 0:
         return 0
