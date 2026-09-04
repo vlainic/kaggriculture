@@ -298,7 +298,7 @@ def build_patterns(horizon: int, price_of: Callable[[str], int]) -> list:
     patterns = []
     pid = 0
     for crop_name, crop_spec in crops_data["crops"].items():
-        for profile_name in CROP_PROFILES:
+        for profile_name in ("no_fert",):
             if profile_name not in crop_spec:
                 continue
             profile_key = f"{crop_name}_{profile_name}"
@@ -528,10 +528,8 @@ def _solve_zone(
             start_d = opening_balances[d] + (
                 conservative_vars[d - 1] - opening_balances[0]
             )
-        cons = model.NewIntVar(0, 200_000, f"cons_{worker}_{d}")
+        cons = model.NewIntVar(-200_000, 200_000, f"cons_{worker}_{d}")
         model.Add(cons == start_d + (sum(spend_terms) if spend_terms else 0))
-        if min_balance > 0:
-            model.Add(cons >= min_balance)
         conservative_vars.append(cons)
 
     zone_weights = [

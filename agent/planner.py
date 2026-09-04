@@ -792,8 +792,8 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
     feed_reserve = wheat_feed * wheat_price
     liquidity_floor = hire_reserve + feed_reserve * 3
     if _wsp_solver():
-        replan_min_balance = hire_reserve
-        replan_track_shed = True
+        replan_min_balance = 0
+        replan_track_shed = False
     else:
         replan_min_balance = liquidity_floor
         replan_track_shed = True

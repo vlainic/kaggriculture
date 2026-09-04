@@ -262,7 +262,7 @@ def _spawn_agnostic_preamble(
         return zone.preamble
     pickups = tuple(s for s in zone.preamble if s.startswith("PICKUP_"))
     if not pickups:
-        pickups = ("PICKUP_WHEAT", "PICKUP_ANIMALS", "PICKUP_FERTILIZER")
+        pickups = ("PICKUP_WHEAT", "PICKUP_ANIMALS")
     return pickups + _walk_steps_to_first_tile(zone, coords)
 
 
