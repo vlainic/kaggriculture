@@ -172,8 +172,6 @@ def _solve_zone(
         if track_shed:
             day_terms.append(-WHEAT_PRICE * buy_w[d])
             day_terms.append(-FERT_PRICE * buy_f[d])
-            spend_terms.append(-WHEAT_PRICE * buy_w[d])
-            spend_terms.append(-FERT_PRICE * buy_f[d])
         if charge_hire_daily and worker in HAND_WORKERS:
             day_terms.append(-hire)
             spend_terms.append(-hire)
