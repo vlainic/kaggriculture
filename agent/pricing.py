@@ -99,30 +99,6 @@ def sell_prefix_table(
     return _sell_prefix_table(product, inv, max_n)
 
 
-def marginal_unit_price(
-    product: str, market_inv: int, already_booked: int = 0, units: int = 1
-) -> int:
-    """Marginal revenue per unit at forecast inventory plus booked volume."""
-    rev, _ = sell_revenue_and_next_inv(product, market_inv + already_booked, units)
-    return rev // max(1, units)
-
-
-def forecast_inventory(
-    product: str,
-    market_inv: int,
-    *,
-    daily_drain: int = 0,
-    days_remaining: int = 0,
-    opp_units: int = 0,
-    max_adjust_pct: float = 0.4,
-) -> int:
-    """Forecast market inventory after town drain and opponent supply."""
-    raw = market_inv - daily_drain * days_remaining + opp_units
-    floor = max(1, int(market_inv * (1.0 - max_adjust_pct)))
-    ceiling = int(market_inv * (1.0 + max_adjust_pct)) + opp_units
-    return max(floor, min(ceiling, raw))
-
-
 def marginal_price(product: str, inv: int) -> int:
     """Price of the next unit sold at inventory inv."""
     return quoted(product, inv)
@@ -164,7 +140,6 @@ def allowed_sell_qty(
     dp_quota: int = 0,
     mode: Literal["drip", "dump"] = "drip",
     wheat_reserve: int = 0,
-    fert_reserve: int = 0,
     max_sell_per_day: int = 24,
     liquidate_from_day: int = 27,
     floor_ratio: float = 0.5,
@@ -172,8 +147,6 @@ def allowed_sell_qty(
     """Below floor → 0. Above floor → drip (premium) or dump (staples)."""
     if product == "WHEAT":
         stock = max(0, stock - wheat_reserve)
-    elif product == "FERTILIZER":
-        stock = max(0, stock - fert_reserve)
     if stock <= 0:
         return 0
 
@@ -182,7 +155,7 @@ def allowed_sell_qty(
             return stock
         cap = max_sell_per_day
         if product == "WOOL":
-            cap = min(cap, max(4, MARKET_PARAMS["WOOL"].t // 8))
+            cap = min(cap, max(4, MARKET_PARAMS["WOOL"].t // 5))
         return max(dp_quota, min(stock, cap))
 
     cap = max_sell_per_day if mode == "drip" else stock
