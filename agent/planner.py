@@ -6,12 +6,7 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
-<<<<<<< HEAD
-from agent import animal_rollouts, dp_catalog, rollouts, solvers, zoning
-=======
 from agent import animal_rollouts, dp_catalog, pricing, rollouts, solvers, zoning
-from agent.solvers.types import SolveResult
->>>>>>> c6b4fdf (Wave 3: forecast marginal pricing and GLUT removal in WSP pattern weights.)
 from agent.zoning import (
     LAND1_TILE_COUNT,
     LAND1_WORKERS,
@@ -789,7 +784,12 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
     hire_reserve = max(0, hire_reserve)
     feed_reserve = wheat_feed * wheat_price
     liquidity_floor = hire_reserve + feed_reserve * 3
-    replan_min_balance = 0 if _wsp_solver() else liquidity_floor
+    if _wsp_solver():
+        replan_min_balance = hire_reserve
+        replan_track_shed = True
+    else:
+        replan_min_balance = liquidity_floor
+        replan_track_shed = True
     replan_max_time = 5.0 if (
         solvers.CURRENT_SOLVER == "twoland_wsp" and not land_owned and not buy_morning
     ) else 15.0
@@ -805,7 +805,7 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
         w_open0=w_open0,
         f_open0=f_open0,
         min_balance=replan_min_balance,
-        track_shed=not _wsp_solver(),
+        track_shed=replan_track_shed,
         price_of=price_of,
         land_owned=land_owned,
         buy_morning=buy_morning,
