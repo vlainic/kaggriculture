@@ -278,6 +278,15 @@ def _formula_net_tile_ops(
     return max(8, TURNS_PER_DAY - zone.start_hour - overhead)
 
 
+def layout_from_land1_and_quadrants(
+    land1: Layout, extra_quadrants: tuple[str, ...]
+) -> Layout:
+    """§7.1: build multi-land layout from one-land base + purchased quadrants."""
+    if land1 is FIVE and extra_quadrants == ("NE",):
+        return TWO
+    raise ValueError(f"unsupported layout composition: {extra_quadrants}")
+
+
 def _fib_hire_cost(n: int) -> int:
     """Daily hire cost: sum of fib(0..n-1) with fib = 1,1,2,3,5,..."""
     if n <= 0:

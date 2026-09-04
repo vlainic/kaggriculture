@@ -6,12 +6,7 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
-<<<<<<< HEAD
-from agent import animal_rollouts, dp_catalog, rollouts, solvers, zoning
-=======
-from agent import animal_rollouts, dp_catalog, pricing, rollouts, solvers, zoning
-from agent.solvers.types import SolveResult
->>>>>>> c6b4fdf (Wave 3: forecast marginal pricing and GLUT removal in WSP pattern weights.)
+from agent import animal_rollouts, dp_catalog, pricing, rollouts, solvers, workers, zoning
 from agent.zoning import (
     LAND1_TILE_COUNT,
     LAND1_WORKERS,
@@ -823,6 +818,7 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
         hires = _active_hand_hires(result.solved_workers)
         if hires > 0:
             NUM_ACTIVE_HIRES = max(4, hires)
+            workers.refresh_hand_zone_map(HAND_WORKERS[:NUM_ACTIVE_HIRES])
 
     if not result.complete and (
         not result.solved_workers or result.solved_workers[0] != WORKERS[0]

@@ -164,6 +164,7 @@ def allowed_sell_qty(
     dp_quota: int = 0,
     mode: Literal["drip", "dump"] = "drip",
     wheat_reserve: int = 0,
+    fert_reserve: int = 0,
     max_sell_per_day: int = 24,
     liquidate_from_day: int = 27,
     floor_ratio: float = 0.5,
@@ -171,6 +172,8 @@ def allowed_sell_qty(
     """Below floor → 0. Above floor → drip (premium) or dump (staples)."""
     if product == "WHEAT":
         stock = max(0, stock - wheat_reserve)
+    elif product == "FERTILIZER":
+        stock = max(0, stock - fert_reserve)
     if stock <= 0:
         return 0
 
