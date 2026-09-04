@@ -84,6 +84,7 @@ class Executor:
             w: {} for w in workers.WORKERS
         }
         self._pass_streak = {w: 0 for w in workers.WORKERS}
+        self._route_order: dict[str, list[int]] = {}
         for idx in range(workers.NUM_TILES):
             queue = script.TILE_QUEUES.get(idx, [])
             first_lag = queue[0].start_lag if queue else 0
@@ -227,6 +228,7 @@ class Executor:
         self._empty_at_dawn = {
             idx for idx in range(workers.NUM_TILES) if _tile_at(me, idx) is None
         }
+        self._refresh_animal_first_routes(me)
         if day >= script.SEASON_LAST_DAY:
             self._endgame_done = {w: set() for w in workers.WORKERS}
         if day == script.SEASON_LAST_DAY:
@@ -305,6 +307,30 @@ class Executor:
         if parts:
             _log(f"[exec] pass_notes {' '.join(parts)}")
 
+    def _tile_animal_priority(self, idx: int, me: dict) -> bool:
+        tile = _tile_at(me, idx)
+        if isinstance(tile, dict) and tile.get("animal"):
+            return True
+        st = self._tile_state.get(idx, {})
+        qi = st.get("queue_idx", 0)
+        queue = script.TILE_QUEUES.get(idx, [])
+        if qi < len(queue) and queue[qi].kind == "animal":
+            return True
+        for item in queue[qi:]:
+            if item.kind == "animal":
+                return True
+        return False
+
+    def _refresh_animal_first_routes(self, me: dict) -> None:
+        for worker in workers.WORKERS:
+            tiles = workers.WORKER_TILES[worker]
+            animal_first = [t for t in tiles if self._tile_animal_priority(t, me)]
+            crop_rest = [t for t in tiles if t not in animal_first]
+            self._route_order[worker] = animal_first + crop_rest
+
+    def _worker_route(self, worker: str) -> list[int]:
+        return self._route_order.get(worker) or workers.WORKER_ROUTES[worker]
+
     def _emit_action(
         self,
         worker: str,
@@ -363,7 +389,7 @@ class Executor:
                         worker, ["PICKUP", "WHEAT", n], f"{worker} wheat"
                     )
 
-        route = workers.WORKER_ROUTES[worker]
+        route = self._worker_route(worker)
         if self._route_idx[worker] >= len(route):
             if self._zone_pending(worker, me, private, day, inv_idx, harvest_only):
                 self._route_idx[worker] = 0
