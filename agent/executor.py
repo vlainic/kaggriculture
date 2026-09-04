@@ -85,7 +85,6 @@ class Executor:
         }
         self._pass_streak = {w: 0 for w in workers.WORKERS}
         self._route_order: dict[str, list[int]] = {}
-        self._current_day = 0
         for idx in range(workers.NUM_TILES):
             queue = script.TILE_QUEUES.get(idx, [])
             first_lag = queue[0].start_lag if queue else 0
@@ -105,7 +104,6 @@ class Executor:
         private = obs["private"]
         day = obs["day"]
         hour = obs["hour"]
-        self._current_day = day
 
         if hour == 0:
             self._on_new_day(me, day)
@@ -611,22 +609,6 @@ class Executor:
                 return ["PASS"], f"{worker} pre-wait-shed"
             return ["PICKUP", label, 1], f"{worker} pre-animal"
 
-        if step == "PICKUP_FERTILIZER":
-            need = script.fert_pickup_needed(
-                me, worker, self._tile_state, private, day=self._current_day
-            )
-            if need <= 0:
-                self._preamble_idx[worker] += 1
-                return self._preamble_action(worker, me, private, fx, fy)
-            if (fx, fy) not in workers.SHED_ADJACENT:
-                return ["PASS"], f"{worker} pre-wait-shed"
-            n = min(need, int(private["shed"].get("FERTILIZER", 0)))
-            if n > 0:
-                self._preamble_idx[worker] += 1
-                return ["PICKUP", "FERTILIZER", n], f"{worker} pre-fert"
-            self._preamble_idx[worker] += 1
-            return self._preamble_action(worker, me, private, fx, fy)
-
         self._preamble_idx[worker] += 1
         return [step], f"{worker} pre"
 
@@ -665,14 +647,6 @@ class Executor:
         )
         if label:
             return ["PICKUP", label, 1], "animal"
-
-        fert_need = script.fert_pickup_needed(
-            me, worker, self._tile_state, private, day=self._current_day
-        )
-        if fert_need > 0:
-            n = min(fert_need, int(private["shed"].get("FERTILIZER", 0)))
-            if n > 0:
-                return ["PICKUP", "FERTILIZER", n], "fert"
         return None
 
     def _drop_if_adjacent(
