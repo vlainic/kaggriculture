@@ -512,6 +512,11 @@ def land_purchase_rows(game: dict[str, Any]) -> list[dict[str, Any]]:
         cash_start = money[u].get("start") or []
         cash_end = money[u].get("end") or []
 
+    r_us = reward_us(game)
+    rewards = game.get("rewards") or []
+    r_opp = float(rewards[1 - u]) if len(rewards) >= 2 else None
+    won = r_us is not None and r_opp is not None and r_us > r_opp
+
     rows: list[dict[str, Any]] = []
     for ev in plan_k.get("land_events") or []:
         day = int(ev.get("day", 0))
@@ -527,6 +532,8 @@ def land_purchase_rows(game: dict[str, Any]) -> list[dict[str, Any]]:
                 "cash_before": before,
                 "cash_after": after,
                 "days_below_floor": plan_k.get("days_below_floor", 0),
+                "reward_us": r_us,
+                "win": won,
             }
         )
     return rows
