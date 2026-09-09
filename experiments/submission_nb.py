@@ -6,7 +6,10 @@ import json
 import math
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -173,6 +176,131 @@ def load_summary(submission_id: str, root: Path | None = None) -> dict[str, Any]
         )
     with open(path, encoding="utf-8") as f:
         return json.load(f)
+
+
+def _kaggle_access_token() -> str:
+    token_path = Path.home() / ".kaggle" / "access_token"
+    if token_path.is_file():
+        return token_path.read_text(encoding="utf-8").strip()
+    raise FileNotFoundError(
+        f"Missing {token_path}. Log in with the kaggle CLI so episode skill can be fetched."
+    )
+
+
+def fetch_episode_meta(episode_id: int | str) -> dict[str, Any]:
+    """Kaggle GetEpisode — includes per-agent initialScore / updatedScore."""
+    url = "https://www.kaggle.com/api/i/competitions.EpisodeService/GetEpisode"
+    req = urllib.request.Request(
+        url,
+        data=json.dumps({"episodeId": int(episode_id)}).encode(),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {_kaggle_access_token()}",
+            "User-Agent": "kaggriculture-submission-nb",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(
+            f"GetEpisode failed for {episode_id}: {e.code} {e.read()[:200]!r}"
+        ) from e
+
+
+def skill_cache_path(submission_id: str, root: Path | None = None) -> Path:
+    return log_dir(submission_id, root) / "episode_skills.json"
+
+
+def ensure_episode_skills(
+    submission_id: str,
+    games: list[dict[str, Any]],
+    root: Path | None = None,
+    *,
+    refresh: bool = False,
+    verbose: bool = True,
+    max_workers: int = 8,
+) -> dict[str, dict[str, Any]]:
+    """Fetch & cache per-episode initialSkill for our submission seat.
+
+    Returns map episode_id(str) -> {initial_score_us, initial_score_opp, ...}.
+    """
+    root = root or repo_root()
+    cache_path = skill_cache_path(submission_id, root)
+    cache: dict[str, dict[str, Any]] = {}
+    if cache_path.is_file() and not refresh:
+        with open(cache_path, encoding="utf-8") as f:
+            cache = json.load(f)
+
+    sid = int(submission_id)
+    by_eid = {str(g["episode_id"]): g for g in games if g.get("episode_id") is not None}
+    needed = [eid for eid in by_eid if eid not in cache]
+    if needed:
+        if verbose:
+            print(f"Fetching initialScore for {len(needed)} episode(s)...")
+
+        def _one(eid: str) -> tuple[str, dict[str, Any]]:
+            payload = fetch_episode_meta(eid)
+            ep = payload.get("episode") or {}
+            agents = list(ep.get("agents") or [])
+            us_index = game_us_index(by_eid[eid])
+            us = next(
+                (
+                    a
+                    for a in agents
+                    if int(a.get("submissionId", -1)) == sid
+                    and int(a.get("index", -1)) == us_index
+                ),
+                None,
+            )
+            if us is None:
+                us = next(
+                    (a for a in agents if int(a.get("submissionId", -1)) == sid),
+                    None,
+                )
+            if us is None and 0 <= us_index < len(agents):
+                us = agents[us_index]
+            opp = next((a for a in agents if a is not us), None)
+            return eid, {
+                "initial_score_us": (us or {}).get("initialScore"),
+                "updated_score_us": (us or {}).get("updatedScore"),
+                "initial_score_opp": (opp or {}).get("initialScore"),
+                "updated_score_opp": (opp or {}).get("updatedScore"),
+                "submission_id_us": (us or {}).get("submissionId"),
+                "submission_id_opp": (opp or {}).get("submissionId"),
+            }
+
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futs = [pool.submit(_one, eid) for eid in needed]
+            for fut in as_completed(futs):
+                eid, row = fut.result()
+                cache[eid] = row
+                if verbose:
+                    print(
+                        f"  episode {eid}: us_skill={row.get('initial_score_us')}"
+                    )
+
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(cache_path, "w", encoding="utf-8") as f:
+            json.dump(cache, f, indent=2)
+
+    return cache
+
+
+def attach_skills(
+    games: list[dict[str, Any]],
+    skills: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Copy skill fields onto each game dict (in place) and return games."""
+    for g in games:
+        eid = g.get("episode_id")
+        if eid is None:
+            continue
+        row = skills.get(str(eid)) or {}
+        g["initial_score_us"] = row.get("initial_score_us")
+        g["initial_score_opp"] = row.get("initial_score_opp")
+    return games
 
 
 def game_us_index(game: dict[str, Any]) -> int:
