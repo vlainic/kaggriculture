@@ -21,6 +21,8 @@ bash scripts/summarize_replays.sh <submission_id> --us-name "Your Name"   # → 
 cd scripts && python -m replay_analysis ../kaggle_logs/<id>/replays/episode-*.json   # single game
 ```
 
+**Preferred for batch A/B:** open `experiments/submission_analysis.ipynb` or `submission_comparison.ipynb` — run all cells; set `SUBMISSION_ID` / `ID_A`/`ID_B` + `US_NAME`. Uses `submission_nb.ensure_summary()` (download replays + summarize if needed). Initial TrueSkill: `ensure_episode_skills()` → Kaggle `GetEpisode` API, cache `kaggle_logs/<id>/episode_skills.json` (needs `~/.kaggle/access_token` or kaggle CLI auth).
+
 ```python
 from kaggle_environments import make
 env = make("kaggriculture", configuration={"episodeSteps": 720}, debug=True)
@@ -85,6 +87,9 @@ Agents never submit without explicit user request (`kaggle-submission.mdc`).
 | `scripts/summarize_replays.sh` | Batch replay analysis → `<id>.json` |
 | `scripts/replay_analysis/` | Replay metrics/KPI module |
 | `experiments/replay_analysis.ipynb` | Single-episode charts |
+| `experiments/submission_nb.py` | Notebook helpers: summary load, day bands, land rows, skill fetch |
+| `experiments/submission_analysis.ipynb` | N-episode one-submission deep-dive + noise floor |
+| `experiments/submission_comparison.ipynb` | OneLand vs TwoLand KPI comparison |
 | `.cursor/skills/kaggriculture-domain` | Mechanics |
 | `.cursor/skills/kaggriculture-agent-conventions` | Agent conventions |
 

@@ -51,6 +51,7 @@
 | WSP conservative cascade | Sep 1 semantics — unbounded cons, no cons≥min_balance |
 | download_submission_logs.sh | Replays bulk; `--with-logs` optional |
 | replay_analysis + summarize_replays.sh | Batch JSON; KPIs; slim default |
+| **Submission analysis notebooks** | `submission_nb.py` + `submission_analysis.ipynb` + `submission_comparison.ipynb` — self-contained (download/summarize in-notebook) |
 | Corrected A/B ONE vs TWO | 55934103: 42.1% / 64k; 55938405: 51.2% / 71k |
 
 ## Known issues
@@ -81,6 +82,16 @@
 | `scripts/replay_analysis/` | Per-game + batch JSON; KPIs |
 | `sold_units()` / `potential_yield` / us_index fix | Corrected A/B rollups |
 | A/B 55934103 vs 55938405 | TwoLand +11% bank, +9pp win |
+
+## Sep 9 session (submission analysis notebooks — KEEP)
+
+| Change | Result |
+| --- | --- |
+| `experiments/submission_nb.py` | `load_summary`, `day_band`, `ensure_summary`, `ensure_episode_skills`, land/anomaly helpers |
+| `submission_analysis.ipynb` | Score scatter (me vs opp, color=initial skill), day bands, land table + cash/score scatter, anomalies |
+| `submission_comparison.ipynb` | Win/loss half-violins, KPI-delta table, post-NE alignment, MELON/WOOL glut |
+| In-notebook fetch | No shell prereq; `GetEpisode` → `initialScore` cached per submission |
+| Key A/B read | TwoLand post-NE occupied % stall; ops_util alignment plot unreliable (negative = bug) |
 
 ## Sep 2 session (two-land WSP @ pre-overhaul — KEEP)
 

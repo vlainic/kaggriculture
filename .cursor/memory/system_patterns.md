@@ -130,6 +130,21 @@ data/two_lands.md
 experiments/OneL-Zonewise-CPSAT-{Handmade,DP}-Catalog.ipynb
 scripts/{smoke_test,smoke_and_submit,vendor_ortools,download_submission_logs,summarize_replays}.sh
 scripts/replay_analysis/   # load, metrics, sells, kpi, plot; python -m replay_analysis
-experiments/replay_analysis.ipynb
-kaggle_logs/              # gitignored; <id>/replays/ + <id>.json batch summary
+experiments/replay_analysis.ipynb          # single-episode viewer (do not fold into batch notebooks)
+experiments/submission_nb.py               # shared notebook helpers only
+experiments/submission_analysis.ipynb      # one submission: noise floor, day bands, land/anomalies
+experiments/submission_comparison.ipynb    # A/B: violins, KPI deltas, post-NE alignment
+kaggle_logs/              # gitignored; <id>/replays/ + <id>.json + episode_skills.json
 ```
+
+### Submission analysis (notebooks-only layer)
+
+```
+kaggle_logs/<id>/<id>.json  ← summarize_replays / ensure_summary
+kaggle_logs/<id>/episode_skills.json  ← GetEpisode initialScore cache
+         ↓
+submission_analysis.ipynb  → noise floor, scatter (reward_me vs opp × skill), land table
+submission_comparison.ipynb → A/B violins, KPI effect sizes, days-since-NE-buy alignment
+```
+
+Do **not** change `scripts/replay_analysis/` KPI extractors for notebook needs — derive std/cash/skill in notebooks. KPI gotchas: `idle_empty` = tile-turns; `noop_ops` = wasted actions; `ops_utilization_by_day` = 1−PASS/(workers×24) — alignment averages can go negative if NaNs leak.
