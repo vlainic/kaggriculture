@@ -1,96 +1,112 @@
 # Progress
 
-## Strategic status (Sep 2, 2026)
+## FAILURE — Sept02 overhaul (DO NOT RELITIGATE)
+
+**Verdict: FAILURE.** The Sept02 all-waves / §7 overhaul and the follow-on regression-recovery re-ladder **broke the live agent**. User discarded the overhaul direction.
+
+| Metric | Pre-overhaul (`d35bff5`) | After overhaul / recovery |
+| --- | ---: | ---: |
+| Smoke median (twoland vs random) | **~85–87k** | **~34k** merged; recovery stuck **~66–69k** |
+| Outcome | Working two-land WSP | Mass INFEASIBLE / under-harvest; never restored BASE |
+
+**Root causes (confirmed):**
+1. `conservative` floored at 0 + `cons >= min_balance` on spend-only ledger → cascade INFEASIBLE
+2. `track_shed=True` on WSP replan put W/F buys into conservative `spend_terms`
+3. Pickup-only §7.3 + formula `net_tile_ops` over-booked ops (formula omitted intra-zone route laps; pin to empirical caps did not restore BASE on n=3)
+4. Batching waves hid bisect; n=3 smoke gates were noise (within-step spreads > wave deltas)
+
+**Do not:**
+- Re-enable Wave 5b `track_shed=True` / fert pipeline as “just missing a knob”
+- Floor `conservative` at 0 or put `min_balance` on `cons`
+- Treat plan todos like “resubmit” / “re-ladder 5b” as permission to rebuild the overhaul
+- Ship `_formula_net_tile_ops` until `_route_move_cost` (intra-zone) is wired and validated at ≥30 episodes
+
+**Recovery pointer:** good tip is **`d35bff5`** (`Enhance replay analysis…`). Local backup of broken stack: branch **`backup/sept02-recovery`** (local only until pushed). Overhaul plans under `.cursor/plans/sept02_*` are historical autopsy, not a roadmap to re-run.
+
+---
+
+## Strategic status (restore target = pre-Sept02)
 
 | Track | Status |
 | --- | --- |
-| **Two-land WSP** | **Live** — `twoland_wsp.py`; `CURRENT = TWO`; probe hire5 → buy NE → cascade VI–X |
-| **One-land WSP** | **Live** — flip `CURRENT_SOLVER = zonewise_wsp`, `CURRENT = FIVE` |
-| **Chain assignment (zonewise)** | **Live** — `dp_catalog.build_catalog`; ~107k smoke on FIVE |
+| **Two-land WSP** | **Restore / keep at `d35bff5` semantics** — `twoland_wsp.py`; `CURRENT = TWO`; probe hire5 → buy NE |
+| **One-land WSP** | Flip `CURRENT_SOLVER = zonewise_wsp`, `CURRENT = FIVE` |
+| **Chain assignment (zonewise)** | Live — `dp_catalog.build_catalog`; ~107k smoke on FIVE |
 | **Solver backend** | **`CURRENT_SOLVER = "twoland_wsp"`** |
 | **Land buy** | Probe: hire5 feasible + ≥$1k conservative → `BUY_LAND` next dawn |
 | **Hiring** | `NUM_ACTIVE_HIRES` from solved prefix; batches per `two_lands.md` |
-| **Dawn replan** | Lock commitments; WSP conservative cascade; INFEASIBLE → break |
-| **Layout catalog** | `FOUR` + `FIVE` + **`TWO`** (50 tiles); **`CURRENT = TWO`** |
+| **Dawn replan** | Lock commitments; WSP **`track_shed=False`**, `min_balance=0`; unbounded `cons`; INFEASIBLE → break cascade |
+| **Layout catalog** | `FOUR` + `FIVE` + **`TWO`**; **`CURRENT = TWO`**; pin **`NET_TILE_OPS = z.net_tile_ops`** (hand table) |
 | **Episode download** | `scripts/download_submission_logs.sh` (replays default) |
 | **Replay analysis** | `scripts/replay_analysis/` + `scripts/summarize_replays.sh` → `<id>.json` |
 | **Competition submission** | Local smoke only unless user asks |
 
-## What works
+## What works (pre-overhaul baseline)
 
 | Item | Notes |
 | --- | --- |
-| twoland_wsp smoke | ~**87352**; land2 buy ~d8; up to 9 hires when cascade allows |
+| twoland_wsp smoke @ `d35bff5` | ~**85–87k**; land2 buy ~d8; up to 9 hires when cascade allows |
 | Land2 probe | hire5 only on probe day; no queue commit until buy morning |
 | TWO layout | Zones I–X; land1 = FIVE geometry; land2 NE snakes |
-| WSP conservative cascade | Unchanged from Sep 1 one-land work |
-| download_submission_logs.sh | Replays bulk; `--with-logs` optional; skips CSV footer junk |
-| replay_analysis + summarize_replays.sh | Batch JSON per submission; KPIs; slim default (no sell events) |
-| Corrected A/B ONE vs TWO | 55934103: 42.1% / 64k; 55938405: 51.2% / 71k (per-game us_index) |
-| `kaggle_logs/` | Gitignored; `<submission_id>/<submission_id>.json` |
+| WSP conservative cascade | Sep 1 semantics — unbounded cons, no cons≥min_balance |
+| download_submission_logs.sh | Replays bulk; `--with-logs` optional |
+| replay_analysis + summarize_replays.sh | Batch JSON; KPIs; slim default |
+| Corrected A/B ONE vs TWO | 55934103: 42.1% / 64k; 55938405: 51.2% / 71k |
 
 ## Known issues
 
 | Issue | Notes |
 | --- | --- |
+| **Sept02 overhaul** | **FAILURE** — see banner above; do not resume |
 | hire9 INFEASIBLE late season | Partial prefix OK; common after land2 expansion |
 | Kaggle agent logs API | 403 on ladder episodes; replays work |
 | WSP vs zonewise gap | ~87k twoland vs ~107k zonewise one-land |
 | hire5 probe UNKNOWN | Occasional 5s timeout; retry next dawn |
-| Replay self-play us_index | Both `TeamNames` = same name → `resolve_us_index` always 0 (rare) |
-| TwoLand conversion leaks | Sept 2 overhaul: E1 walk-to-shed, pricing, track_shed, fert pipeline |
+| TwoLand conversion leaks (analysis) | hand3 idle post-NE, weeds, crop mix — from **replay KPIs**, not from re-running Sept02 plan |
 
-## Sep 2 session (Sept02 overhaul — all waves)
+## Sep 4–9 — recovery attempt then abandon
+
+| Step | Median / result |
+| --- | --- |
+| Hotfix (unbounded cons, track_shed off) on stacked tree | ~33k — not enough |
+| Re-ladder W0–5a from `d35bff5` | peak wave ~73k; final ~69k |
+| Pin empirical `net_tile_ops` A/B | ~66k — **no** jump to BASE (n=3 noise) |
+| Wave 5b track_shed + fert | ~27–34k — deferred / abandoned |
+| **User decision** | **Revert to pre-overhaul; overhaul = FAILURE** |
+
+## Sep 2 session (replay analysis — KEEP)
 
 | Change | Result |
 | --- | --- |
-| Wave 0 instrumentation | PASS note counters, solver early_stopped logs, day-29 drift |
-| Wave 1 E1+P3 | pickup-first preambles, walk-to-shed, NUM_ACTIVE_HIRES after INFEASIBLE |
-| Wave 2 S2+S6 | conservative floor 0, negative handoff break, apply_replan state reset |
-| Wave 3 P1+P2+S3 | forecast-inventory effective_price, marginal glut pricing |
-| Wave 4 E2 | animal-first routes at dawn |
-| Wave 5 S1+E3+M1 | W/F handoff, track_shed=True, PICKUP_FERTILIZER, BUY FERTILIZER |
-| Wave 6 S4+S5 | PER_TILE_FLOOR early stop, weighted time, ROI land probe |
-| Wave 7 M2 | PRICE_FLOOR_RATIO 0.35, wool cap T//5 |
+| `scripts/replay_analysis/` | Per-game + batch JSON; KPIs |
+| `sold_units()` / `potential_yield` / us_index fix | Corrected A/B rollups |
+| A/B 55934103 vs 55938405 | TwoLand +11% bank, +9pp win |
 
-## Sep 2 session (replay analysis + us_index fix)
+## Sep 2 session (two-land WSP @ pre-overhaul — KEEP)
 
 | Change | Result |
 | --- | --- |
-| `scripts/replay_analysis/` (metrics, sells, kpi, plot) | Per-game + batch JSON; executor/market/planner KPIs |
-| `sold_units()` from stock deltas | Fixed undercount vs ~80k bank |
-| `potential_yield` replant key | `(player,x,y,planted_day)` not tile-only |
-| `summarize_replays.sh` | `kaggle_logs/<id>/<id>.json`; slim batch (no events) |
-| `_aggregate()` per-game `us_index` | Fixed 50% opponent contamination in rollups |
-| A/B 55934103 vs 55938405 | TwoLand +11% bank, +9pp win (corrected) |
-
-## Sep 2 session (two-land WSP + download script)
-
-| Change | Result |
-| --- | --- |
-| `TWO` layout + `twoland_wsp.py` | 50-tile solver with probe/buy split |
+| `TWO` + `twoland_wsp` | ~87k smoke |
 | `BUY_LAND_DAY` / `NUM_ACTIVE_HIRES` | Planner + market glue |
-| `download_submission_logs.sh` | Replay bulk; numeric ID filter |
-| Smoke twoland_wsp | ~87k |
 
-## Sep 1 session (WSP conservative handoff)
+## Sep 1 session (WSP conservative handoff — KEEP)
 
 | Change | Result |
 | --- | --- |
 | Conservative cascade in `zonewise_wsp` | ~81–85k one-land |
-| Executor FERT/wheat fixes | Lifted both backends |
 
 ## What's left
 
-1. **Agent fixes from replay KPIs:** hand3→zone routing, marginal crop mix, SW buy timing
-2. Reduce late hire9 INFEASIBLE without over-hiring day 0
-3. Lands 3–4 out of scope for now
+1. Ensure working tree / `main` matches **`d35bff5`** (or equivalent good tip) — user reverting overhaul
+2. Optional: `git push -u origin backup/sept02-recovery` so GitHub shows the failed stack
+3. Agent fixes from **replay KPIs only** (hand3 routing, crop mix) — **not** Sept02 wave plan
 4. Do not Kaggle submit without ask
 
 ## Do not do unless asked
 
+- **Re-run Sept02 overhaul / regression-recovery plan**
 - Restore full-bank-per-zone WSP hack
 - Buy SW/SE (land 3–4) in twoland_wsp
 - Runtime `bind()` layout switch mid-game
 - Kaggle submit
-- Commit `.cursor/` or `kaggle_logs/`
+- Commit `kaggle_logs/`
