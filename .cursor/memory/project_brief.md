@@ -12,18 +12,17 @@ Kaggle Simulations competition **Kaggriculture** — 720-turn, two-player farmin
 
 Heuristic/rule-based Python agent (no ML/RL pipeline) that wins on the ladder.
 
-## Current implementation (Aug 27, 2026)
+## Current implementation (Sep 11, 2026)
 
-**Active stack:** one-land **DP-catalog assignment** + snake executor + **layout catalog** + **dawn replan** + **pickups-honest animal ops**.
+**Active stack:** **two-land WSP** (`CURRENT_SOLVER = twoland_wsp`, `zoning.CURRENT = TWO`) + snake executor + dawn replan + pickups-honest animal ops.
 
-- Zoning (`agent/zoning.py`): `FOUR` / `FIVE`; **`CURRENT = FIVE`**; `bind()` feeds planner/executor/market.
-- Catalog (`agent/dp_catalog.py`): WIS chains with lag + insert variants; greedy multi-extra prefixes; no forced wheat/carrot before inserts.
-- Planner (`agent/planner.py`): CP-SAT at **import** (20s, `track_shed=True`) + dawn **replan from day 1** (15s, `track_shed=False`). Lock committed tiles; variables = replan-eligible empties. Animals from **`animal_with_pickups.json`**. Ops cap = **`daily_tile_ops` only** (+ hire preamble). Catalog prices on replan: live × `max(0.1, 1 + demand − opp_tiles/10)`.
-- Executor: snake + stay-until-fed; runtime fert; no d=0 replan.
-- Market: 50% floor + premium sell DP; wheat dawn buy / no early wheat sells.
-- Experiments: zonewise handmade/DP notebooks with **conservative** inter-zone cash (start − loss, no sells).
+- Zoning: `FOUR` / `FIVE` / **`TWO`** (50 tiles); live = **TWO**.
+- Solver: sequential per-zone WSP; day-0 `wsp_prestart.json`; land2 probe hire5 → `BUY_LAND`; **full** conservative cash cascade (no per-zone bank clamp — ladder rejected caps).
+- Planner: import solve + dawn replan; WSP replan **`track_shed=False`**, `min_balance=0`; lock commitments; empties only.
+- Animals: `animal_with_pickups.json`; ops = **`daily_tile_ops` only** (+ hire preamble).
+- One-land fallback: `zonewise_wsp` + `FIVE`.
 
-**Not this:** season-long weighted set packing (WSP). Abandoned Aug 12 — see `docs/weighted_set_packing_failer.md`.
+**Ruled out (diagnosis):** static NW spend caps; melon/wool glut as TwoLand gap cause. See `docs/twoland/diagnosis_0911.md`.
 
 ## Deliverable
 

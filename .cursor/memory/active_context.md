@@ -1,58 +1,47 @@
 # Active Context
 
-## Current focus (Sep 9, 2026)
+## Current focus (Sep 11, 2026)
 
-**Sept02 overhaul = FAILURE.** Do not resume waves, “fix forward” 5b, or re-ladder from those plans.
+**Keep full conservative handoff** in `twoland_wsp` — **no** per-zone spend / opening clamp. Static NW budget splits lost on the ladder; softest → hardest was monotonic worse.
 
-Working direction: restore / stay on **pre-overhaul two-land WSP** at commit **`d35bff5`** (~85–87k smoke). Broken stack kept locally as **`backup/sept02-recovery`** (not on GitHub until pushed).
+Working agent: **two-land WSP** (`twoland_wsp` + `CURRENT = TWO`), pre-Sept02 / `d35bff5` cash semantics. Broken Sept02 stack: local `backup/sept02-recovery`.
+
+Diagnosis writeup: [`docs/twoland/diagnosis_0911.md`](../../docs/twoland/diagnosis_0911.md) (A OneLand `55934103` vs B TwoLand `55938405`).
 
 ### Status
 
 | Item | State |
 | --- | --- |
-| Live agent target | `d35bff5` semantics (`twoland_wsp` + `CURRENT = TWO`) |
-| Sept02 all-waves plan | **FAILED** — collapsed ~87k → ~34k |
-| Regression recovery plan | **FAILED to restore BASE** — stuck ~66–69k; abandoned |
-| Next agent work | Replay-KPI fixes only (hand3 routing, crop mix, weeds) — **not** Sept02 §7 waves |
+| Live agent | `twoland_wsp` + `CURRENT = TWO`; **full** cascade `opening = res["conservative"]` |
+| Zone money caps | **REJECTED** — no-cap best (rating ~555–561); `min(day_start/2, handoff)` ~533; `day_start/n_hands` ~509 |
+| Sept02 overhaul | **FAILED** — do not resume |
+| TwoLand vs OneLand gap | ~+7k only (not 30–50%); root cause = **post-NE ops/weed collapse**, not glut |
 
-### Confirmed anti-patterns (from failure)
+### Confirmed (diagnosis_0911)
+
+1. **NE buy → ops crash → weeds** — `ops_utilization` drops on buy-day; occupied% bottoms +1 day; recovery lag ~half of NE lifespan. Opponent expands without PASS spike → our bug.
+2. **Late NE buy correlates with worse score** — day timing (cash ≈9–10k proxy), not income rate alone.
+3. **Premium glut ruled out** — MELON/WOOL fill & rv/q similar A vs B.
+4. **Hard NW spend caps ruled out** — both capped variants lost to no-cap.
+
+### Anti-patterns (still)
 
 - Floor `conservative` at 0 / `cons >= min_balance`
 - `track_shed=True` on WSP replan with W/F in conservative spend
-- Gate strategy on n=3 smoke (noise > wave deltas); prefer ≥30 episodes
-- Batch multiple waves in one commit
+- Static per-zone bank split (`money/N`, `min(money/2, handoff)`, etc.)
+- Gate strategy on n=3 smoke; prefer ≥30 episodes / ladder
 
-### What still stands (pre-overhaul)
+### What still stands
 
-1. **Two-land WSP** — probe hire5 → `BUY_LAND` → cascade VI–X
-2. **Layout TWO** — 50 tiles; hand-calibrated `net_tile_ops`
-3. **Planner / market glue** — `BUY_LAND_DAY`, `NUM_ACTIVE_HIRES`, hire batches
-4. **Replay analysis** — `scripts/replay_analysis/` + us_index-correct A/B (ONE 42%/64k vs TWO 51%/71k)
+1. Two-land WSP — probe hire5 → `BUY_LAND` → cascade VI–X
+2. Layout TWO — hand-calibrated `net_tile_ops`
+3. Planner / market — `BUY_LAND_DAY`, `NUM_ACTIVE_HIRES`
+4. Submission notebooks — `submission_analysis` / `submission_comparison` + `replay_analysis`
 
-### Submission analysis notebooks (Sep 9 — DONE)
+### Immediate next steps (from diagnosis priority)
 
-Self-contained notebooks on top of existing `kaggle_logs/<id>/<id>.json` (no agent/pipeline changes):
-
-| Artifact | Role |
-| --- | --- |
-| `experiments/submission_nb.py` | Shared loaders + `ensure_summary` / `ensure_episode_skills` |
-| `experiments/submission_analysis.ipynb` | Single-submission deep-dive + noise floor |
-| `experiments/submission_comparison.ipynb` | OneLand vs TwoLand A/B (defaults 55934103 / 55938405) |
-| `experiments/replay_analysis.ipynb` | **Unchanged** — single-episode viewer |
-
-Notebook UX: run all cells — auto-download replays + summarize if JSON missing. `US_NAME` in config cell. Initial TrueSkill per episode via Kaggle `GetEpisode` → cached `kaggle_logs/<id>/episode_skills.json`.
-
-**Useful findings from comparison (55934103 vs 55938405):**
-- Post-NE buy: **occupied %** drops ~40% day+1 and only recovers to ~70% vs OneLand ~90% — conversion stall (hand3 / route cost hypothesis).
-- **Ops utilization alignment plot** can show negative values — NaN/missing-day artifact; trust **occupied %**, not left panel.
-- **idle_empty** = empty-tile×turn sum over 720 turns (~3k–7k/ep), not PASS count.
-- **noop_ops** ~6/ep = wasted unit actions, not passes.
-- WOOL glut: OneLand fill/rv/q bimodal; TwoLand cleaner.
-
-### Immediate next steps
-
-1. Finish revert: `main` / working tree = `d35bff5` (user intent)
-2. Optional push `backup/sept02-recovery` so GH shows the failed branch
-3. Agent fixes from replay KPIs (hand3 routing, post-buy conversion) — use submission notebooks to track
-4. Agents never submit without explicit ask
-5. Do **not** implement `.cursor/plans/sept02_*` again unless user explicitly reopens that work
+1. Wire `_route_move_cost` into `_formula_net_tile_ops` (or keep hand caps but fix real buy-day ops) — root-cause candidate
+2. Check `by_worker` PASS split (NE hand ~100% PASS?) — may outrank route-cost
+3. Early-NE-buy heuristic (day-based, not cash) / trigger-based NW→NE reserve — **not** a gentler static cap
+4. Fix comparison tooling (`noise_std` fallback, unexplained_delta, wool rv/q zero-fill)
+5. Agents never submit without explicit ask

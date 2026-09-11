@@ -35,7 +35,7 @@
 | **Solver backend** | **`CURRENT_SOLVER = "twoland_wsp"`** |
 | **Land buy** | Probe: hire5 feasible + ≥$1k conservative → `BUY_LAND` next dawn |
 | **Hiring** | `NUM_ACTIVE_HIRES` from solved prefix; batches per `two_lands.md` |
-| **Dawn replan** | Lock commitments; WSP **`track_shed=False`**, `min_balance=0`; unbounded `cons`; INFEASIBLE → break cascade |
+| **Dawn replan** | Lock commitments; WSP **`track_shed=False`**, `min_balance=0`; unbounded `cons`; **full** conservative handoff (no zone budget clamp); INFEASIBLE → break cascade |
 | **Layout catalog** | `FOUR` + `FIVE` + **`TWO`**; **`CURRENT = TWO`**; pin **`NET_TILE_OPS = z.net_tile_ops`** (hand table) |
 | **Episode download** | `scripts/download_submission_logs.sh` (replays default) |
 | **Replay analysis** | `scripts/replay_analysis/` + `scripts/summarize_replays.sh` → `<id>.json` |
@@ -63,7 +63,19 @@
 | Kaggle agent logs API | 403 on ladder episodes; replays work |
 | WSP vs zonewise gap | ~87k twoland vs ~107k zonewise one-land |
 | hire5 probe UNKNOWN | Occasional 5s timeout; retry next dawn |
-| TwoLand conversion leaks (analysis) | hand3 idle post-NE, weeds, crop mix — from **replay KPIs**, not from re-running Sept02 plan |
+| TwoLand conversion leaks (analysis) | post-NE ops/weed collapse — see `docs/twoland/diagnosis_0911.md` |
+| Static NW zone budget caps | **REJECTED** (ladder): no-cap > half-handoff > money/N |
+
+## Sep 11 — TwoLand diagnosis + budget A/B (KEEP)
+
+| Finding | Result |
+| --- | --- |
+| A/B 55934103 vs 55938405 | TwoLand ~+7k only; writeup `docs/twoland/diagnosis_0911.md` |
+| Root cause (strong) | NE buy → ops_util crash → occupied% lag → weeds; opponent expands without PASS spike |
+| Glut (melon/wool) | Ruled out |
+| Hard NW spend caps | no-cap rating ~555–561; `min(day_start/2, handoff)` ~533; `day_start/n_hands` ~508 — **keep full handoff** |
+| Next | route-cost / NE-hand PASS / early-buy trigger — not softer static caps |
+| Tooling | noise_std fallback, unexplained_delta, wool rv/q zero-fill — fix before trusting beyond_noise |
 
 ## Sep 4–9 — recovery attempt then abandon
 
@@ -108,15 +120,15 @@
 
 ## What's left
 
-1. Ensure working tree / `main` matches **`d35bff5`** (or equivalent good tip) — user reverting overhaul
-2. Optional: `git push -u origin backup/sept02-recovery` so GitHub shows the failed stack
-3. Agent fixes from **replay KPIs only** (hand3 routing, crop mix) — **not** Sept02 wave plan
+1. Post-NE ops crash: `_route_move_cost` wiring and/or NE-hand PASS routing (`by_worker`)
+2. Early-NE-buy / trigger-based NW→NE reserve (day-based) — not static fraction of bank
+3. Fix submission comparison tooling bugs (noise_std, unexplained_delta)
 4. Do not Kaggle submit without ask
 
 ## Do not do unless asked
 
 - **Re-run Sept02 overhaul / regression-recovery plan**
-- Restore full-bank-per-zone WSP hack
+- Re-try static per-zone money caps (`money/N`, half-cash clamp, etc.)
 - Buy SW/SE (land 3–4) in twoland_wsp
 - Runtime `bind()` layout switch mid-game
 - Kaggle submit

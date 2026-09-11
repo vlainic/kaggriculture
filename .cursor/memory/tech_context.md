@@ -42,8 +42,8 @@ Agents never submit without explicit user request (`kaggle-submission.mdc`).
 | --- | --- | --- |
 | `num_workers` | 8 | |
 | `max_time_in_seconds` | 20 import / **15 replan** | |
-| `track_shed` | **True** on replan | W/F handoff between zones |
-| `replan_min_balance` | **liquidity floor** | hire reserve + 3× feed |
+| `track_shed` | **False** on WSP replan; True on zonewise | No W/F in WSP conservative spend |
+| `replan_min_balance` | **0** on WSP; liquidity floor on zonewise | Never floor `conservative` |
 | `OBJECTIVE_GOOD_ENOUGH` | 80_000 | |
 | Ops cap | **`daily_tile_ops` + hire preamble** | No wheat/animal/fert side counters with pickups JSON |
 | Animals JSON | `animal_with_pickups.json` | |
@@ -82,6 +82,7 @@ Agents never submit without explicit user request (`kaggle-submission.mdc`).
 | --- | --- |
 | `docs/project_overview.md` | Game rules |
 | `docs/two_land_approach.md` | Pickups ops lesson |
+| `docs/twoland/diagnosis_0911.md` | OneLand vs TwoLand diagnosis; reject static NW caps; post-NE ops crash |
 | `data/two_lands.md` | TWO layout geometry / hire batches |
 | `scripts/download_submission_logs.sh` | Bulk episode replays from Kaggle CLI |
 | `scripts/summarize_replays.sh` | Batch replay analysis → `<id>.json` |

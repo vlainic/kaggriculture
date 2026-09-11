@@ -48,7 +48,7 @@ obs → executor.step
 - **Ops (with pickups JSON):** **`daily_tile_ops` only** (+ hire preamble if any animal active). Do **not** add `daily_wheat_pickup` / `daily_animal_place` / `daily_fert_pickup` or extra `build_day += 1` — those double-count PICKUP/BUILD already in the tape.
 - **Cash / W/F (day-0):** balance chain, shed ledgers, hire daily; **`cascade_reserve`** enforces `min_close0` for downstream zones.
 - **Replan (zonewise):** `track_shed=True`; shed W/F from obs; **`min_balance`** on **balance_vars only** (liquidity floor); never on `conservative`.
-- **Replan (WSP / twoland):** **`track_shed=False`**, **`min_balance=0`**; `cons = NewIntVar(-200_000, 200_000)` — **no** `cons >= min_balance`; cascade handoff `opening = res["conservative"]`; break if `open0 < 0`.
+- **Replan (WSP / twoland):** **`track_shed=False`**, **`min_balance=0`**; `cons = NewIntVar(-200_000, 200_000)` — **no** `cons >= min_balance`; cascade handoff `opening = res["conservative"]` **uncapped** (full handoff); break if `open0 < 0`. Do **not** clamp zone openings to `money/N` or `min(money/2, handoff)` — ladder rejected both.
 - **Dawn replan triage:** empties + WEED only; locked = board + queue suffix; horizon = remaining days. INFEASIBLE → preserve queues (never IDLE wipe).
 - **Zonewise solver:** sequential zones; handoff = close balance; stop if `open0 < 0`.
 - **WSP / twoland:** atomic patterns; day-0 `wsp_prestart.json`; replan from d≥3; hire5 probe → buy if cons leftover ≥ $1k; buy morning full cascade.
@@ -110,6 +110,8 @@ NE owned:
 19. **Trust batch `reward_us` before us_index fix** — ~50% of episodes had opponent scores in aggregate rollups.
 20. **Blind movement before `PICKUP_*` in zone preamble** — `pre-wait-shed` absorbing PASS; always pickup-first + walk-to-shed fallback.
 21. **Hand-tuned price multipliers** (`GLUT_CAPS`, `1 + shop_demand`, `−opp/10`) — use `pricing.marginal_unit_price` at forecast inventory instead.
+22. **Static per-zone replan bank caps** (`starting_money/N`, `min(day_start/2, handoff)`) — ladder: no-cap beat both; prefer trigger-based NE reserve / ops fixes instead.
+23. **Blame TwoLand gap on premium glut** without fill/rv/q — diagnosis_0911 ruled melon/wool glut out; post-NE ops/weed collapse is the primary.
 
 ---
 
@@ -134,6 +136,7 @@ experiments/replay_analysis.ipynb          # single-episode viewer (do not fold 
 experiments/submission_nb.py               # shared notebook helpers only
 experiments/submission_analysis.ipynb      # one submission: noise floor, day bands, land/anomalies
 experiments/submission_comparison.ipynb    # A/B: violins, KPI deltas, post-NE alignment
+docs/twoland/diagnosis_0911.md             # OneLand vs TwoLand root-cause + budget A/B (Sep 11)
 kaggle_logs/              # gitignored; <id>/replays/ + <id>.json + episode_skills.json
 ```
 

@@ -16,14 +16,14 @@ Compete on Kaggriculture with an autonomous agent that beats typical heuristic/L
 
 ## How the current agent is supposed to work
 
-1. **Import:** bind `zoning.CURRENT` (**FIVE**); `dp_catalog.build_catalog` at i0; stamp with `animal_with_pickups`; CP-SAT zone counts with shed W/F + hire cash (20s). Ops = `daily_tile_ops` (+ hire preamble).
-2. **Decode:** animals on route-first tiles, IDLE middle, crops last.
-3. **Dawn replan (day ≥ 1):** remaining horizon; lock non-empty / waiting-PLACE; assign to empty tiles; forecast-inventory pricing; **W/F shed ledger**; liquidity floor on conservative handoff. INFEASIBLE → keep queues.
-4. **Runtime:** snake; animal-first routes; pickup-first preambles; fert after WATER; `BUY_PRODUCT` wheat+fert. Market: 35% floor + premium DP; wool cap T//5; 2+2 hire on FIVE.
+1. **Import:** bind `zoning.CURRENT` (**TWO**); twoland WSP day-0 from `wsp_prestart.json` (land1); ops = `daily_tile_ops` (+ hire preamble).
+2. **Dawn replan (WSP, day ≥ 3):** remaining horizon; lock commitments; sequential zones with **full** conservative handoff; probe hire5 → schedule NE buy. INFEASIBLE → break cascade, keep queues.
+3. **Buy morning / NE owned:** cascade VI–X; `NUM_ACTIVE_HIRES` from solved prefix; market hire batches.
+4. **Runtime:** snake; pickup-first preambles; fert after WATER. Market: sell floor + premium DP; wheat dawn buy.
 
 ## Known product gap
 
-Day-0 catalog still i0. Replans use live × opponent factor. Late dawns can still go INFEASIBLE. Score variance historically large — **do not bank** peaks. Occasional weeds from missed WATER. After pickups switch, smoke must be re-validated with de-duplicated ops.
+TwoLand only ~+7k over OneLand: **post-NE ops/weed collapse** (not glut). Static zone bank caps make it worse — keep full handoff. Late dawns can still go INFEASIBLE. Score variance large — prefer ≥30 episodes / ladder over n=3 smoke.
 
 ## User workflow preferences
 
