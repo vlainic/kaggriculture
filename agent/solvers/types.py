@@ -22,4 +22,3 @@ class SolveResult:
     assigned: dict[int, list]
     complete: bool
     solved_workers: tuple[str, ...]
-    buy_land: bool = False

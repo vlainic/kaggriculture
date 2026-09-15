@@ -4,16 +4,15 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from agent.solvers import monolithic, twoland_wsp, zonewise, zonewise_wsp
+from agent.solvers import monolithic, zonewise, zonewise_wsp
 from agent.solvers.types import SolveResult
 
-CURRENT_SOLVER = "zonewise_wsp"  # "monolithic" | "zonewise" | "zonewise_wsp" | "twoland_wsp"
+CURRENT_SOLVER = "zonewise_wsp"  # "monolithic" | "zonewise" | "zonewise_wsp"
 
 _BACKENDS = {
     "monolithic": monolithic,
     "zonewise": zonewise,
     "zonewise_wsp": zonewise_wsp,
-    "twoland_wsp": twoland_wsp,
 }
 
 
@@ -28,7 +27,7 @@ def _backend():
 
 
 def _wsp_solver() -> bool:
-    return CURRENT_SOLVER in ("zonewise_wsp", "twoland_wsp")
+    return CURRENT_SOLVER == "zonewise_wsp"
 
 
 def solve(
@@ -47,8 +46,6 @@ def solve(
     cascade_reserve: bool = False,
     min_balance: int = 0,
     price_of: Callable[[str], int] | None = None,
-    land_owned: bool = False,
-    buy_morning: bool = False,
 ) -> SolveResult:
     kwargs = {
         "horizon": horizon,
@@ -66,9 +63,6 @@ def solve(
     }
     if price_of is not None:
         kwargs["price_of"] = price_of
-    if CURRENT_SOLVER == "twoland_wsp":
-        kwargs["land_owned"] = land_owned
-        kwargs["buy_morning"] = buy_morning
     return _backend().solve(chains, **kwargs)
 
 
@@ -79,19 +73,7 @@ def apply_replan(
     tile_state: dict | None,
     horizon: int,
     chain_to_queue_items,
-    *,
-    write_all_solved: bool = False,
 ) -> int:
-    if CURRENT_SOLVER == "twoland_wsp":
-        return twoland_wsp.apply_replan(
-            result,
-            replan_tiles,
-            tile_queues,
-            tile_state,
-            horizon,
-            chain_to_queue_items,
-            write_all_solved=write_all_solved,
-        )
     return _backend().apply_replan(
         result,
         replan_tiles,

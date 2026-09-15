@@ -17,16 +17,9 @@ STAPLE_DUMP = frozenset(sell_dp.STAPLE_PRODUCTS)
 DRIP_PER_HOUR = 1
 
 
-def _land2_owned(me: dict) -> bool:
-    return "NE" in me.get("unlocked_quadrants", [])
-
-
 def _target_hires(me: dict, day: int) -> int:
-    if _land2_owned(me):
-        return planner.NUM_ACTIVE_HIRES
-    if planner.BUY_LAND_DAY is not None and day >= planner.BUY_LAND_DAY:
-        return planner.NUM_ACTIVE_HIRES
-    return 4
+    del me, day
+    return planner.NUM_ACTIVE_HIRES
 
 
 def _hire_batches(target: int) -> tuple[int, int]:
@@ -225,14 +218,6 @@ def build_orders(
         hires_needed = _hires_this_hour(hour, target_hires, len(me["hands"]))
         for _ in range(hires_needed):
             orders.append(["HIRE"])
-
-    if (
-        hour == 0
-        and planner.BUY_LAND_DAY is not None
-        and day == planner.BUY_LAND_DAY
-        and not _land2_owned(me)
-    ):
-        orders.insert(0, ["BUY_LAND"])
 
     needed_seeds, needed_animals, wheat_need = needed_buys(
         me, private, day, tile_state, dawn
