@@ -87,6 +87,7 @@ def analyze(path: str | Path) -> dict[str, Any]:
         workers=workers,
         land2_tile_min=layout["land2_tile_min"],
         has_land2=layout["has_land2"],
+        land2_probe_worker=layout.get("land2_probe_worker"),
     )
 
     earnings = parse_earnings.parse_earnings(
@@ -127,6 +128,8 @@ def analyze(path: str | Path) -> dict[str, Any]:
         "land1_workers": list(layout["land1_workers"]),
         "land2_workers": list(land2_workers),
         "land2_tile_min": layout["land2_tile_min"],
+        "has_land2": layout["has_land2"],
+        "land2_probe_worker": layout.get("land2_probe_worker"),
     }
 
 
@@ -158,9 +161,11 @@ def summarize_distribution(reports: list[dict[str, Any]]) -> str:
 
 def summarize(report: dict[str, Any]) -> str:
     stuck = report.get("kpi", {}).get("stuck_zones") or {}
+    land2 = report.get("land2_workers") or []
     lines = [
         f"log={report.get('log_stem')} seed={report.get('seed')} "
-        f"layout={report.get('layout')} reward={report.get('reward')} "
+        f"layout={report.get('layout')} land2={len(land2)} workers "
+        f"reward={report.get('reward')} "
         f"smoke_passed={report.get('smoke_passed')} buy_land_day={report.get('buy_land_day')}",
         f"PASS total={report.get('passes', {}).get('total')} "
         f"HIRE total={report.get('hires', {}).get('total')}",
@@ -171,6 +176,7 @@ def summarize(report: dict[str, Any]) -> str:
     idle = report.get("kpi", {}).get("idle_proxy", {})
     lines.append(
         f"idle: mean_empty={idle.get('mean_empty_per_dawn', 0):.1f} "
+        f"land2_mean={idle.get('land2_mean_empty_per_dawn', 0):.1f} "
         f"hire5_empty_days={idle.get('hire5_empty_days')} "
         f"max_streak={idle.get('max_hire5_empty_streak')}"
     )

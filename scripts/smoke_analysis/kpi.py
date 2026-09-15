@@ -16,6 +16,7 @@ def compute_kpis(
     workers: tuple[str, ...],
     land2_tile_min: int = 26,
     has_land2: bool = True,
+    land2_probe_worker: str | None = "hire5",
 ) -> dict[str, Any]:
     del hires
     acceptance = {
@@ -26,7 +27,10 @@ def compute_kpis(
         ),
         "thin_writes_logged": _check_thin_writes(planner),
         "hire5_idle_proxy": _check_hire5_idle(
-            snaps_empty, planner, has_land2=has_land2
+            snaps_empty,
+            planner,
+            has_land2=has_land2,
+            probe_worker=land2_probe_worker or "hire5",
         ),
         "missing_from_solved": _check_missing_from_solved(planner, workers),
         "stale_start_blocks": _check_stale_start_blocks(planner),
@@ -176,19 +180,20 @@ def _check_hire5_idle(
     planner: dict[str, Any],
     *,
     has_land2: bool,
+    probe_worker: str = "hire5",
 ) -> dict[str, Any]:
     if not has_land2:
-        return _check("hire5_idle_proxy", True, "one-land layout (no hire5)")
-    hire5 = snaps_empty.get("hire5") or []
-    days_nonempty = sum(1 for v in hire5 if v is not None and v > 0)
+        return _check("hire5_idle_proxy", True, "one-land layout (no land2)")
+    probe = snaps_empty.get(probe_worker) or []
+    days_nonempty = sum(1 for v in probe if v is not None and v > 0)
     infeas = [
         x for x in (planner.get("infeasible") or [])
-        if x.get("worker") == "hire5" and int(x.get("empty") or 0) == 1
+        if x.get("worker") == probe_worker and int(x.get("empty") or 0) == 1
     ]
     ok = days_nonempty <= 15 and len(infeas) <= 20
     detail = (
-        f"hire5_empty dawn days={days_nonempty}, "
-        f"hire5 empty=1 INFEASIBLE={len(infeas)}"
+        f"{probe_worker}_empty dawn days={days_nonempty}, "
+        f"{probe_worker} empty=1 INFEASIBLE={len(infeas)}"
     )
     return _check("hire5_idle_proxy", ok, detail)
 

@@ -7,28 +7,34 @@ import re
 from typing import Any
 
 ZONE_OK_RE = re.compile(
-    r"\[planner\] twoland_wsp zone=(\w+) (OPTIMAL|FEASIBLE) "
+    r"\[planner\] wsp zone=(\w+) (OPTIMAL|FEASIBLE) "
     r"obj=([\d.]+) time=([\d.]+)s close0=(-?\d+) cons0=(-?\d+) "
     r"open0=(-?\d+) empty=(\d+) picks=(\d+)"
 )
 ZONE_STARTS_RE = re.compile(
-    r"\[planner\] twoland_wsp zone=(\w+) starts=(\{.+?\}) "
+    r"\[planner\] (?:wsp|twoland_wsp) zone=(\w+) starts=(\{.+?\}) "
     r"min=(-?\d+|None) picks=(\d+) day0=(\d+)"
 )
 ZONE_INFEASIBLE_RE = re.compile(
-    r"\[planner\] twoland_wsp zone=(\w+) status=(\w+) "
+    r"\[planner\] wsp zone=(\w+) status=(\w+) "
     r"time=([\d.]+)s empty=(\d+) open0=(-?\d+|N/A)"
     r"(?: locked_peak=(\d+)@(\d+) cap=(\d+)(?: over_days=(\d+))?)?"
 )
 SKIP_RE = re.compile(
-    r"\[planner\] twoland_wsp zone=(\w+) skip cascade \((INFEASIBLE|picks=0)\)"
+    r"\[planner\] (?:wsp|twoland_wsp) zone=(\w+) skip cascade \((INFEASIBLE|picks=0)\)"
+)
+CASCADE_STOP_RE = re.compile(
+    r"\[planner\] twoland cascade stop=(\w+) solved=(\d+)"
 )
 THIN_RE = re.compile(
-    r"\[planner\] twoland_wsp zone=(\w+) thin day0=(\d+) "
+    r"\[planner\] (?:wsp|twoland_wsp) zone=(\w+) thin day0=(\d+) "
     r"need>=(\d+) \(write anyway\)"
 )
 PROBE_OK_RE = re.compile(
-    r"\[planner\] twoland_wsp probe hire5 ok day0=(\d+) buy_land tomorrow"
+    r"\[planner\] twoland probe hire5 day0=(\d+) buy_land tomorrow"
+)
+PROBE_DEFER_RE = re.compile(
+    r"\[planner\] twoland probe hire5 (?:INFEASIBLE )?defer"
 )
 PROBE_THIN_RE = re.compile(
     r"\[planner\] twoland_wsp probe hire5 thin day0=(\d+) defer buy past d=(\d+)"
@@ -39,7 +45,10 @@ REPLAN_META_RE = re.compile(
     r"assign=(\d+) locked=(\d+)"
 )
 REPLAN_BUY_RE = re.compile(
-    r"\[planner\] replan d=(\d+) land2 probe ok BUY_LAND_DAY=(\d+)"
+    r"\[planner\] d=(\d+) probe OK -> BUY_LAND_DAY=(\d+)"
+)
+HIRES_SOLVED_RE = re.compile(
+    r"\[planner\] twoland hires active=(\d+) NUM_ACTIVE_HIRES=(\d+) solved=([\w,]+|none)"
 )
 ASSIGN_RE = re.compile(r"\[planner\] replan assign (.+?)(?: partial=(\d+))?$")
 ASSIGN_TILE_RE = re.compile(r"t(\d+):(\w+)(?:@(-?\d+))?")
@@ -129,10 +138,12 @@ def parse_planner_events(lines: list[str]) -> dict[str, Any]:
     replan_days: list[int] = []
     zone_solves: list[dict[str, Any]] = []
     skip_cascade: list[dict[str, Any]] = []
+    cascade_stops: list[dict[str, Any]] = []
     infeasible: list[dict[str, Any]] = []
     probe_hire5: list[dict[str, Any]] = []
     keep_assignments: list[dict[str, Any]] = []
     buy_land_day_logged: int | None = None
+    solved_by_day: dict[int, list[str]] = {}
 
     for day, block_lines in blocks:
         if day is not None and (not replan_days or replan_days[-1] != day):
@@ -140,15 +151,18 @@ def parse_planner_events(lines: list[str]) -> dict[str, Any]:
         parsed = _parse_replan_block(block_lines, day)
         zone_solves.extend(parsed["zone_solves"])
         skip_cascade.extend(parsed["skip_cascade"])
+        cascade_stops.extend(parsed.get("cascade_stops") or [])
         infeasible.extend(parsed["infeasible"])
         probe_hire5.extend(parsed["probe_hire5"])
         keep_assignments.extend(parsed["keep_assignments"])
         if parsed.get("buy_land_day_logged") is not None:
             buy_land_day_logged = parsed["buy_land_day_logged"]
+        sw = parsed.get("solved_workers_logged")
+        if sw is not None and day is not None:
+            solved_by_day[day] = sw
 
     zone_streak_events = parse_zone_streaks(lines)
     replan_meta: dict[int, dict[str, int]] = {}
-    solved_by_day: dict[int, list[str]] = {}
     outcomes_by_day: dict[int, dict[str, str]] = {}
     stale_unlocks: list[dict[str, Any]] = []
     for line in lines:
@@ -182,6 +196,7 @@ def parse_planner_events(lines: list[str]) -> dict[str, Any]:
         "replan_days": replan_days,
         "zone_solves": zone_solves,
         "skip_cascade": skip_cascade,
+        "cascade_stops": cascade_stops,
         "infeasible": infeasible,
         "probe_hire5": probe_hire5,
         "keep_assignments": keep_assignments,
@@ -211,11 +226,13 @@ def _parse_outcomes_map(raw: str) -> dict[str, str]:
 def _parse_replan_block(block_lines: list[str], day: int | None) -> dict[str, Any]:
     zone_solves: list[dict[str, Any]] = []
     skip_cascade: list[dict[str, Any]] = []
+    cascade_stops: list[dict[str, Any]] = []
     infeasible: list[dict[str, Any]] = []
     probe_hire5: list[dict[str, Any]] = []
     keep_assignments: list[dict[str, Any]] = []
     buy_land_day_logged: int | None = None
     pending_zone: dict[str, Any] | None = None
+    solved_workers_logged: list[str] | None = None
 
     def flush_zone() -> None:
         nonlocal pending_zone
@@ -235,6 +252,13 @@ def _parse_replan_block(block_lines: list[str], day: int | None) -> dict[str, An
                     "thin": False,
                     "buy_land_day": buy_land_day_logged,
                 }
+            )
+
+        m = HIRES_SOLVED_RE.search(line)
+        if m:
+            solved_raw = m.group(3)
+            solved_workers_logged = (
+                [] if solved_raw == "none" else solved_raw.split(",")
             )
 
         m = ASSIGN_RE.search(line)
@@ -260,6 +284,22 @@ def _parse_replan_block(block_lines: list[str], day: int | None) -> dict[str, An
         if m:
             probe_hire5.append(
                 {"day": day, "ok": True, "thin": False, "day0": int(m.group(1))}
+            )
+            continue
+
+        m = PROBE_DEFER_RE.search(line)
+        if m:
+            probe_hire5.append({"day": day, "ok": False, "thin": False, "defer": True})
+            continue
+
+        m = CASCADE_STOP_RE.search(line)
+        if m:
+            cascade_stops.append(
+                {
+                    "day": day,
+                    "worker": m.group(1),
+                    "solved_prefix": int(m.group(2)),
+                }
             )
             continue
 
@@ -351,8 +391,10 @@ def _parse_replan_block(block_lines: list[str], day: int | None) -> dict[str, An
     return {
         "zone_solves": zone_solves,
         "skip_cascade": skip_cascade,
+        "cascade_stops": cascade_stops,
         "infeasible": infeasible,
         "probe_hire5": probe_hire5,
         "keep_assignments": keep_assignments,
         "buy_land_day_logged": buy_land_day_logged,
+        "solved_workers_logged": solved_workers_logged,
     }

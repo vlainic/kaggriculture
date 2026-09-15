@@ -102,7 +102,10 @@ def _plot_money(ax, report: dict[str, Any]) -> None:
 def _plot_passes(ax, report: dict[str, Any]) -> None:
     by_worker = (report.get("passes") or {}).get("by_worker") or {}
     bottom = np.zeros(SEASON_DAYS)
-    for worker in sorted(by_worker):
+    worker_order = report.get("workers") or sorted(by_worker)
+    for worker in worker_order:
+        if worker not in by_worker:
+            continue
         vals = np.array(by_worker[worker][:SEASON_DAYS], dtype=float)
         ax.bar(DAYS, vals, bottom=bottom, label=worker, width=0.8)
         bottom += vals
@@ -124,7 +127,10 @@ def _plot_hires(ax, report: dict[str, Any]) -> None:
 def _plot_planner_heatmap(ax, report: dict[str, Any]) -> None:
     planner = report.get("planner") or {}
     solves = planner.get("zone_solves") or []
-    workers = sorted({z["worker"] for z in solves})
+    seen = {z["worker"] for z in solves}
+    layout_workers = report.get("workers") or []
+    workers = [w for w in layout_workers if w in seen]
+    workers.extend(sorted(seen - set(workers)))
     replan_days = sorted({z.get("day") for z in solves if z.get("day") is not None})
     if not workers or not replan_days:
         ax.text(0.5, 0.5, "no planner zone solves", ha="center", va="center")
