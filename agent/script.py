@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from agent import zoning
+from agent import planner, zoning
 from agent.zoning import (
     HAND_WORKERS,
     NUM_TILES,
@@ -101,7 +101,9 @@ def _tile_at(me: dict, idx: int):
     return me["tiles"][y][x]
 
 
-def zone_animal_feed_count(me: dict, worker: str, tile_state: dict) -> int:
+def zone_animal_feed_count(
+    me: dict, worker: str, tile_state: dict, *, day: int | None = None
+) -> int:
     """Live animals plus animals queued for place today in this zone."""
     count = 0
     for idx in WORKER_TILES[worker]:
@@ -119,7 +121,10 @@ def zone_animal_feed_count(me: dict, worker: str, tile_state: dict) -> int:
         item = queue[qi]
         if item.kind != "animal":
             continue
-        if tile is None:
+        emptyish = tile is None or (
+            day is not None and planner.is_buy_morning_ne_locked(tile, idx, day)
+        )
+        if emptyish:
             count += 1
             continue
         if isinstance(tile, dict) and tile.get("kind") in ("COOP", "PASTURE"):
@@ -134,16 +139,16 @@ def zone_needs_feed_wheat(me: dict, worker: str, tile_state: dict) -> bool:
 
 
 def wheat_pickup_needed(
-    me: dict, worker: str, tile_state: dict, inv: dict
+    me: dict, worker: str, tile_state: dict, inv: dict, *, day: int | None = None
 ) -> int:
-    need = zone_animal_feed_count(me, worker, tile_state)
+    need = zone_animal_feed_count(me, worker, tile_state, day=day)
     if need <= 0:
         return 0
     return max(0, need - inv.get("WHEAT", 0))
 
 
 def _animals_needed_for_zone(
-    me: dict, worker: str, tile_state: dict
+    me: dict, worker: str, tile_state: dict, *, day: int | None = None
 ) -> dict[str, int]:
     needed: dict[str, int] = {}
     for idx in WORKER_TILES[worker]:
@@ -158,7 +163,10 @@ def _animals_needed_for_zone(
         if item.kind != "animal":
             continue
         tile = _tile_at(me, idx)
-        if tile is None:
+        emptyish = tile is None or (
+            day is not None and planner.is_buy_morning_ne_locked(tile, idx, day)
+        )
+        if emptyish:
             needed[item.label] = needed.get(item.label, 0) + 1
             continue
         if not isinstance(tile, dict):
@@ -193,7 +201,9 @@ def _inventory_index(worker: str) -> int:
     return HAND_WORKERS.index(worker) + 1
 
 
-def total_wheat_feed_need(me: dict, tile_state: dict, private: dict) -> int:
+def total_wheat_feed_need(
+    me: dict, tile_state: dict, private: dict, *, day: int | None = None
+) -> int:
     total = 0
     for worker in WORKERS:
         inv_idx = _inventory_index(worker)
@@ -202,5 +212,5 @@ def total_wheat_feed_need(me: dict, tile_state: dict, private: dict) -> int:
             if inv_idx < len(private["inventories"])
             else {}
         )
-        total += wheat_pickup_needed(me, worker, tile_state, inv)
+        total += wheat_pickup_needed(me, worker, tile_state, inv, day=day)
     return total

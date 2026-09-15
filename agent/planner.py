@@ -8,6 +8,8 @@ from pathlib import Path
 
 from agent import animal_rollouts, dp_catalog, rollouts, solvers, zoning
 from agent.zoning import (
+    LAND1_TILE_COUNT,
+    LAND1_WORKERS,
     NUM_TILES,
     TILE_COORDS,
     WORKER_TILES,
@@ -21,6 +23,8 @@ NUM_DAYS = 30
 SEASON_LAST_DAY = 29
 STARTING_MONEY = 3000
 NUM_ACTIVE_HIRES: int = 4
+BUY_LAND_DAY: int | None = None
+_NE_TILES = tuple(range(LAND1_TILE_COUNT, NUM_TILES))
 PROFILE_SUFFIXES = ("no_fert", "with_fert", "no_care", "with_care")
 ANIMAL_NAMES = frozenset(animal_rollouts.animal_names())
 CROP_PROFILE = "no_fert"
@@ -39,6 +43,34 @@ ZERO_DAILY_KEYS = (
 )
 
 _cached_queues: dict | None = None
+
+
+def _land2_owned(me: dict) -> bool:
+    return "NE" in me.get("unlocked_quadrants", [])
+
+
+def is_buy_morning_ne_locked(tile, idx: int, day: int) -> bool:
+    """NE tiles still read LOCKED at h0 on the morning we BUY_LAND."""
+    return (
+        tile == "LOCKED"
+        and idx >= LAND1_TILE_COUNT
+        and BUY_LAND_DAY is not None
+        and day == BUY_LAND_DAY
+    )
+
+
+def _zone_has_work(
+    me: dict, worker: str, tile_queues: dict, assigned: dict[int, list]
+) -> bool:
+    for idx in WORKER_TILES[worker]:
+        tile = _tile_at(me, idx)
+        if isinstance(tile, dict) and tile.get("kind") in ("PLANT", "COOP", "PASTURE"):
+            return True
+        if assigned.get(idx):
+            return True
+        if tile_queues.get(idx):
+            return True
+    return False
 
 
 def _load_json(name: str) -> dict | list:
@@ -597,7 +629,7 @@ def _active_hand_hires(solved_workers: tuple[str, ...]) -> int:
 
 
 def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None:
-    global NUM_ACTIVE_HIRES
+    global NUM_ACTIVE_HIRES, BUY_LAND_DAY
     day = obs["day"]
     if day == 0 or day >= SEASON_LAST_DAY:
         return
@@ -609,10 +641,14 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
 
     player = obs["player"]
     me = obs["farms"][player]
+    land_owned = _land2_owned(me)
+    buy_morning = (
+        BUY_LAND_DAY is not None and day == BUY_LAND_DAY and not land_owned
+    )
 
     st_map = tile_state or {}
 
-    if not any(
+    if not buy_morning and not any(
         _replan_eligible(i, _tile_at(me, i), st_map.get(i, {}), tile_queues)
         for i in range(NUM_TILES)
     ):
@@ -638,6 +674,7 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
 
     replan_tiles = []
     locked_tiles = 0
+    force_ne = 0
     empty_counts = {w: 0 for w in WORKERS}
     locked_by_worker = {w: _empty_locked(horizon) for w in WORKERS}
 
@@ -645,7 +682,10 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
         tile = _tile_at(me, idx)
         worker = worker_for_tile(idx)
         st = st_map.get(idx, {})
-        if _replan_eligible(idx, tile, st, tile_queues):
+        ne_force = buy_morning and idx in _NE_TILES and tile == "LOCKED"
+        if ne_force:
+            force_ne += 1
+        if ne_force or _replan_eligible(idx, tile, st, tile_queues):
             replan_tiles.append(idx)
             empty_counts[worker] += 1
         else:
@@ -687,6 +727,13 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
     liquidity_floor = hire_reserve + feed_reserve * 3
     replan_min_balance = 0 if _wsp_solver() else liquidity_floor
 
+    print(
+        f"[planner] twoland d={day} land_owned={int(land_owned)} "
+        f"buy_morning={int(buy_morning)} BUY_LAND_DAY={BUY_LAND_DAY} "
+        f"force_ne={force_ne} empty={len(replan_tiles)}",
+        flush=True,
+    )
+
     result = solvers.solve(
         chains,
         horizon=horizon,
@@ -700,6 +747,8 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
         min_balance=replan_min_balance,
         track_shed=not _wsp_solver(),
         price_of=price_of,
+        land_owned=land_owned,
+        buy_morning=buy_morning,
     )
 
     if not result.complete and (
@@ -712,10 +761,6 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
         )
         return
 
-    hires = _active_hand_hires(result.solved_workers)
-    if hires > 0:
-        NUM_ACTIVE_HIRES = max(4, hires)
-
     n_written = solvers.apply_replan(
         result,
         replan_tiles,
@@ -723,6 +768,38 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
         tile_state,
         horizon,
         chain_to_queue_items,
+    )
+
+    if buy_morning:
+        ne_written = any(tile_queues.get(idx) for idx in _NE_TILES)
+        if not ne_written:
+            print(
+                f"[planner] d={day} buy-morning NE unwritten -> abort buy",
+                flush=True,
+            )
+            BUY_LAND_DAY = None
+    elif not land_owned and BUY_LAND_DAY is None and result.buy_land:
+        BUY_LAND_DAY = day + 1
+        print(
+            f"[planner] d={day} probe OK -> BUY_LAND_DAY={BUY_LAND_DAY}",
+            flush=True,
+        )
+
+    ordered_hands = [w for w in WORKERS if w in zoning.HAND_WORKERS]
+    active = 0
+    for w in ordered_hands:
+        if w in result.solved_workers and _zone_has_work(
+            me, w, tile_queues, result.assigned
+        ):
+            active += 1
+        else:
+            break
+    NUM_ACTIVE_HIRES = max(4, active)
+    print(
+        f"[planner] twoland hires active={active} "
+        f"NUM_ACTIVE_HIRES={NUM_ACTIVE_HIRES} "
+        f"solved={','.join(result.solved_workers) or 'none'}",
+        flush=True,
     )
 
     if replan_tiles:
@@ -755,8 +832,14 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
 
 
 def _build_from_solver() -> dict[int, list]:
-    empty_tiles = list(range(NUM_TILES))
-    empty_counts = {w: len(WORKER_TILES[w]) for w in WORKERS}
+    if solvers.CURRENT_SOLVER == "twoland_wsp":
+        empty_tiles = list(range(LAND1_TILE_COUNT))
+        empty_counts = {
+            w: (len(WORKER_TILES[w]) if w in LAND1_WORKERS else 0) for w in WORKERS
+        }
+    else:
+        empty_tiles = list(range(NUM_TILES))
+        empty_counts = {w: len(WORKER_TILES[w]) for w in WORKERS}
     locked_by_worker = {w: _empty_locked(NUM_DAYS) for w in WORKERS}
     if _wsp_solver():
         chains = []
@@ -803,7 +886,7 @@ def get_tile_queues(fallback: Callable[[], dict]) -> dict:
         try:
             _cached_queues = _build_from_solver()
         except (RuntimeError, OSError, ValueError, KeyError, TypeError) as exc:
-            if zoning.CURRENT is zoning.FIVE:
+            if zoning.CURRENT in (zoning.FIVE, zoning.TWO):
                 raise RuntimeError(
                     f"day-0 solver failed on {zoning.CURRENT} layout (no empty fallback): {exc}"
                 ) from exc

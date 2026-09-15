@@ -17,6 +17,10 @@ STAPLE_DUMP = frozenset(sell_dp.STAPLE_PRODUCTS)
 DRIP_PER_HOUR = 1
 
 
+def _land2_owned(me: dict) -> bool:
+    return "NE" in me.get("unlocked_quadrants", [])
+
+
 def _target_hires(me: dict, day: int) -> int:
     del me, day
     return planner.NUM_ACTIVE_HIRES
@@ -64,9 +68,15 @@ def _tile_at(me: dict, idx: int):
     return me["tiles"][y][x]
 
 
-def _tile_empty(me: dict, idx: int) -> bool:
+def _tile_empty(me: dict, idx: int, *, day: int) -> bool:
     tile = _tile_at(me, idx)
-    return tile is None or (isinstance(tile, dict) and tile.get("kind") == "WEED")
+    if tile is None:
+        return True
+    if isinstance(tile, dict) and tile.get("kind") == "WEED":
+        return True
+    if planner.is_buy_morning_ne_locked(tile, idx, day):
+        return True
+    return False
 
 
 def _count_live_animals(me: dict) -> int:
@@ -138,6 +148,8 @@ def _needs_animal_today(
     tile = _tile_at(me, idx)
     if tile is None:
         return item
+    if planner.is_buy_morning_ne_locked(tile, idx, day):
+        return item
     if isinstance(tile, dict) and tile.get("kind") in ("COOP", "PASTURE"):
         if not tile.get("animal"):
             return item
@@ -147,6 +159,7 @@ def _needs_animal_today(
 def _needs_build_today(
     idx: int,
     me: dict,
+    day: int,
     queue_idx: int,
     lag: int,
     gap: int,
@@ -161,6 +174,8 @@ def _needs_build_today(
         return None
     tile = _tile_at(me, idx)
     if tile is None:
+        return item
+    if planner.is_buy_morning_ne_locked(tile, idx, day):
         return item
     return None
 
@@ -188,14 +203,14 @@ def needed_buys(
         crop = _needs_plant_today(
             idx, qi, lag, gap, pending_dig, empty_at_dawn, dig_plant_ok
         )
-        if crop and _tile_empty(me, idx):
+        if crop and _tile_empty(me, idx, day=day):
             seeds[crop.label] += 1
 
         animal = _needs_animal_today(idx, day, me, qi, lag, gap)
         if animal:
             animals[animal.label] += 1
 
-    wheat_need = script.total_wheat_feed_need(me, tile_state, private)
+    wheat_need = script.total_wheat_feed_need(me, tile_state, private, day=day)
 
     return seeds, animals, wheat_need
 
@@ -219,16 +234,32 @@ def build_orders(
         for _ in range(hires_needed):
             orders.append(["HIRE"])
 
+    if (
+        hour == 0
+        and planner.BUY_LAND_DAY is not None
+        and day == planner.BUY_LAND_DAY
+        and not _land2_owned(me)
+    ):
+        orders.insert(0, ["BUY_LAND"])
+
     needed_seeds, needed_animals, wheat_need = needed_buys(
         me, private, day, tile_state, dawn
     )
-    wheat_feed_need = script.total_wheat_feed_need(me, tile_state, private)
+    wheat_feed_need = script.total_wheat_feed_need(me, tile_state, private, day=day)
     live_animals = _count_live_animals(me)
     wheat_reserve = max(wheat_feed_need, live_animals)
 
     seeds = private["seeds"]
     shed = private["shed"]
     money = int(me["money"])
+    buy_land_reserved = 0
+    if (
+        planner.BUY_LAND_DAY is not None
+        and day == planner.BUY_LAND_DAY
+        and not _land2_owned(me)
+    ):
+        buy_land_reserved = zoning.LAND2_BUY_COST
+        money = max(0, money - buy_land_reserved)
     wheat_price = int(prices.get("WHEAT", 0) or 25)
     feed_reserve = wheat_reserve * wheat_price
     hire_reserve = _active_hire_reserve(target_hires, len(me["hands"]))
@@ -240,7 +271,7 @@ def build_orders(
         if wheat_in_shed < dawn_wheat_need + 1:
             deficit = dawn_wheat_need + 1 - wheat_in_shed
             cost = wheat_price
-            buy = min(deficit, money // cost, MAX_ORDERS - len(orders)) if cost else 0
+            buy = min(deficit, money // cost) if cost else 0
             if buy > 0:
                 orders.append(["BUY_PRODUCT", "WHEAT", buy])
                 money -= buy * cost
@@ -287,7 +318,19 @@ def build_orders(
         sells = sells[: max(0, MAX_ORDERS - len(orders))]
     orders.extend(sells)
 
-    return orders[:MAX_ORDERS]
+    out = orders[:MAX_ORDERS]
+    if hour == 0 and buy_land_reserved:
+        wheat_buys = sum(
+            o[2] for o in out if len(o) >= 3 and o[0] == "BUY_PRODUCT" and o[1] == "WHEAT"
+        )
+        capped = len(orders) > MAX_ORDERS
+        print(
+            f"[market] d={day} BUY_LAND reserved={buy_land_reserved} "
+            f"wheat={wheat_buys} orders={len(out)}/{MAX_ORDERS}"
+            + (" buys_capped_before_sells" if capped else ""),
+            flush=True,
+        )
+    return out
 
 
 def _staple_sell_orders(

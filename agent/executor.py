@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from agent import market, planner, rollouts, script, sell_dp, tile_ops, workers
+from agent import market, planner, rollouts, script, sell_dp, tile_ops, workers, zoning
 from agent.zoning import NET_TILE_OPS
+
+_DEBUG = True
 
 _EXECUTOR: Executor | None = None
 
@@ -15,6 +17,11 @@ _TILE_OP_VERBS = frozenset({
 
 def _log(msg: str) -> None:
     print(msg, flush=True)
+
+
+def _dbg(msg: str) -> None:
+    if _DEBUG:
+        print(msg, flush=True)
 
 
 def _fmt(action: list) -> str:
@@ -36,6 +43,15 @@ def _step_toward(fx: int, fy: int, tx: int, ty: int) -> str:
 def _tile_at(me: dict, idx: int):
     x, y = workers.TILE_COORDS[idx]
     return me["tiles"][y][x]
+
+
+def _dawn_empty(me: dict, idx: int, day: int) -> bool:
+    tile = _tile_at(me, idx)
+    if tile is None:
+        return True
+    if planner.is_buy_morning_ne_locked(tile, idx, day):
+        return True
+    return False
 
 
 def _zone_empty(me: dict, worker: str) -> int:
@@ -68,6 +84,8 @@ class Executor:
         self._tile_state: dict[int, dict] = {}
         self._empty_at_dawn: set[int] = set()
         self._day0_productive = False
+        self._day = 0
+        self._hour = 0
         self._tile_ops_today = {w: 0 for w in workers.WORKERS}
         for idx in range(workers.NUM_TILES):
             queue = script.TILE_QUEUES.get(idx, [])
@@ -88,6 +106,7 @@ class Executor:
         private = obs["private"]
         day = obs["day"]
         hour = obs["hour"]
+        self._day, self._hour = day, hour
 
         if hour == 0:
             self._on_new_day(me, day)
@@ -109,6 +128,10 @@ class Executor:
 
         if hour == 0:
             self._log_snap(obs, me, day, hour)
+            self._log_hand_queues(me, day)
+            self._log_stuck_tiles(me, day)
+        if hour == 1:
+            self._log_hand_positions(me, day)
 
         orders = market.build_orders(
             obs, me, private, day, hour, self._tile_state, self._empty_at_dawn
@@ -116,19 +139,19 @@ class Executor:
         harvest_only = day >= script.SEASON_LAST_DAY
 
         if market.defer_farmer_hour0(hour, orders, me, day):
-            farmer = ["PASS"]
-            hands = [["PASS"] for _ in me["hands"]]
-            note = "market-hour"
+            farmer, fnote = ["PASS"], "market-hour"
+            hand_results = [(["PASS"], "market-hour") for _ in me["hands"]]
         else:
-            farmer, note = self._worker_action(
+            farmer, fnote = self._worker_action(
                 "farmer", me, private, day, hour, harvest_only
             )
-            hands = [
+            hand_results = [
                 self._worker_action(
                     workers.worker_for_hand_idx(i), me, private, day, hour, harvest_only
-                )[0]
+                )
                 for i in range(len(me["hands"]))
             ]
+        hands = [r[0] for r in hand_results]
 
         if orders:
             _log(f"[exec] d={day} h={hour} market {' '.join(_fmt(o) for o in orders)}")
@@ -140,9 +163,18 @@ class Executor:
             for act in hands:
                 if act and act[0] == "PLANT":
                     self._day0_productive = True
-        _log(f"[exec] d={day} h={hour} farmer {_fmt(farmer)}" + (f" {note}" if note else ""))
-        for i, act in enumerate(hands):
-            _log(f"[exec] d={day} h={hour} hand{i} {_fmt(act)}")
+        _log(
+            f"[exec] d={day} h={hour} farmer {_fmt(farmer)}"
+            + (f" {fnote}" if fnote else "")
+        )
+        for i, (act, note) in enumerate(hand_results):
+            w = workers.worker_for_hand_idx(i)
+            pos = tuple(me["hands"][i]) if i < len(me["hands"]) else None
+            adj = int(pos in workers.SHED_ADJACENT) if pos else 0
+            _log(
+                f"[exec] d={day} h={hour} hand{i}={w} {_fmt(act)} "
+                f"pos={pos} adj={adj}" + (f" {note}" if note else "")
+            )
 
         return {"farmer": farmer, "hands": hands, "market": orders}
 
@@ -178,10 +210,89 @@ class Executor:
                 st["active"] = True
 
         self._empty_at_dawn = {
-            idx for idx in range(workers.NUM_TILES) if _tile_at(me, idx) is None
+            idx for idx in range(workers.NUM_TILES) if _dawn_empty(me, idx, day)
         }
+        ne_locked = sum(
+            1
+            for idx in range(workers.NUM_TILES)
+            if planner.is_buy_morning_ne_locked(_tile_at(me, idx), idx, day)
+        )
+        _log(
+            f"[exec] d={day} dawn_empty={len(self._empty_at_dawn)} "
+            f"dawn_ne_locked={ne_locked}"
+        )
         if day >= script.SEASON_LAST_DAY:
             self._endgame_done = {w: set() for w in workers.WORKERS}
+
+    def _log_hand_queues(self, me: dict, day: int) -> None:
+        for w in workers.HAND_WORKERS:
+            q = sum(
+                1 for idx in workers.WORKER_TILES[w] if script.TILE_QUEUES.get(idx)
+            )
+            empty = sum(1 for idx in workers.WORKER_TILES[w] if _tile_at(me, idx) is None)
+            locked = sum(
+                1
+                for idx in workers.WORKER_TILES[w]
+                if planner.is_buy_morning_ne_locked(_tile_at(me, idx), idx, day)
+            )
+            live = sum(
+                1
+                for idx in workers.WORKER_TILES[w]
+                if isinstance(_tile_at(me, idx), dict)
+                and _tile_at(me, idx).get("kind") in ("PLANT", "COOP", "PASTURE")
+            )
+            _log(
+                f"[hands] d={day} h0 {w} NUM_ACTIVE_HIRES={planner.NUM_ACTIVE_HIRES} "
+                f"qtiles={q} empty={empty} locked={locked} live={live}"
+            )
+
+    def _log_stuck_tiles(self, me: dict, day: int) -> None:
+        if not _DEBUG:
+            return
+        for idx in range(workers.NUM_TILES):
+            tile = _tile_at(me, idx)
+            st = self._tile_state[idx]
+            q = script.TILE_QUEUES.get(idx, [])
+            qi = st["queue_idx"]
+            item = q[qi] if qi < len(q) else None
+            worker = zoning.worker_for_tile(idx)
+
+            empty = tile is None
+            pasture_empty = (
+                isinstance(tile, dict)
+                and tile.get("kind") in ("COOP", "PASTURE")
+                and not tile.get("animal")
+            )
+            harvestable = tile_ops.tile_has_harvestable(idx, me, day)
+
+            if (
+                (empty or pasture_empty)
+                and item is not None
+                and st["lag"] == 0
+                and st["gap"] == 0
+            ):
+                kind = tile if not isinstance(tile, dict) else tile.get("kind")
+                _log(
+                    f"[stuck] d={day} t{idx + 1} {worker} kind={kind} qi={qi} "
+                    f"item={item.kind}:{item.label} lag={st['lag']} gap={st['gap']} "
+                    f"qlen={len(q)}"
+                )
+            if harvestable and isinstance(tile, dict):
+                _log(
+                    f"[stuck] d={day} t{idx + 1} {worker} HARVESTABLE "
+                    f"kind={tile.get('kind')} yield={tile.get('yield_units')} "
+                    f"fert_avail={tile.get('fertilizer_available')}"
+                )
+
+    def _log_hand_positions(self, me: dict, day: int) -> None:
+        for i, w in enumerate(workers.HAND_WORKERS):
+            hired = i < len(me["hands"])
+            pos = tuple(me["hands"][i]) if hired else None
+            adj = pos in workers.SHED_ADJACENT if hired else False
+            _log(
+                f"[hands] d={day} h1 {w} hired={int(hired)} pos={pos} "
+                f"shed_adj={int(adj)}"
+            )
 
     def _log_snap(self, obs: dict, me: dict, day: int, hour: int) -> None:
         shops = obs.get("town", {}).get("unlocked_shops", [])
@@ -318,6 +429,13 @@ class Executor:
                     and day - _tile_at(me, idx)["planted_day"] == tile_ops.STRAWBERRY_LAST_AGE
                 ):
                     st["pending_dig"] = True
+                if action[0] == "HARVEST":
+                    t = _tile_at(me, idx)
+                    y = t.get("yield_units") if isinstance(t, dict) else "?"
+                    _dbg(
+                        f"[harv] d={self._day} h={self._hour} {worker} t{idx + 1} "
+                        f"kind={t.get('kind') if isinstance(t, dict) else t} yield={y}"
+                    )
                 return self._emit_action(
                     worker, action, f"{worker} t{idx + 1}", tile_idx=idx
                 )
@@ -330,17 +448,30 @@ class Executor:
                     else {}
                 )
                 if inv.get("WHEAT", 0) <= 0:
-                    if (fx, fy) in workers.SHED_ADJACENT:
+                    adj = (fx, fy) in workers.SHED_ADJACENT
+                    shed_w = int(private["shed"].get("WHEAT", 0))
+                    inv_w = int(inv.get("WHEAT", 0))
+                    if adj:
                         n = min(
                             script.wheat_pickup_needed(
                                 me, worker, self._tile_state, inv
                             ),
-                            private["shed"].get("WHEAT", 0),
+                            shed_w,
                         )
                         if n > 0:
+                            _dbg(
+                                f"[pick] d={self._day} h={self._hour} {worker} "
+                                f"want=WHEAT feed-wait pos=({fx},{fy}) adj=1 "
+                                f"shed={shed_w} inv={inv_w} n={n}"
+                            )
                             return self._emit_action(
                                 worker, ["PICKUP", "WHEAT", n], f"{worker} feed-wait"
                             )
+                    _dbg(
+                        f"[pick] d={self._day} h={self._hour} {worker} "
+                        f"want=WHEAT feed-wait pos=({fx},{fy}) adj={int(adj)} "
+                        f"shed={shed_w} inv={inv_w}"
+                    )
                     return ["PASS"], f"{worker} feed-wait"
                 return ["PASS"], f"{worker} feed-wait"
 
@@ -478,6 +609,11 @@ class Executor:
                 return ["PASS"], f"{worker} pre-wait-shed"
             n = min(need, private["shed"].get("WHEAT", 0))
             if n > 0:
+                _dbg(
+                    f"[pick] d={self._day} h={self._hour} {worker} want=WHEAT "
+                    f"pos=({fx},{fy}) adj=1 shed={int(private['shed'].get('WHEAT', 0))} "
+                    f"inv={int(inv.get('WHEAT', 0))} n={n}"
+                )
                 self._preamble_idx[worker] += 1
                 return ["PICKUP", "WHEAT", n], f"{worker} pre-wheat"
             self._preamble_idx[worker] += 1
@@ -490,8 +626,19 @@ class Executor:
             if label is None:
                 self._preamble_idx[worker] += 1
                 return self._preamble_action(worker, me, private, fx, fy)
-            if (fx, fy) not in workers.SHED_ADJACENT:
-                return ["PASS"], f"{worker} pre-wait-shed"
+            adj = (fx, fy) in workers.SHED_ADJACENT
+            shed_n = int(private["shed"].get(label, 0))
+            inv_n = int(inv.get(label, 0))
+            _dbg(
+                f"[pick] d={self._day} h={self._hour} {worker} want={label} "
+                f"pos=({fx},{fy}) adj={int(adj)} shed={shed_n} inv={inv_n}"
+            )
+            if not adj or shed_n <= 0:
+                _dbg(
+                    f"[pick] d={self._day} h={self._hour} {worker} want={label} give-up"
+                )
+                self._preamble_idx[worker] += 1
+                return self._preamble_action(worker, me, private, fx, fy)
             return ["PICKUP", label, 1], f"{worker} pre-animal"
 
         self._preamble_idx[worker] += 1

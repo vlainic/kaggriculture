@@ -228,7 +228,14 @@ TWO = Layout(
     shed_adjacent=_SHED_ADJACENT,
 )
 
-CURRENT: Layout = FIVE
+CURRENT: Layout = TWO
+
+LAND2_BUY_COST = 1000
+LAND1_TILE_COUNT = len(FIVE.coords)
+LAND1_WORKERS: tuple[str, ...] = tuple(z.name for z in FIVE.zones)
+LAND2_WORKERS: tuple[str, ...] = tuple(
+    z.name for z in TWO.zones if z.name not in LAND1_WORKERS
+)
 
 
 def _fib_hire_cost(n: int) -> int:
