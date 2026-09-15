@@ -14,16 +14,16 @@ Heuristic/rule-based Python agent (no ML/RL pipeline) that wins on the ladder.
 
 ## Current implementation (Sep 15, 2026)
 
-**Active stack:** **one-land WSP** (`CURRENT_SOLVER = zonewise_wsp`, `zoning.CURRENT = FIVE`) + snake executor + dawn replan + pickups-honest animal ops.
+**Active stack:** **TwoLand WSP** (`CURRENT_SOLVER = twoland_wsp`, `zoning.CURRENT = TWO`) + snake executor + dawn replan + pickups-honest animal ops.
 
-- Zoning catalog: `FOUR` / `FIVE` / `TWO` (50 tiles kept as catalog); **live = FIVE**.
-- Solver: sequential per-zone WSP; day-0 `wsp_prestart.json`; **full** conservative cash cascade (`track_shed=False`, `min_balance=0`).
-- Planner: import solve + dawn replan; lock commitments; empties only; `NUM_ACTIVE_HIRES` from solved prefix.
-- Market: hire batches from `NUM_ACTIVE_HIRES`; **no** `BUY_LAND` path in live agent.
+- Zoning catalog: `FOUR` / `FIVE` / `TWO`; **live = TWO**.
+- Solver: land1 day-0 + hire5 probe + NE cascade; **full** conservative cash cascade (`track_shed=False`, `min_balance=0`).
+- Planner: import solve + dawn replan; lock commitments; empties only; `BUY_LAND_DAY`; `NUM_ACTIVE_HIRES` from solved prefix.
+- Market: hire batches; `BUY_LAND` + reserve; uncap dawn wheat.
 - Animals: `animal_with_pickups.json`; ops = **`daily_tile_ops` only** (+ hire preamble).
-- TwoLand: stub `twoland_wsp.py` + docs under `docs/twoland*/` — **not** wired.
+- **Shed:** PICKUP/DROP only on **owned** center tiles (`!= LOCKED`); SW/SE never valid on TwoLand. Owned-shed first → PICKUP → zone.
 
-**Ruled out:** Sept02 overhaul; stuck-zone queue-lock chase; OneLand-parity rewrite without a fresh plan; static NW spend caps; melon/wool glut as the TwoLand gap cause.
+**Ruled out:** Sept02 mid-zone walk-to-shed; stuck-zone queue-lock chase; static NW spend caps; melon/wool glut as the TwoLand gap cause.
 
 ## Deliverable
 
@@ -33,8 +33,8 @@ Heuristic/rule-based Python agent (no ML/RL pipeline) that wins on the ladder.
 
 ## Scope boundaries
 
-- **In scope:** one-land WSP, sell policy, local eval, user-requested submit
-- **Out of scope unless asked:** re-wire TwoLand / `BUY_LAND`, agent-initiated Kaggle submit, RL, notebooks in the submission bundle
+- **In scope:** TwoLand WSP, sell policy, local eval, user-requested submit
+- **Out of scope unless asked:** agent-initiated Kaggle submit, RL, notebooks in the submission bundle
 
 ## Key references
 

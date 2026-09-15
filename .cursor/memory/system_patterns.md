@@ -4,34 +4,43 @@
 
 **Sept02 overhaul patterns are REJECTED.** Do not copy Wave 2–8 “safety rails” (`cons≥0`, WSP `track_shed=True`, formula `net_tile_ops`, fert dawn pipeline) into live agent. Pre-overhaul WSP: **`track_shed=False`**, **`min_balance=0`**, **unbounded `conservative`**, hand-calibrated `NET_TILE_OPS`. See `progress.md` FAILURE banner.
 
-## Current: one-land WSP + snake executor (Sep 15)
+## Current: TwoLand WSP + snake executor (Sep 15)
 
 ```
 import:
-  agent/zoning.py CURRENT=FIVE → bind() → WORKERS / TILES / PREAMBLE / NET_TILE_OPS / HIRE_DAILY_COST
+  agent/zoning.py CURRENT=TWO → bind() → WORKERS / TILES / PREAMBLE / NET_TILE_OPS / LAND1_* / LAND2_*
   data/crop_rollouts.json + data/animal_with_pickups.json
-  zonewise_wsp day-0 wsp_prestart.json (25 tiles)
+  twoland_wsp day-0 land1 prestart + hire5 probe + NE cascade
 
 obs → executor.step
-  ├─ hour0: reset routes; dawn replan if 0 < day < SEASON_LAST; HIRE
-  │         replan: lock commitments → CP-SAT empties only
+  ├─ hour0: reset routes; dawn replan if 0 < day < SEASON_LAST; HIRE / BUY_LAND
+  │         replan: lock commitments → CP-SAT empties only; NE LOCKED carve-out on buy-morning
   │         WSP: track_shed=False, min_balance=0; full conservative handoff
-  ├─ market: dump SELL; buy animals even if tile still empty; NUM_ACTIVE_HIRES batches
-  └─ snake: preamble → tile ops → shed
+  ├─ market: dump SELL; buy animals; NUM_ACTIVE_HIRES batches; BUY_LAND reserved
+  └─ snake: owned-shed first → PICKUP → compass → tile ops
 ```
 
-`main.py` → `executor.step`. Import solve + dawn replan from **day 1** (not day 0).  
-`CURRENT_SOLVER = "zonewise_wsp"`. `twoland_wsp` is a **stub**, not registered.
+`main.py` → `executor.step`.  
+`CURRENT_SOLVER = "twoland_wsp"`.
+
+### Shed-adjacent **ONLY IF OWNED** (engine + executor)
+
+- Rules list four center tiles as shed-adjacent: `(4,4)`, `(5,4)`, `(4,5)`, `(5,5)`.
+- **PICKUP / DROP no-op when the standing tile is `LOCKED`** (confirmed: shed count never drops).
+- TwoLand owns NW+NE only → SW/SE centers **never** valid pickup spots.
+- Live gate: `_owned_shed_tiles(me)` = `SHED_ADJACENT` ∩ `{tile != "LOCKED"}`.
+- Dawn path: if not on owned shed → `_step_to_owned_shed` (0–2 hops); then PICKUP; then zoning compass.
+- FIVE hire1–4 preambles are **pickup-first** (no leading WEST/NORTH). hire5–9 already were.
+- **Not** Sept02 mid-zone walk-to-shed — only spawn/locked-center correction + preamble.
 
 ### Zone layouts (`agent/zoning.py`)
 
 - **`Layout` / `Zone` dataclasses** — coords, visit order (= route), preamble, `start_hour`, `net_tile_ops`, `is_hand`.
-- **Catalog:** `FOUR` + `FIVE` + **`TWO`** (kept). **`CURRENT = FIVE`** (live one-land).
-- Live FIVE ops **18/17/16/14/13**. TWO land2 ops **16/14/13/12/11** remain in catalog for a future re-add.
-- **No** module-level `LAND1_*` / `LAND2_*` constants (stripped with TwoLand runtime).
-- **`bind(layout)`** fills module aliases; **`NET_TILE_OPS = z.net_tile_ops`** (hand table).
+- **Catalog:** `FOUR` + `FIVE` + **`TWO`**. **`CURRENT = TWO`** (live).
+- Live TWO: land1 ops **18/17/16/14/13**, land2 **16/14/13/12/11**.
+- Module constants: `LAND1_TILE_COUNT`, `LAND1_WORKERS`, `LAND2_WORKERS`, `LAND2_BUY_COST`.
+- **`bind(layout)`** fills module aliases; **`NET_TILE_OPS = z.net_tile_ops`**.
 - Hire cash: fib sum of active hands (`planner.NUM_ACTIVE_HIRES`).
-- Spec notes: `data/five_zone_plan.md` (FIVE); `data/two_lands.md`.
 
 ### DP catalog (`agent/dp_catalog.py`)
 
@@ -54,10 +63,11 @@ obs → executor.step
 - **Zonewise / WSP solvers:** sequential zones; WSP atomic patterns; day-0 `wsp_prestart.json`; replan from d≥3.
 - **Hiring:** `NUM_ACTIVE_HIRES` updated from solved prefix after farmer-ok replan; market `_hire_batches` for h=0/h=1.
 
-### Two-land flow (HISTORICAL — not live)
+### Two-land flow (LIVE)
 
-Was: probe hire5 → `BUY_LAND_DAY` → buy morning cascade VI–X + `NUM_ACTIVE_HIRES`.  
-Stripped Sep 15. See `docs/twolands/twoland_readd.md` / `docs/twoland/*` before rewiring.
+Probe hire5 → `BUY_LAND_DAY` → buy morning cascade VI–X + `NUM_ACTIVE_HIRES`.  
+NE tiles still read `LOCKED` at h0 on buy-morning — carve-out in planner/executor/market.  
+See `docs/twolands/twoland_readd.md`.
 
 ### Planner catalog prices (`effective_price`)
 
@@ -68,7 +78,8 @@ Stripped Sep 15. See `docs/twolands/twoland_readd.md` / `docs/twoland/*` before 
 ### Executor + fert + feed (runtime, not CP-SAT)
 
 - Snake routes; BUILD only if animal in inv; PLACE same day needs wheat.
-- Preamble / walk / fert / sell-floor knobs from **Sept02 are failed experiments** — restore pre-overhaul executor/market unless a change is revalidated against `d35bff5` smoke.
+- **PICKUP/DROP only on owned shed tiles** (`_owned_shed_tiles`); locked center → `_step_to_owned_shed`.
+- Mid-zone walk-to-shed / Sept02 preamble rewrites are **failed** — do not reintroduce.
 
 ### Engine facts
 
@@ -99,10 +110,11 @@ Stripped Sep 15. See `docs/twolands/twoland_readd.md` / `docs/twoland/*` before 
 17. **Smoke `PLACE ≤ BUILD+1`.**
 18. **Batch aggregate with fixed `us_index`** — Kaggle seats vary per episode; use `g["us_index"]` in `_aggregate()`, not `games[0].us_index`.
 19. **Trust batch `reward_us` before us_index fix** — ~50% of episodes had opponent scores in aggregate rollups.
-20. **Blind movement before `PICKUP_*` in zone preamble** — `pre-wait-shed` absorbing PASS; always pickup-first + walk-to-shed fallback.
+20. **Blind movement before `PICKUP_*` / treating any shed-adjacent tile as pickup-valid** — SW/SE are LOCKED on TwoLand; PICKUP no-ops. Always owned-shed first (`_owned_shed_tiles`), then PICKUP, then compass. Mid-zone walk-to-shed = Sept02 failure.
 21. **Hand-tuned price multipliers** (`GLUT_CAPS`, `1 + shop_demand`, `−opp/10`) — use `pricing.marginal_unit_price` at forecast inventory instead.
 22. **Static per-zone replan bank caps** (`starting_money/N`, `min(day_start/2, handoff)`) — ladder: no-cap beat both; prefer trigger-based NE reserve / ops fixes instead.
 23. **Blame TwoLand gap on premium glut** without fill/rv/q — diagnosis_0911 ruled melon/wool glut out; post-NE ops/weed collapse is the primary.
+24. **`pos in SHED_ADJACENT` alone as shed-door** — must also be **owned** (`tile != "LOCKED"`).
 
 ---
 

@@ -25,59 +25,69 @@
 
 ---
 
-## Strategic status (Sep 15 — live = one-land)
+## Strategic status (Sep 15 — live = TwoLand)
 
 | Track | Status |
 | --- | --- |
-| **One-land WSP** | **LIVE** — `CURRENT_SOLVER = zonewise_wsp`, `CURRENT = FIVE` |
-| **Two-land WSP** | **STRIPPED** — stub `twoland_wsp.py`; no buy/probe/LAND* constants; re-add via `docs/twolands/twoland_readd.md` only |
-| **Solver backend** | **`CURRENT_SOLVER = "zonewise_wsp"`** |
-| **Land buy** | **Off** in live agent |
-| **Hiring** | `NUM_ACTIVE_HIRES` from solved prefix; market hire batches kept |
+| **Two-land WSP** | **LIVE** — `CURRENT_SOLVER = twoland_wsp`, `CURRENT = TWO` |
+| **One-land WSP** | Available as `zonewise_wsp` + FIVE catalog; not CURRENT |
+| **Land buy** | Probe → `BUY_LAND_DAY`; market `BUY_LAND` + reserve |
+| **Hiring** | `NUM_ACTIVE_HIRES` from solved prefix; market hire batches |
 | **Dawn replan** | Lock commitments; WSP **`track_shed=False`**, `min_balance=0`; unbounded `cons`; **full** conservative handoff; INFEASIBLE → break cascade |
-| **Layout catalog** | `FOUR` + `FIVE` + `TWO`; **`CURRENT = FIVE`**; pin **`NET_TILE_OPS = z.net_tile_ops`** |
-| **Smoke analysis** | `scripts/smoke_analysis/` restored; layout-aware (`layout.py`) |
+| **Layout catalog** | `FOUR` + `FIVE` + `TWO`; **`CURRENT = TWO`**; pin **`NET_TILE_OPS = z.net_tile_ops`** |
+| **Shed pickup** | **Only on owned center tiles** (`!= LOCKED`); see active_context |
+| **Smoke analysis** | Layout-aware (`layout.py`); earnings from `[harv]` when no `earn=` |
 | **Episode download** | `scripts/download_submission_logs.sh` (replays default) |
-| **Replay analysis** | `scripts/replay_analysis/` + `scripts/summarize_replays.sh` → `<id>.json` |
 | **Competition submission** | Local smoke only unless user asks |
 
 ## What works (live)
 
 | Item | Notes |
 | --- | --- |
-| zonewise_wsp + FIVE smoke | ~**85k** post-strip (`scripts/smoke.txt`) |
+| twoland_wsp + TWO smoke | ~**119k** after owned-shed fix (`scripts/smoke.txt`) |
+| Owned-shed first preamble | hire1–4 pickup-first; `_step_to_owned_shed` 0–2 hops; no PICKUP on `(4,5)`/`(5,5)` while LOCKED |
 | WSP conservative cascade | Sep 1 semantics — unbounded cons, no cons≥min_balance |
-| `NUM_ACTIVE_HIRES` + hire batches | Kept from TwoLand era; works on FIVE |
-| TWO layout catalog | Still in `zoning.py` (unused) |
-| download_submission_logs.sh | Replays bulk; `--with-logs` optional |
-| replay_analysis + summarize_replays.sh | Batch JSON; KPIs; slim default |
-| **smoke_analysis** | Layout-aware KPIs/plots; re-run notebook after agent layout flips |
-| **Submission analysis notebooks** | `submission_nb.py` + analysis/comparison nbs |
-| Historical twoland @ `d35bff5` | ~85–87k smoke; land2 buy ~d8 — not live |
+| `NUM_ACTIVE_HIRES` + hire batches | Contiguous working zones |
+| smoke_analysis | Layout-aware; `handN=hireN` parsers; `[harv]`×dawn quote earnings |
+| Historical one-land strip | ~85k FIVE — superseded by TwoLand re-add |
 
-## Sep 14–15 — discard TwoLand runtime, return to one-land (KEEP)
+## Sep 15 — owned-shed pickup (KEEP)
 
 | Change | Result |
 | --- | --- |
-| Hard reset / discard thrash | Parity + prior TwoLand recovery paths abandoned (3rd discard) |
-| Strip plan | `one-land_twoland_strip_*` — remove twoland dispatch + buy glue |
-| `CURRENT = FIVE`, `zonewise_wsp` | Live one-land |
-| Stub `twoland_wsp.py` | File kept, not imported |
-| Removed | `BUY_LAND_DAY`, `_land2_owned`, `land_owned`/`buy_morning`, `write_all_solved`, `LAND1_*`/`LAND2_*`, `SolveResult.buy_land` |
-| Kept | `NUM_ACTIVE_HIRES`, hire batches, `TWO` catalog, WSP cash rules |
-| Restored `scripts/smoke_analysis/` | Lost on reset; pulled from pre-reset commit + layout-aware fix |
+| Root cause | `PICKUP`/`DROP` **no-op on LOCKED** center tiles; SW/SE stay locked on TwoLand |
+| Symptom | `adj=1 pos=(4,5) shed>0 inv=0` forever; hire3+ freeze; harvest dies |
+| Fix | `_owned_shed_tiles` / `_step_to_owned_shed`; gate every pickup/drop; FIVE hire1–4 drop leading WEST/NORTH |
+| Not done | Mid-zone walk-to-shed (Sept02 failure) |
+| Smoke | ~74k freeze → ~**119k** |
+
+## Sep 15 — TwoLand re-add (KEEP)
+
+| Change | Result |
+| --- | --- |
+| `CURRENT = TWO`, `CURRENT_SOLVER = twoland_wsp` | Live again |
+| Glue | Probe, `BUY_LAND_DAY`, NE LOCKED carve-out, uncap dawn wheat, hire-on-work |
+| Smoke before shed fix | ~77k then ~74k (preamble give-up alone did not fix locked PICKUP) |
+
+## Sep 14–15 — discard TwoLand then re-add (KEEP)
+
+| Change | Result |
+| --- | --- |
+| Hard reset / one-land strip | Temporary; TwoLand re-added same day from `twoland_readd.md` |
+| Kept through strip | `NUM_ACTIVE_HIRES`, hire batches, `TWO` catalog, WSP cash rules |
+| Restored `scripts/smoke_analysis/` | Layout-aware |
 
 ## Known issues
 
 | Issue | Notes |
 | --- | --- |
-| **Sept02 overhaul** | **FAILURE** — see banner above; do not resume |
+| **Shed-adjacent ≠ owned** | Engine fact — always filter LOCKED before PICKUP/DROP |
+| **Sept02 overhaul** | **FAILURE** — do not resume mid-zone walk-to-shed |
 | hire9 INFEASIBLE late season | Partial prefix OK; common after land2 expansion |
 | Kaggle agent logs API | 403 on ladder episodes; replays work |
-| WSP vs zonewise gap | ~87k twoland vs ~107k zonewise one-land |
-| hire5 probe UNKNOWN | Occasional 5s timeout; retry next dawn |
 | TwoLand conversion leaks (analysis) | post-NE ops/weed collapse — see `docs/twoland/diagnosis_0911.md` |
 | Static NW zone budget caps | **REJECTED** (ladder): no-cap > half-handoff > money/N |
+
 
 ## Sep 11 — TwoLand diagnosis + budget A/B (KEEP)
 
@@ -133,17 +143,16 @@
 
 ## What's left
 
-1. Stabilize / ladder one-land as user asks
-2. TwoLand re-add only from explicit plan + `docs/twolands/twoland_readd.md` (post-NE ops crash still the real gap)
-3. Fix submission comparison tooling bugs (noise_std, unexplained_delta) when doing A/B again
-4. Do not Kaggle submit without ask
+1. Ladder / post-NE ops gap as user asks (`docs/twoland/diagnosis_0911.md`)
+2. Keep shed pickup gated on **owned** center tiles only
+3. Do not Kaggle submit without ask
 
 ## Do not do unless asked
 
-- **Re-wire `twoland_wsp` / `BUY_LAND` / TWO as live CURRENT**
-- **Re-run Sept02 overhaul / queue-lock chase / OneLand-parity plan**
+- Mid-zone walk-to-shed / Sept02 overhaul / queue-lock chase
 - Re-try static per-zone money caps (`money/N`, half-cash clamp, etc.)
 - Runtime `bind()` layout switch mid-game
 - Kaggle submit
 - Commit `kaggle_logs/`
 - Hardcode land2 workers in smoke/replay analysis
+- Treat `SHED_ADJACENT` alone as pickup-valid (must be **owned** / `!= LOCKED`)
