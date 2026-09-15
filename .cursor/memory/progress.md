@@ -25,34 +25,47 @@
 
 ---
 
-## Strategic status (restore target = pre-Sept02)
+## Strategic status (Sep 15 — live = one-land)
 
 | Track | Status |
 | --- | --- |
-| **Two-land WSP** | **Restore / keep at `d35bff5` semantics** — `twoland_wsp.py`; `CURRENT = TWO`; probe hire5 → buy NE |
-| **One-land WSP** | Flip `CURRENT_SOLVER = zonewise_wsp`, `CURRENT = FIVE` |
-| **Chain assignment (zonewise)** | Live — `dp_catalog.build_catalog`; ~107k smoke on FIVE |
-| **Solver backend** | **`CURRENT_SOLVER = "twoland_wsp"`** |
-| **Land buy** | Probe: hire5 feasible + ≥$1k conservative → `BUY_LAND` next dawn |
-| **Hiring** | `NUM_ACTIVE_HIRES` from solved prefix; batches per `two_lands.md` |
-| **Dawn replan** | Lock commitments; WSP **`track_shed=False`**, `min_balance=0`; unbounded `cons`; **full** conservative handoff (no zone budget clamp); INFEASIBLE → break cascade |
-| **Layout catalog** | `FOUR` + `FIVE` + **`TWO`**; **`CURRENT = TWO`**; pin **`NET_TILE_OPS = z.net_tile_ops`** (hand table) |
+| **One-land WSP** | **LIVE** — `CURRENT_SOLVER = zonewise_wsp`, `CURRENT = FIVE` |
+| **Two-land WSP** | **STRIPPED** — stub `twoland_wsp.py`; no buy/probe/LAND* constants; re-add via `docs/twolands/twoland_readd.md` only |
+| **Solver backend** | **`CURRENT_SOLVER = "zonewise_wsp"`** |
+| **Land buy** | **Off** in live agent |
+| **Hiring** | `NUM_ACTIVE_HIRES` from solved prefix; market hire batches kept |
+| **Dawn replan** | Lock commitments; WSP **`track_shed=False`**, `min_balance=0`; unbounded `cons`; **full** conservative handoff; INFEASIBLE → break cascade |
+| **Layout catalog** | `FOUR` + `FIVE` + `TWO`; **`CURRENT = FIVE`**; pin **`NET_TILE_OPS = z.net_tile_ops`** |
+| **Smoke analysis** | `scripts/smoke_analysis/` restored; layout-aware (`layout.py`) |
 | **Episode download** | `scripts/download_submission_logs.sh` (replays default) |
 | **Replay analysis** | `scripts/replay_analysis/` + `scripts/summarize_replays.sh` → `<id>.json` |
 | **Competition submission** | Local smoke only unless user asks |
 
-## What works (pre-overhaul baseline)
+## What works (live)
 
 | Item | Notes |
 | --- | --- |
-| twoland_wsp smoke @ `d35bff5` | ~**85–87k**; land2 buy ~d8; up to 9 hires when cascade allows |
-| Land2 probe | hire5 only on probe day; no queue commit until buy morning |
-| TWO layout | Zones I–X; land1 = FIVE geometry; land2 NE snakes |
+| zonewise_wsp + FIVE smoke | ~**85k** post-strip (`scripts/smoke.txt`) |
 | WSP conservative cascade | Sep 1 semantics — unbounded cons, no cons≥min_balance |
+| `NUM_ACTIVE_HIRES` + hire batches | Kept from TwoLand era; works on FIVE |
+| TWO layout catalog | Still in `zoning.py` (unused) |
 | download_submission_logs.sh | Replays bulk; `--with-logs` optional |
 | replay_analysis + summarize_replays.sh | Batch JSON; KPIs; slim default |
-| **Submission analysis notebooks** | `submission_nb.py` + `submission_analysis.ipynb` + `submission_comparison.ipynb` — self-contained (download/summarize in-notebook) |
-| Corrected A/B ONE vs TWO | 55934103: 42.1% / 64k; 55938405: 51.2% / 71k |
+| **smoke_analysis** | Layout-aware KPIs/plots; re-run notebook after agent layout flips |
+| **Submission analysis notebooks** | `submission_nb.py` + analysis/comparison nbs |
+| Historical twoland @ `d35bff5` | ~85–87k smoke; land2 buy ~d8 — not live |
+
+## Sep 14–15 — discard TwoLand runtime, return to one-land (KEEP)
+
+| Change | Result |
+| --- | --- |
+| Hard reset / discard thrash | Parity + prior TwoLand recovery paths abandoned (3rd discard) |
+| Strip plan | `one-land_twoland_strip_*` — remove twoland dispatch + buy glue |
+| `CURRENT = FIVE`, `zonewise_wsp` | Live one-land |
+| Stub `twoland_wsp.py` | File kept, not imported |
+| Removed | `BUY_LAND_DAY`, `_land2_owned`, `land_owned`/`buy_morning`, `write_all_solved`, `LAND1_*`/`LAND2_*`, `SolveResult.buy_land` |
+| Kept | `NUM_ACTIVE_HIRES`, hire batches, `TWO` catalog, WSP cash rules |
+| Restored `scripts/smoke_analysis/` | Lost on reset; pulled from pre-reset commit + layout-aware fix |
 
 ## Known issues
 
@@ -120,16 +133,17 @@
 
 ## What's left
 
-1. Post-NE ops crash: `_route_move_cost` wiring and/or NE-hand PASS routing (`by_worker`)
-2. Early-NE-buy / trigger-based NW→NE reserve (day-based) — not static fraction of bank
-3. Fix submission comparison tooling bugs (noise_std, unexplained_delta)
+1. Stabilize / ladder one-land as user asks
+2. TwoLand re-add only from explicit plan + `docs/twolands/twoland_readd.md` (post-NE ops crash still the real gap)
+3. Fix submission comparison tooling bugs (noise_std, unexplained_delta) when doing A/B again
 4. Do not Kaggle submit without ask
 
 ## Do not do unless asked
 
-- **Re-run Sept02 overhaul / regression-recovery plan**
+- **Re-wire `twoland_wsp` / `BUY_LAND` / TWO as live CURRENT**
+- **Re-run Sept02 overhaul / queue-lock chase / OneLand-parity plan**
 - Re-try static per-zone money caps (`money/N`, half-cash clamp, etc.)
-- Buy SW/SE (land 3–4) in twoland_wsp
 - Runtime `bind()` layout switch mid-game
 - Kaggle submit
 - Commit `kaggle_logs/`
+- Hardcode land2 workers in smoke/replay analysis

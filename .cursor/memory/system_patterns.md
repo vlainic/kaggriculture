@@ -4,32 +4,33 @@
 
 **Sept02 overhaul patterns are REJECTED.** Do not copy Wave 2–8 “safety rails” (`cons≥0`, WSP `track_shed=True`, formula `net_tile_ops`, fert dawn pipeline) into live agent. Pre-overhaul WSP: **`track_shed=False`**, **`min_balance=0`**, **unbounded `conservative`**, hand-calibrated `NET_TILE_OPS`. See `progress.md` FAILURE banner.
 
-## Current: DP-catalog assignment + snake executor (pre-Sept02 restore)
+## Current: one-land WSP + snake executor (Sep 15)
 
 ```
 import:
-  agent/zoning.py CURRENT → bind() → WORKERS / TILES / PREAMBLE / NET_TILE_OPS / HIRE_DAILY_COST
+  agent/zoning.py CURRENT=FIVE → bind() → WORKERS / TILES / PREAMBLE / NET_TILE_OPS / HIRE_DAILY_COST
   data/crop_rollouts.json + data/animal_with_pickups.json
-  dp_catalog.build_catalog(horizon, price_of) → stamp chains → CP-SAT count[zone][chain]
-    decode: animals (earliest start_day) → IDLE → crops → TILE_QUEUES
+  zonewise_wsp day-0 wsp_prestart.json (25 tiles)
 
 obs → executor.step
-  ├─ hour0: reset routes; dawn replan if 0 < day < SEASON_LAST; HIRE / BUY
+  ├─ hour0: reset routes; dawn replan if 0 < day < SEASON_LAST; HIRE
   │         replan: lock commitments → CP-SAT empties only
-  │         WSP: track_shed=False, min_balance=0; zonewise: track_shed + liquidity floor
-  ├─ market: dump SELL; buy animals even if tile still empty
+  │         WSP: track_shed=False, min_balance=0; full conservative handoff
+  ├─ market: dump SELL; buy animals even if tile still empty; NUM_ACTIVE_HIRES batches
   └─ snake: preamble → tile ops → shed
 ```
 
-`main.py` → `executor.step`. Import solve + dawn replan from **day 1** (not day 0).
+`main.py` → `executor.step`. Import solve + dawn replan from **day 1** (not day 0).  
+`CURRENT_SOLVER = "zonewise_wsp"`. `twoland_wsp` is a **stub**, not registered.
 
 ### Zone layouts (`agent/zoning.py`)
 
 - **`Layout` / `Zone` dataclasses** — coords, visit order (= route), preamble, `start_hour`, `net_tile_ops`, `is_hand`.
-- **Catalog:** `FOUR` + `FIVE` + **`TWO`** (FIVE land1 + NE land2, 10 zones). **`CURRENT = TWO`** for twoland_wsp; flip to `FIVE` for one-land.
-- Live FIVE/TWO land1 ops **18/17/16/14/13**; land2 **16/14/13/12/11** (`two_lands.md`).
-- **`bind(layout)`** fills module aliases; **`NET_TILE_OPS = z.net_tile_ops`** (hand table). Do not ship formula caps that omit intra-zone route cost.
-- Hire cash: fib sum of hands (FIVE=$7/day).
+- **Catalog:** `FOUR` + `FIVE` + **`TWO`** (kept). **`CURRENT = FIVE`** (live one-land).
+- Live FIVE ops **18/17/16/14/13**. TWO land2 ops **16/14/13/12/11** remain in catalog for a future re-add.
+- **No** module-level `LAND1_*` / `LAND2_*` constants (stripped with TwoLand runtime).
+- **`bind(layout)`** fills module aliases; **`NET_TILE_OPS = z.net_tile_ops`** (hand table).
+- Hire cash: fib sum of active hands (`planner.NUM_ACTIVE_HIRES`).
 - Spec notes: `data/five_zone_plan.md` (FIVE); `data/two_lands.md`.
 
 ### DP catalog (`agent/dp_catalog.py`)
@@ -48,25 +49,15 @@ obs → executor.step
 - **Ops (with pickups JSON):** **`daily_tile_ops` only** (+ hire preamble if any animal active). Do **not** add `daily_wheat_pickup` / `daily_animal_place` / `daily_fert_pickup` or extra `build_day += 1` — those double-count PICKUP/BUILD already in the tape.
 - **Cash / W/F (day-0):** balance chain, shed ledgers, hire daily; **`cascade_reserve`** enforces `min_close0` for downstream zones.
 - **Replan (zonewise):** `track_shed=True`; shed W/F from obs; **`min_balance`** on **balance_vars only** (liquidity floor); never on `conservative`.
-- **Replan (WSP / twoland):** **`track_shed=False`**, **`min_balance=0`**; `cons = NewIntVar(-200_000, 200_000)` — **no** `cons >= min_balance`; cascade handoff `opening = res["conservative"]` **uncapped** (full handoff); break if `open0 < 0`. Do **not** clamp zone openings to `money/N` or `min(money/2, handoff)` — ladder rejected both.
+- **Replan (WSP):** **`track_shed=False`**, **`min_balance=0`**; `cons = NewIntVar(-200_000, 200_000)` — **no** `cons >= min_balance`; cascade handoff `opening = res["conservative"]` **uncapped** (full handoff); break if `open0 < 0`. Do **not** clamp zone openings to `money/N` or `min(money/2, handoff)` — ladder rejected both.
 - **Dawn replan triage:** empties + WEED only; locked = board + queue suffix; horizon = remaining days. INFEASIBLE → preserve queues (never IDLE wipe).
-- **Zonewise solver:** sequential zones; handoff = close balance; stop if `open0 < 0`.
-- **WSP / twoland:** atomic patterns; day-0 `wsp_prestart.json`; replan from d≥3; hire5 probe → buy if cons leftover ≥ $1k; buy morning full cascade.
+- **Zonewise / WSP solvers:** sequential zones; WSP atomic patterns; day-0 `wsp_prestart.json`; replan from d≥3.
+- **Hiring:** `NUM_ACTIVE_HIRES` updated from solved prefix after farmer-ok replan; market `_hire_batches` for h=0/h=1.
 
-### Two-land flow (`twoland_wsp` + planner + market)
+### Two-land flow (HISTORICAL — not live)
 
-```
-d≥3 replan (NE not owned):
-  solve land1 → probe hire5–9 → ROI test → BUY_LAND_DAY = tomorrow
-  (no land2 queues written on probe day)
-
-BUY_LAND_DAY dawn:
-  replan all zones until INFEASIBLE → NUM_ACTIVE_HIRES after INFEASIBLE gate
-  market h=0: BUY_LAND + hire batches per two_lands.md
-
-NE owned:
-  full cascade each replan; update NUM_ACTIVE_HIRES (non-empty zones only)
-```
+Was: probe hire5 → `BUY_LAND_DAY` → buy morning cascade VI–X + `NUM_ACTIVE_HIRES`.  
+Stripped Sep 15. See `docs/twolands/twoland_readd.md` / `docs/twoland/*` before rewiring.
 
 ### Planner catalog prices (`effective_price`)
 

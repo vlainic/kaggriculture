@@ -1,47 +1,42 @@
 # Active Context
 
-## Current focus (Sep 11, 2026)
+## Current focus (Sep 15, 2026)
 
-**Keep full conservative handoff** in `twoland_wsp` — **no** per-zone spend / opening clamp. Static NW budget splits lost on the ladder; softest → hardest was monotonic worse.
+**Live agent = one-land WSP.** `CURRENT_SOLVER = "zonewise_wsp"`, `zoning.CURRENT = FIVE`. TwoLand runtime wiring stripped (third discard of TwoLand agent experiments this stretch).
 
-Working agent: **two-land WSP** (`twoland_wsp` + `CURRENT = TWO`), pre-Sept02 / `d35bff5` cash semantics. Broken Sept02 stack: local `backup/sept02-recovery`.
-
-Diagnosis writeup: [`docs/twoland/diagnosis_0911.md`](../../docs/twoland/diagnosis_0911.md) (A OneLand `55934103` vs B TwoLand `55938405`).
+`agent/solvers/twoland_wsp.py` is a **stub** (not imported). `TWO` layout stays in the zoning catalog only. Re-add path / notes: [`docs/twolands/twoland_readd.md`](../../docs/twolands/twoland_readd.md).
 
 ### Status
 
 | Item | State |
 | --- | --- |
-| Live agent | `twoland_wsp` + `CURRENT = TWO`; **full** cascade `opening = res["conservative"]` |
-| Zone money caps | **REJECTED** — no-cap best (rating ~555–561); `min(day_start/2, handoff)` ~533; `day_start/n_hands` ~509 |
-| Sept02 overhaul | **FAILED** — do not resume |
-| TwoLand vs OneLand gap | ~+7k only (not 30–50%); root cause = **post-NE ops/weed collapse**, not glut |
+| Live agent | **`zonewise_wsp` + `CURRENT = FIVE`** |
+| TwoLand runtime | **REMOVED** — no `BUY_LAND_DAY`, no land2 probe, no `LAND1_`/`LAND2_` constants |
+| `twoland_wsp.py` | Stub file kept; not in `_BACKENDS` |
+| `TWO` layout | Catalog only (unused at runtime) |
+| Kept from TwoLand era | `NUM_ACTIVE_HIRES`, hire batches, WSP cash semantics, smoke/replay tooling |
+| Smoke (post-strip) | ~**85k** one-land on `scripts/smoke.txt` |
+| Sept02 overhaul | Still **FAILED** — do not resume |
+| Parity / queue-lock / min-overhaul | **DISCARDED** (third reset) — do not re-litigate without a new plan |
 
-### Confirmed (diagnosis_0911)
+### What was done this session (Sep 14–15)
 
-1. **NE buy → ops crash → weeds** — `ops_utilization` drops on buy-day; occupied% bottoms +1 day; recovery lag ~half of NE lifespan. Opponent expands without PASS spike → our bug.
-2. **Late NE buy correlates with worse score** — day timing (cash ≈9–10k proxy), not income rate alone.
-3. **Premium glut ruled out** — MELON/WOOL fill & rv/q similar A vs B.
-4. **Hard NW spend caps ruled out** — both capped variants lost to no-cap.
+1. **Hard reset** toward pre-parity tip (`5b58c07` era) after parity / overhaul thrash.
+2. **One-land strip plan** — remove all `twoland_wsp` + TWO *runtime* glue; keep catalog + stub file.
+3. Implemented strip in `solvers/__init__.py`, `types.py`, `planner.py`, `market.py`, `zoning.py`.
+4. Restored `scripts/smoke_analysis/` (lost on reset) and made it **layout-aware** via `smoke_analysis/layout.py` (no hard `LAND2_WORKERS`).
 
 ### Anti-patterns (still)
 
 - Floor `conservative` at 0 / `cons >= min_balance`
 - `track_shed=True` on WSP replan with W/F in conservative spend
-- Static per-zone bank split (`money/N`, `min(money/2, handoff)`, etc.)
-- Gate strategy on n=3 smoke; prefer ≥30 episodes / ladder
+- Static per-zone bank split
+- Another eligibility / queue-lock chase for TwoLand stuck hands
+- Treating “parity” / “min overhaul” as green light without a fresh approved plan
+- Hardcoding land2 workers in analysis tooling
 
-### What still stands
+### Immediate next steps
 
-1. Two-land WSP — probe hire5 → `BUY_LAND` → cascade VI–X
-2. Layout TWO — hand-calibrated `net_tile_ops`
-3. Planner / market — `BUY_LAND_DAY`, `NUM_ACTIVE_HIRES`
-4. Submission notebooks — `submission_analysis` / `submission_comparison` + `replay_analysis`
-
-### Immediate next steps (from diagnosis priority)
-
-1. Wire `_route_move_cost` into `_formula_net_tile_ops` (or keep hand caps but fix real buy-day ops) — root-cause candidate
-2. Check `by_worker` PASS split (NE hand ~100% PASS?) — may outrank route-cost
-3. Early-NE-buy heuristic (day-based, not cash) / trigger-based NW→NE reserve — **not** a gentler static cap
-4. Fix comparison tooling (`noise_std` fallback, unexplained_delta, wool rv/q zero-fill)
-5. Agents never submit without explicit ask
+1. Stabilize one-land (`zonewise_wsp` + FIVE) — smoke / ladder as user asks
+2. Only re-open TwoLand from [`docs/twolands/twoland_readd.md`](../../docs/twolands/twoland_readd.md) when user asks — do not sneak `twoland_wsp` back into the dispatcher
+3. Agents never submit without explicit ask
