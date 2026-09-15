@@ -40,6 +40,22 @@ def _step_toward(fx: int, fy: int, tx: int, ty: int) -> str:
     return "PASS"
 
 
+def _owned_shed_tiles(me: dict) -> frozenset[tuple[int, int]]:
+    return frozenset(
+        (x, y)
+        for x, y in workers.SHED_ADJACENT
+        if me["tiles"][y][x] != "LOCKED"
+    )
+
+
+def _step_to_owned_shed(me: dict, fx: int, fy: int) -> str | None:
+    owned = _owned_shed_tiles(me)
+    if not owned or (fx, fy) in owned:
+        return None
+    tx, ty = min(owned, key=lambda p: abs(p[0] - fx) + abs(p[1] - fy))
+    return _step_toward(fx, fy, tx, ty)
+
+
 def _tile_at(me: dict, idx: int):
     x, y = workers.TILE_COORDS[idx]
     return me["tiles"][y][x]
@@ -171,9 +187,15 @@ class Executor:
             w = workers.worker_for_hand_idx(i)
             pos = tuple(me["hands"][i]) if i < len(me["hands"]) else None
             adj = int(pos in workers.SHED_ADJACENT) if pos else 0
+            owned = (
+                int(pos in _owned_shed_tiles(me))
+                if pos is not None
+                else 0
+            )
             _log(
                 f"[exec] d={day} h={hour} hand{i}={w} {_fmt(act)} "
-                f"pos={pos} adj={adj}" + (f" {note}" if note else "")
+                f"pos={pos} adj={adj} owned={owned}"
+                + (f" {note}" if note else "")
             )
 
         return {"farmer": farmer, "hands": hands, "market": orders}
@@ -289,9 +311,14 @@ class Executor:
             hired = i < len(me["hands"])
             pos = tuple(me["hands"][i]) if hired else None
             adj = pos in workers.SHED_ADJACENT if hired else False
+            owned = (
+                int(pos in _owned_shed_tiles(me))
+                if hired and pos is not None
+                else 0
+            )
             _log(
                 f"[hands] d={day} h1 {w} hired={int(hired)} pos={pos} "
-                f"shed_adj={int(adj)}"
+                f"shed_adj={int(adj)} owned={owned}"
             )
 
     def _log_snap(self, obs: dict, me: dict, day: int, hour: int) -> None:
@@ -376,21 +403,28 @@ class Executor:
                 else {}
             )
             if (fx, fy) in workers.SHED_ADJACENT and inv.get("WHEAT", 0) <= 0:
-                need = script.wheat_pickup_needed(
-                    me, worker, self._tile_state, inv
-                )
-                if need > 0 and int(private["shed"].get("WHEAT", 0)) > 0:
-                    n = min(need, int(private["shed"].get("WHEAT", 0)))
-                    return self._emit_action(
-                        worker, ["PICKUP", "WHEAT", n], f"{worker} wheat"
+                if (fx, fy) not in _owned_shed_tiles(me):
+                    step = _step_to_owned_shed(me, fx, fy)
+                    if step:
+                        return self._emit_action(
+                            worker, [step], f"{worker} ->shed"
+                        )
+                else:
+                    need = script.wheat_pickup_needed(
+                        me, worker, self._tile_state, inv
                     )
+                    if need > 0 and int(private["shed"].get("WHEAT", 0)) > 0:
+                        n = min(need, int(private["shed"].get("WHEAT", 0)))
+                        return self._emit_action(
+                            worker, ["PICKUP", "WHEAT", n], f"{worker} wheat"
+                        )
 
         route = workers.WORKER_ROUTES[worker]
         if self._route_idx[worker] >= len(route):
             if self._zone_pending(worker, me, private, day, inv_idx, harvest_only):
                 self._route_idx[worker] = 0
             else:
-                drop = self._drop_if_adjacent(fx, fy, private, inv_idx)
+                drop = self._drop_if_adjacent(fx, fy, private, inv_idx, me)
                 return drop or (["PASS"], f"{worker} done")
 
         idx = route[self._route_idx[worker]]
@@ -449,9 +483,16 @@ class Executor:
                 )
                 if inv.get("WHEAT", 0) <= 0:
                     adj = (fx, fy) in workers.SHED_ADJACENT
+                    on_owned = (fx, fy) in _owned_shed_tiles(me)
                     shed_w = int(private["shed"].get("WHEAT", 0))
                     inv_w = int(inv.get("WHEAT", 0))
-                    if adj:
+                    if adj and not on_owned:
+                        step = _step_to_owned_shed(me, fx, fy)
+                        if step:
+                            return self._emit_action(
+                                worker, [step], f"{worker} feed->shed"
+                            )
+                    if on_owned:
                         n = min(
                             script.wheat_pickup_needed(
                                 me, worker, self._tile_state, inv
@@ -462,7 +503,7 @@ class Executor:
                             _dbg(
                                 f"[pick] d={self._day} h={self._hour} {worker} "
                                 f"want=WHEAT feed-wait pos=({fx},{fy}) adj=1 "
-                                f"shed={shed_w} inv={inv_w} n={n}"
+                                f"owned=1 shed={shed_w} inv={inv_w} n={n}"
                             )
                             return self._emit_action(
                                 worker, ["PICKUP", "WHEAT", n], f"{worker} feed-wait"
@@ -470,7 +511,7 @@ class Executor:
                     _dbg(
                         f"[pick] d={self._day} h={self._hour} {worker} "
                         f"want=WHEAT feed-wait pos=({fx},{fy}) adj={int(adj)} "
-                        f"shed={shed_w} inv={inv_w}"
+                        f"owned={int(on_owned)} shed={shed_w} inv={inv_w}"
                     )
                     return ["PASS"], f"{worker} feed-wait"
                 return ["PASS"], f"{worker} feed-wait"
@@ -546,7 +587,7 @@ class Executor:
         fy: int,
         inv_idx: int,
     ) -> tuple[list, str]:
-        drop = self._drop_if_adjacent(fx, fy, private, inv_idx)
+        drop = self._drop_if_adjacent(fx, fy, private, inv_idx, me)
         if drop:
             self._endgame_done[worker].clear()
             return drop
@@ -556,8 +597,12 @@ class Executor:
         )
         if target is None:
             if _inv_nonempty(private, inv_idx):
-                if (fx, fy) in workers.SHED_ADJACENT:
+                if (fx, fy) in _owned_shed_tiles(me):
                     return ["DROP"], f"{worker} drop"
+                if (fx, fy) in workers.SHED_ADJACENT:
+                    step = _step_to_owned_shed(me, fx, fy)
+                    if step:
+                        return [step], f"{worker} ->shed"
                 return [_step_toward(fx, fy, *workers.SHED_DOOR)], f"{worker} ->shed"
             return ["PASS"], f"{worker} done"
 
@@ -605,18 +650,23 @@ class Executor:
             if need <= 0:
                 self._preamble_idx[worker] += 1
                 return self._preamble_action(worker, me, private, fx, fy)
-            if (fx, fy) not in workers.SHED_ADJACENT:
-                return ["PASS"], f"{worker} pre-wait-shed"
+            on_owned = (fx, fy) in _owned_shed_tiles(me)
+            if not on_owned:
+                step_move = _step_to_owned_shed(me, fx, fy)
+                if step_move:
+                    return [step_move], f"{worker} pre->shed"
             n = min(need, private["shed"].get("WHEAT", 0))
-            if n > 0:
+            if on_owned and n > 0:
                 _dbg(
                     f"[pick] d={self._day} h={self._hour} {worker} want=WHEAT "
-                    f"pos=({fx},{fy}) adj=1 shed={int(private['shed'].get('WHEAT', 0))} "
+                    f"pos=({fx},{fy}) adj=1 owned=1 "
+                    f"shed={int(private['shed'].get('WHEAT', 0))} "
                     f"inv={int(inv.get('WHEAT', 0))} n={n}"
                 )
                 self._preamble_idx[worker] += 1
                 return ["PICKUP", "WHEAT", n], f"{worker} pre-wheat"
-            self._preamble_idx[worker] += 1
+            if on_owned:
+                self._preamble_idx[worker] += 1
             return self._preamble_action(worker, me, private, fx, fy)
 
         if step == "PICKUP_ANIMALS":
@@ -627,13 +677,19 @@ class Executor:
                 self._preamble_idx[worker] += 1
                 return self._preamble_action(worker, me, private, fx, fy)
             adj = (fx, fy) in workers.SHED_ADJACENT
+            on_owned = (fx, fy) in _owned_shed_tiles(me)
             shed_n = int(private["shed"].get(label, 0))
             inv_n = int(inv.get(label, 0))
+            if not on_owned:
+                step_move = _step_to_owned_shed(me, fx, fy)
+                if step_move:
+                    return [step_move], f"{worker} pre->shed"
             _dbg(
                 f"[pick] d={self._day} h={self._hour} {worker} want={label} "
-                f"pos=({fx},{fy}) adj={int(adj)} shed={shed_n} inv={inv_n}"
+                f"pos=({fx},{fy}) adj={int(adj)} owned={int(on_owned)} "
+                f"shed={shed_n} inv={inv_n}"
             )
-            if not adj or shed_n <= 0:
+            if not on_owned or shed_n <= 0:
                 _dbg(
                     f"[pick] d={self._day} h={self._hour} {worker} want={label} give-up"
                 )
@@ -666,6 +722,11 @@ class Executor:
     ) -> tuple[list, str] | None:
         if (fx, fy) not in workers.SHED_ADJACENT:
             return None
+        if (fx, fy) not in _owned_shed_tiles(me):
+            step = _step_to_owned_shed(me, fx, fy)
+            if step:
+                return [step], "->shed"
+            return None
         inv = private["inventories"][inv_idx] if inv_idx < len(private["inventories"]) else {}
 
         need = script.wheat_pickup_needed(me, worker, self._tile_state, inv)
@@ -682,9 +743,14 @@ class Executor:
         return None
 
     def _drop_if_adjacent(
-        self, fx: int, fy: int, private: dict, inv_idx: int
+        self, fx: int, fy: int, private: dict, inv_idx: int, me: dict
     ) -> tuple[list, str] | None:
         if (fx, fy) not in workers.SHED_ADJACENT:
+            return None
+        if (fx, fy) not in _owned_shed_tiles(me):
+            step = _step_to_owned_shed(me, fx, fy)
+            if step:
+                return [step], "->shed"
             return None
         inv = private["inventories"][inv_idx] if inv_idx < len(private["inventories"]) else {}
         if any(v > 0 for v in inv.values()):

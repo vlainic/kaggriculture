@@ -113,7 +113,6 @@ FIVE = Layout(
             name="hire1",
             tiles=(5, 6, 7, 8, 9),
             preamble=(
-                "WEST",
                 "PICKUP_WHEAT",
                 "PICKUP_ANIMALS",
                 "WEST",
@@ -129,7 +128,6 @@ FIVE = Layout(
             name="hire2",
             tiles=(10, 11, 12, 13, 14),
             preamble=(
-                "NORTH",
                 "PICKUP_WHEAT",
                 "PICKUP_ANIMALS",
                 "WEST",
@@ -143,7 +141,7 @@ FIVE = Layout(
         Zone(
             name="hire3",
             tiles=(15, 16, 17, 18, 19),
-            preamble=("WEST", "PICKUP_WHEAT", "PICKUP_ANIMALS", "WEST", "WEST"),
+            preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS", "WEST", "WEST"),
             start_hour=2,
             net_tile_ops=14,
             is_hand=True,
@@ -151,7 +149,7 @@ FIVE = Layout(
         Zone(
             name="hire4",
             tiles=(20, 21, 22, 23, 24),
-            preamble=("NORTH", "PICKUP_WHEAT", "PICKUP_ANIMALS", "WEST"),
+            preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS", "WEST"),
             start_hour=2,
             net_tile_ops=13,
             is_hand=True,
