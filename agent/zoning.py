@@ -232,7 +232,7 @@ LAND1_TILE_COUNT = len(FIVE.coords)
 LAND1_WORKERS: tuple[str, ...] = tuple(z.name for z in FIVE.zones)
 LAND2_WORKERS: tuple[str, ...] = tuple(z.name for z in TWO.zones if z.name not in LAND1_WORKERS)
 
-CURRENT: Layout = TWO
+CURRENT: Layout = FIVE
 
 
 def _fib_hire_cost(n: int) -> int:

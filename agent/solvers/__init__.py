@@ -7,7 +7,7 @@ from collections.abc import Callable
 from agent.solvers import monolithic, twoland_wsp, zonewise, zonewise_wsp
 from agent.solvers.types import SolveResult
 
-CURRENT_SOLVER = "twoland_wsp"  # "monolithic" | "zonewise" | "zonewise_wsp" | "twoland_wsp"
+CURRENT_SOLVER = "zonewise_wsp"  # "monolithic" | "zonewise" | "zonewise_wsp" | "twoland_wsp"
 
 _BACKENDS = {
     "monolithic": monolithic,
