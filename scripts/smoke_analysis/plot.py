@@ -300,11 +300,15 @@ def plot_earnings_by_zone(report: dict[str, Any], *, title: str | None = None) -
         ax.axvline(buy_day, color="white", ls="--", lw=1.5, alpha=0.9)
         ax.axvline(buy_day, color="#2e7d32", ls="--", lw=1, label=f"BUY_LAND d={buy_day}")
 
-    earn_logged = (report.get("earnings") or {}).get("earn_logged")
-    n_events = sum((report.get("earnings") or {}).get("harvest_events_by_worker", {}).values())
+    earnings = report.get("earnings") or {}
+    earn_logged = earnings.get("earn_logged")
+    harv_inferred = earnings.get("harv_inferred")
+    n_events = sum(earnings.get("harvest_events_by_worker", {}).values())
     title_suffix = f" ({n_events} harvest/collect events)"
-    if earn_logged is False:
-        title_suffix = " (re-run smoke for earn= logs)"
+    if earn_logged is False and harv_inferred:
+        title_suffix = f" ({n_events} events; [harv]×dawn quote, PLANT→WHEAT)"
+    elif earn_logged is False:
+        title_suffix = " (re-run smoke for earn= or [harv] logs)"
     ax.set_title(f"{stem} — zone harvest earnings (Gantt view){title_suffix}")
     ax.set_xlim(-0.5, SEASON_DAYS - 0.5)
     if buy_day is not None:

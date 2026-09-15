@@ -75,10 +75,10 @@ def _worker_for_hand(hand_idx: int, hand_workers: tuple[str, ...]) -> str:
 def _parse_actor(line: str, hand_workers: tuple[str, ...]) -> tuple[str, str] | None:
     if " farmer " in line:
         return "farmer", line.split(" farmer ", 1)[1].strip()
-    hm = re.search(r" hand(\d+) ", line)
+    hm = re.search(r" hand(\d+)(?:=\w+)? ", line)
     if hm:
         hand_idx = int(hm.group(1))
-        rest = line.split(f" hand{hand_idx} ", 1)[1].strip()
+        rest = line[hm.end() :].strip()
         return _worker_for_hand(hand_idx, hand_workers), rest
     return None
 

@@ -14,6 +14,24 @@ EARN_RE = re.compile(r"\bearn=(\d+)\b")
 TILE_RE = re.compile(r"\bt(\d+)\b")
 FERTILIZER_BASE = 100
 _COLLECT_VERBS = frozenset({"COLLECT_FERTILIZER"})
+HARV_RE = re.compile(
+    r"\[harv\] d=(\d+) h=(\d+) (\S+) t\d+ kind=(\S+) yield=(\d+)"
+)
+# Tile kind on [harv] lines — crop product unknown for PLANT; dawn quote is approximate.
+_KIND_PRODUCT = {"PLANT": "WHEAT", "COOP": "EGG", "PASTURE": "MILK"}
+_PRICE_KEYS = frozenset(
+    {
+        "WHEAT",
+        "CARROT",
+        "TOMATO",
+        "STRAWBERRY",
+        "MELON",
+        "EGG",
+        "MILK",
+        "WOOL",
+        "FERTILIZER",
+    }
+)
 
 
 def _worker_for_hand(hand_idx: int, hand_workers: tuple[str, ...]) -> str:
@@ -32,12 +50,37 @@ def _tile_worker(tile_idx: int, worker_tiles: dict[str, tuple[int, ...]]) -> str
 def _parse_actor(line: str, hand_workers: tuple[str, ...]) -> tuple[str, str] | None:
     if " farmer " in line:
         return "farmer", line.split(" farmer ", 1)[1].strip()
-    hm = re.search(r" hand(\d+) ", line)
+    hm = re.search(r" hand(\d+)(?:=\w+)? ", line)
     if hm:
         hand_idx = int(hm.group(1))
-        rest = line.split(f" hand{hand_idx} ", 1)[1].strip()
+        rest = line[hm.end() :].strip()
         return _worker_for_hand(hand_idx, hand_workers), rest
     return None
+
+
+def _dawn_quotes_by_day(
+    dawn: dict[int, dict[str, Any]], *, season_days: int
+) -> dict[int, dict[str, int]]:
+    out: dict[int, dict[str, int]] = {}
+    for day in range(season_days):
+        row = dawn.get(day) or {}
+        prices = {
+            k: int(v)
+            for k, v in row.items()
+            if k in _PRICE_KEYS and isinstance(v, (int, float))
+        }
+        if prices:
+            out[day] = prices
+    return out
+
+
+def _harv_earn(
+    day: int, kind: str, yield_units: int, quotes_by_day: dict[int, dict[str, int]]
+) -> int:
+    product = _KIND_PRODUCT.get(kind, "WHEAT")
+    prices = quotes_by_day.get(day) or quotes_by_day.get(max(quotes_by_day) if quotes_by_day else 0, {})
+    unit = int(prices.get(product, 25))
+    return max(0, yield_units) * unit
 
 
 def parse_earnings(
@@ -48,8 +91,9 @@ def parse_earnings(
     hand_workers: tuple[str, ...] = (),
     worker_tiles: dict[str, tuple[int, ...]] | None = None,
 ) -> dict[str, Any]:
-    """Sell revenue from sell_rev logs; harvest/collect from earn= on exec lines."""
+    """Sell revenue from sell_rev logs; harvest/collect from earn= or [harv] debug lines."""
     dawn = {int(s["day"]): s for s in dawn_snaps(snaps)}
+    quotes_by_day = _dawn_quotes_by_day(dawn, season_days=season_days)
     sell_by_day = [0.0] * season_days
     net_by_day = [0.0] * season_days
     harvest_by_worker: dict[str, list[float]] = defaultdict(
@@ -58,6 +102,7 @@ def parse_earnings(
     harvest_events_by_worker: dict[str, int] = defaultdict(int)
     sell_rev_logged = False
     earn_logged = False
+    harv_inferred = False
     worker_tiles = worker_tiles or {}
 
     dawn_money = [
@@ -113,6 +158,23 @@ def parse_earnings(
         harvest_by_worker[worker][day] += earn
         harvest_events_by_worker[worker] += 1
 
+    for line in lines:
+        hm = HARV_RE.search(line)
+        if not hm:
+            continue
+        day = int(hm.group(1))
+        if not (0 <= day < season_days):
+            continue
+        worker = hm.group(3)
+        kind = hm.group(4)
+        yield_units = int(hm.group(5))
+        earn = _harv_earn(day, kind, yield_units, quotes_by_day)
+        if earn <= 0:
+            continue
+        harv_inferred = True
+        harvest_by_worker[worker][day] += earn
+        harvest_events_by_worker[worker] += 1
+
     harvest_total = [0.0] * season_days
     for series in harvest_by_worker.values():
         for d in range(season_days):
@@ -122,6 +184,7 @@ def parse_earnings(
         "sell_revenue_by_day": sell_by_day,
         "sell_rev_logged": sell_rev_logged,
         "earn_logged": earn_logged,
+        "harv_inferred": harv_inferred,
         "net_cash_by_day": net_by_day,
         "harvest_by_worker_by_day": dict(harvest_by_worker),
         "harvest_events_by_worker": dict(harvest_events_by_worker),

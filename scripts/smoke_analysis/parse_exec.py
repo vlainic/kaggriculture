@@ -6,7 +6,10 @@ import re
 from collections import defaultdict
 from typing import Any
 
-PASS_RE = re.compile(r"\[exec\] d=(\d+) h=(\d+) (farmer|hand\d+) PASS")
+PASS_ACT_RE = re.compile(
+    r"\[exec\] d=(\d+) h=(\d+) "
+    r"(?:farmer|hand\d+(?:=(?P<hworker>\w+))?)\s+(?P<act>\S+)"
+)
 EXEC_RE = re.compile(r"\[exec\] d=(\d+) h=(\d+)")
 REWARD_RE = re.compile(r"Player 0: reward=([\d.]+)")
 START_BLOCK_RE = re.compile(
@@ -18,9 +21,19 @@ START_BLOCK_RE = re.compile(
 def parse_passes(lines: list[str], *, season_days: int = 30) -> dict[str, Any]:
     counts: dict[tuple[int, str], int] = defaultdict(int)
     for line in lines:
-        m = PASS_RE.search(line)
-        if m:
-            counts[(int(m.group(1)), m.group(3))] += 1
+        m = PASS_ACT_RE.search(line)
+        if not m or m.group("act") != "PASS":
+            continue
+        day = int(m.group(1))
+        hworker = m.group("hworker")
+        if hworker:
+            worker_key = hworker
+        elif " farmer " in line:
+            worker_key = "farmer"
+        else:
+            hm = re.search(r" hand(\d+)", line)
+            worker_key = f"hand{hm.group(1)}" if hm else "farmer"
+        counts[(day, worker_key)] += 1
     by_worker: dict[str, list[int]] = defaultdict(lambda: [0] * season_days)
     for (day, worker), n in counts.items():
         if 0 <= day < season_days:
