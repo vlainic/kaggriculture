@@ -65,7 +65,7 @@ def _dawn_empty(me: dict, idx: int, day: int) -> bool:
     tile = _tile_at(me, idx)
     if tile is None:
         return True
-    if planner.is_buy_morning_ne_locked(tile, idx, day):
+    if planner.is_buy_morning_locked(tile, idx, day, me):
         return True
     return False
 
@@ -237,7 +237,7 @@ class Executor:
         ne_locked = sum(
             1
             for idx in range(workers.NUM_TILES)
-            if planner.is_buy_morning_ne_locked(_tile_at(me, idx), idx, day)
+            if planner.is_buy_morning_locked(_tile_at(me, idx), idx, day, me)
         )
         _log(
             f"[exec] d={day} dawn_empty={len(self._empty_at_dawn)} "
@@ -255,7 +255,7 @@ class Executor:
             locked = sum(
                 1
                 for idx in workers.WORKER_TILES[w]
-                if planner.is_buy_morning_ne_locked(_tile_at(me, idx), idx, day)
+                if planner.is_buy_morning_locked(_tile_at(me, idx), idx, day, me)
             )
             live = sum(
                 1

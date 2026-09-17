@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 _SHED_DOOR = (4, 4)
@@ -226,14 +227,92 @@ TWO = Layout(
     shed_adjacent=_SHED_ADJACENT,
 )
 
-CURRENT: Layout = TWO
+# Tile grid — land 1+2 = TWO; land 3 = SW columns y=5..9 (75 tiles total)
+#   XV XIV XIII XII  XI
+#   75  70  65  60  55
+#   74  69  64  59  54
+#   73  68  63  58  53
+#   72  67  62  57  52
+#   71  66  61  56  51
+# ops = daily_tile_ops only + hire animal preamble; do not side-charge PICKUP
+THREE = Layout(
+    coords=TWO.coords + (
+        (4, 5), (4, 6), (4, 7), (4, 8), (4, 9),  # 51-55 hire10 / zone XI
+        (3, 5), (3, 6), (3, 7), (3, 8), (3, 9),  # 56-60 hire11 / XII
+        (2, 5), (2, 6), (2, 7), (2, 8), (2, 9),  # 61-65 hire12 / XIII
+        (1, 5), (1, 6), (1, 7), (1, 8), (1, 9),  # 66-70 hire13 / XIV
+        (0, 5), (0, 6), (0, 7), (0, 8), (0, 9),  # 71-75 hire14 / XV
+    ),
+    zones=TWO.zones + (
+        Zone(
+            name="hire10",
+            tiles=(50, 51, 52, 53, 54),
+            preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS"),
+            start_hour=2,
+            net_tile_ops=14,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire11",
+            tiles=(55, 56, 57, 58, 59),
+            preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS", "WEST"),
+            start_hour=2,
+            net_tile_ops=14,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire12",
+            tiles=(60, 61, 62, 63, 64),
+            preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS", "WEST", "WEST"),
+            start_hour=2,
+            net_tile_ops=13,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire13",
+            tiles=(65, 66, 67, 68, 69),
+            preamble=("PICKUP_WHEAT", "PICKUP_ANIMALS", "WEST", "WEST", "WEST"),
+            start_hour=2,
+            net_tile_ops=12,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire14",
+            tiles=(70, 71, 72, 73, 74),
+            preamble=(
+                "PICKUP_WHEAT",
+                "PICKUP_ANIMALS",
+                "WEST",
+                "WEST",
+                "WEST",
+                "WEST",
+            ),
+            start_hour=2,
+            net_tile_ops=12,
+            is_hand=True,
+        ),
+    ),
+    shed_door=_SHED_DOOR,
+    shed_adjacent=_SHED_ADJACENT,
+)
+
+CURRENT: Layout = TWO  # overwritten below from KAGGRI_LANDS
 
 LAND2_BUY_COST = 1000
+LAND3_BUY_COST = 2000
 LAND1_TILE_COUNT = len(FIVE.coords)
+LAND2_TILE_COUNT = len(TWO.coords)
 LAND1_WORKERS: tuple[str, ...] = tuple(z.name for z in FIVE.zones)
 LAND2_WORKERS: tuple[str, ...] = tuple(
     z.name for z in TWO.zones if z.name not in LAND1_WORKERS
 )
+LAND3_WORKERS: tuple[str, ...] = tuple(
+    z.name for z in THREE.zones if z.name not in LAND1_WORKERS + LAND2_WORKERS
+)
+
+# KAGGRI_LANDS=3 → ThreeLand; default / anything else → TwoLand
+USE_THREE: bool = os.environ.get("KAGGRI_LANDS", "2") == "3"
+CURRENT = THREE if USE_THREE else TWO
 
 
 def _fib_hire_cost(n: int) -> int:
@@ -303,4 +382,39 @@ def worker_for_tile(idx: int) -> str:
     return WORKERS[0] if WORKERS else "farmer"
 
 
+def _register_land3_catalog() -> None:
+    """Expose LAND3 tile/ops/cost tables while CURRENT stays TWO."""
+    global WORKER_TILES, WORKER_ROUTES, PREAMBLE, HAND_START_HOUR, NET_TILE_OPS
+    global HAND_DAILY_COST
+    if not LAND3_WORKERS:
+        return
+    vals = list(HAND_DAILY_COST.values())
+    if len(vals) >= 2:
+        a, b = vals[-1] + vals[-2], vals[-1] + vals[-2] + vals[-1]
+    elif len(vals) == 1:
+        a, b = vals[0], vals[0]
+    else:
+        a, b = 1, 1
+    for z in THREE.zones:
+        if z.name not in LAND3_WORKERS:
+            continue
+        WORKER_TILES[z.name] = list(z.tiles)
+        WORKER_ROUTES[z.name] = list(z.tiles)
+        PREAMBLE[z.name] = list(z.preamble)
+        HAND_START_HOUR[z.name] = z.start_hour
+        NET_TILE_OPS[z.name] = z.net_tile_ops
+        HAND_DAILY_COST[z.name] = a
+        a, b = b, a + b
+
+
 bind(CURRENT)
+if CURRENT is TWO:
+    _register_land3_catalog()
+_layout_name = (
+    "THREE" if CURRENT is THREE else "TWO" if CURRENT is TWO else "FIVE" if CURRENT is FIVE else "FOUR"
+)
+print(
+    f"[zoning] CURRENT={_layout_name} tiles={NUM_TILES} hands={NUM_HIRES} "
+    f"KAGGRI_LANDS={os.environ.get('KAGGRI_LANDS', '2')}",
+    flush=True,
+)

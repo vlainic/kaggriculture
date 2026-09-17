@@ -137,6 +137,7 @@ def tile_needs_work(
     dig_plant_ok: bool = False,
 ) -> bool:
     tile = _tile_at(me, idx)
+    dawn = empty_at_dawn if empty_at_dawn is not None else set()
     if isinstance(tile, dict) and tile.get("kind") == "WEED":
         return True
     if pending_dig:
@@ -148,13 +149,15 @@ def tile_needs_work(
     item = current_queue_item(idx, queue_idx)
     if item is None:
         return False
-    if tile is None:
-        dawn = empty_at_dawn if empty_at_dawn is not None else set()
+    # Buy-morning expand tiles stay "LOCKED" until market runs; dawn set treats them empty.
+    if tile is None or (tile == "LOCKED" and idx in dawn):
         return can_start_today(idx, dawn, dig_plant_ok) and (
             _start_lifecycle(item, private, inv_idx, harvest_only, idx, dawn, dig_plant_ok)
             is not None
         )
-    if isinstance(tile, dict) and tile.get("kind") in ("COOP", "PASTURE"):
+    if not isinstance(tile, dict):
+        return False
+    if tile.get("kind") in ("COOP", "PASTURE"):
         if tile_needs_feed(tile, day):
             return True
     return _lifecycle_pending(
@@ -231,7 +234,7 @@ def next_tile_action(
             return _harvest_only_fallback(idx, me, day)
         return None
 
-    if tile is None:
+    if tile is None or (tile == "LOCKED" and idx in dawn):
         return _start_lifecycle(
             item, private, inv_idx, harvest_only, idx, dawn, dig_plant_ok
         )

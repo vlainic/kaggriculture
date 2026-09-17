@@ -122,7 +122,7 @@ def zone_animal_feed_count(
         if item.kind != "animal":
             continue
         emptyish = tile is None or (
-            day is not None and planner.is_buy_morning_ne_locked(tile, idx, day)
+            day is not None and planner.is_buy_morning_locked(tile, idx, day, me)
         )
         if emptyish:
             count += 1
@@ -164,7 +164,7 @@ def _animals_needed_for_zone(
             continue
         tile = _tile_at(me, idx)
         emptyish = tile is None or (
-            day is not None and planner.is_buy_morning_ne_locked(tile, idx, day)
+            day is not None and planner.is_buy_morning_locked(tile, idx, day, me)
         )
         if emptyish:
             needed[item.label] = needed.get(item.label, 0) + 1
