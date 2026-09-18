@@ -22,7 +22,15 @@ from replay_analysis.metrics import (
 from replay_analysis.kpi import executor_kpis, market_kpis, planner_kpis
 from replay_analysis.sells import simulate_sells
 
-__all__ = ["analyze", "summarize_dir", "plot_game", "load_replay"]
+__all__ = [
+    "analyze",
+    "summarize_dir",
+    "plot_game",
+    "plot_earnings_by_day",
+    "plot_earnings_by_zone",
+    "plot_worker_actions",
+    "load_replay",
+]
 
 
 def plot_game(report, *, title: str | None = None):
@@ -30,6 +38,24 @@ def plot_game(report, *, title: str | None = None):
     from replay_analysis.plot import plot_game as _plot_game
 
     return _plot_game(report, title=title)
+
+
+def plot_earnings_by_day(report, *, title: str | None = None):
+    from replay_analysis.plot import plot_earnings_by_day as _plot
+
+    return _plot(report, title=title)
+
+
+def plot_earnings_by_zone(report, *, title: str | None = None):
+    from replay_analysis.plot import plot_earnings_by_zone as _plot
+
+    return _plot(report, title=title)
+
+
+def plot_worker_actions(report, *, title: str | None = None):
+    from replay_analysis.plot import plot_worker_actions as _plot
+
+    return _plot(report, title=title)
 
 
 def analyze(

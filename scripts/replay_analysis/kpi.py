@@ -672,16 +672,18 @@ def _planner_for_player(
 
         hires_today_local = int(pre_obs["farms"][player].get("hires_today") or 0)
         for order in (rec.action.get("market") or []):
-            if isinstance(order, list) and len(order) >= 3 and order[0] == "BUY_SEED":
+            if not isinstance(order, list) or not order:
+                continue
+            if len(order) >= 3 and order[0] == "BUY_SEED":
                 seeds_bought[str(order[1])] += int(order[2])
-            if isinstance(order, list) and order[0] == "HIRE":
+            if order[0] == "HIRE":
                 hires_by_day[day] += 1
                 cost = _fib_hire_cost(hires_today_local + 1) - _fib_hire_cost(
                     hires_today_local
                 )
                 hire_spend_by_day[day] += cost
                 hires_today_local += 1
-            if isinstance(order, list) and order[0] == "BUY_LAND":
+            if order[0] == "BUY_LAND":
                 pre_q = pre_obs["farms"][player].get("unlocked_quadrants") or ["NW"]
                 post_q = farm.get("unlocked_quadrants") or pre_q
                 new_q = list(set(post_q) - set(pre_q))

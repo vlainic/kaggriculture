@@ -25,16 +25,17 @@
 
 ---
 
-## Strategic status (Sep 15 — live = TwoLand)
+## Strategic status (Sep 18 — live = TwoLand)
 
 | Track | Status |
 | --- | --- |
 | **Two-land WSP** | **LIVE** — `CURRENT_SOLVER = twoland_wsp`, `CURRENT = TWO` |
+| **Three-land WSP** | Opt-in `KAGGRI_LANDS=3` → `threeland_wsp` + THREE |
 | **One-land WSP** | Available as `zonewise_wsp` + FIVE catalog; not CURRENT |
-| **Land buy** | Probe → `BUY_LAND_DAY`; market `BUY_LAND` + reserve |
+| **Land buy** | Probe → `BUY_LAND_DAY`; NE $1k; clear next dawn after buy day |
 | **Hiring** | `NUM_ACTIVE_HIRES` from solved prefix; market hire batches |
 | **Dawn replan** | Lock commitments; WSP **`track_shed=False`**, `min_balance=0`; unbounded `cons`; **full** conservative handoff; INFEASIBLE → break cascade |
-| **Layout catalog** | `FOUR` + `FIVE` + `TWO`; **`CURRENT = TWO`**; pin **`NET_TILE_OPS = z.net_tile_ops`** |
+| **Layout catalog** | `FOUR` + `FIVE` + `TWO` + `THREE`; **`CURRENT = TWO`**; pin **`NET_TILE_OPS = z.net_tile_ops`** |
 | **Shed pickup** | **Only on owned center tiles** (`!= LOCKED`); see active_context |
 | **Smoke analysis** | Layout-aware (`layout.py`); earnings from `[harv]` when no `earn=` |
 | **Episode download** | `scripts/download_submission_logs.sh` (replays default) |

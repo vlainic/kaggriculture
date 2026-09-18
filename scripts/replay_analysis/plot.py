@@ -666,3 +666,27 @@ def _plot_kpi_table(
     table.set_fontsize(9)
     table.scale(1, 1.4)
     ax.set_title(f"{label} — diagnostic KPIs", pad=12)
+
+
+def plot_earnings_by_day(report: dict[str, Any], *, title: str | None = None) -> None:
+    """Sell revenue + net cash by day (smoke-style; us player from replay)."""
+    from smoke_analysis.plot import plot_earnings_by_day as _plot
+    from replay_analysis.smoke_views import smoke_style_from_report
+
+    _plot(smoke_style_from_report(report), title=title)
+
+
+def plot_earnings_by_zone(report: dict[str, Any], *, title: str | None = None) -> None:
+    """Zone×day harvest value heatmap (smoke-style; us player from replay)."""
+    from smoke_analysis.plot import plot_earnings_by_zone as _plot
+    from replay_analysis.smoke_views import smoke_style_from_report
+
+    _plot(smoke_style_from_report(report), title=title)
+
+
+def plot_worker_actions(report: dict[str, Any], *, title: str | None = None) -> None:
+    """Worker×day hour-action heatmap (smoke-style; us player from replay)."""
+    from smoke_analysis.plot import plot_worker_actions as _plot
+    from replay_analysis.smoke_views import smoke_style_from_report
+
+    _plot(smoke_style_from_report(report), title=title)
