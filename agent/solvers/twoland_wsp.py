@@ -12,7 +12,12 @@ from pathlib import Path
 from ortools.sat.python import cp_model
 
 from agent import animal_rollouts
-from agent.solvers.common import decode_sort_key
+from agent.solvers.common import (
+    decode_sort_key,
+    land_is_construction,
+    repack_land_mix,
+    resize_land_tiles,
+)
 from agent.solvers.types import SolveResult
 from agent.zoning import (
     HAND_DAILY_COST,
@@ -25,6 +30,8 @@ from agent.zoning import (
     NUM_TILES,
     WORKER_TILES,
     WORKERS,
+    ZONE_OPS_MIX,
+    ZONE_TILE_RESIZE,
 )
 
 NEW_ZONE_MIN_DAY0_STARTS = 2
@@ -629,6 +636,29 @@ def _solve_zone(
     }
 
 
+def _construction_mix_and_resize(
+    assigned: dict[int, list],
+    workers: tuple[str, ...],
+    empty_set: set[int],
+    patterns: list,
+    horizon: int,
+) -> dict[int, list]:
+    """ZONE_OPS_MIX then ZONE_TILE_RESIZE for one construction land group."""
+    if ZONE_OPS_MIX:
+        assigned, note = repack_land_mix(
+            assigned, workers, empty_set, patterns, horizon
+        )
+        if note:
+            print(f"[planner] ZONE_OPS_MIX {note}", flush=True)
+    if ZONE_TILE_RESIZE:
+        note = resize_land_tiles(
+            assigned, workers, empty_set, patterns, horizon
+        )
+        if note:
+            print(f"[planner] ZONE_TILE_RESIZE {note}", flush=True)
+    return assigned
+
+
 def solve(
     chains: list,
     *,
@@ -655,6 +685,15 @@ def solve(
             f"[planner] twoland prestart tiles={len(assigned)} complete={complete}",
             flush=True,
         )
+        if ZONE_OPS_MIX or ZONE_TILE_RESIZE:
+            if price_of is None:
+                base = _i0_base_prices()
+                price_of = lambda product, _base=base: _base[product]
+            patterns = build_patterns(horizon, price_of)
+            empty_set = set(empty_tiles)
+            assigned = _construction_mix_and_resize(
+                assigned, LAND1_WORKERS, empty_set, patterns, horizon
+            )
         return SolveResult(assigned, complete, solved_workers)
 
     if price_of is None:
@@ -744,6 +783,16 @@ def solve(
                 locked_harvest[prod] = locked_harvest.get(prod, 0) + units
         opening = res["conservative"]
         solved_workers.append(worker)
+
+    if assigned and (ZONE_OPS_MIX or ZONE_TILE_RESIZE):
+        if land_is_construction(LAND1_WORKERS, empty_set):
+            assigned = _construction_mix_and_resize(
+                assigned, LAND1_WORKERS, empty_set, patterns, horizon
+            )
+        if ne_active and land_is_construction(LAND2_WORKERS, empty_set):
+            assigned = _construction_mix_and_resize(
+                assigned, LAND2_WORKERS, empty_set, patterns, horizon
+            )
 
     return SolveResult(
         assigned,

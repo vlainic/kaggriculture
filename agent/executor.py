@@ -61,6 +61,23 @@ def _tile_at(me: dict, idx: int):
     return me["tiles"][y][x]
 
 
+def _zone_animal_crop_ops(me: dict, worker: str) -> tuple[int, int, float]:
+    """Count animal/crop structures in a zone; est_ops = animal*4 + crop*1.5."""
+    animal = 0
+    crop = 0
+    for idx in workers.WORKER_TILES[worker]:
+        tile = _tile_at(me, idx)
+        if not isinstance(tile, dict):
+            continue
+        kind = tile.get("kind")
+        if kind in ("COOP", "PASTURE"):
+            animal += 1
+        elif kind == "PLANT":
+            crop += 1
+    est_ops = animal * zoning.EST_OPS_ANIMAL + crop * zoning.EST_OPS_CROP
+    return animal, crop, est_ops
+
+
 def _dawn_empty(me: dict, idx: int, day: int) -> bool:
     tile = _tile_at(me, idx)
     if tile is None:
@@ -243,6 +260,8 @@ class Executor:
             f"[exec] d={day} dawn_empty={len(self._empty_at_dawn)} "
             f"dawn_ne_locked={ne_locked}"
         )
+        if zoning.ZONE_OPS_BUDGET:
+            zoning.rebalance_zones_for_ops(me, day=day)
         if day >= script.SEASON_LAST_DAY:
             self._endgame_done = {w: set() for w in workers.WORKERS}
 
@@ -263,9 +282,11 @@ class Executor:
                 if isinstance(_tile_at(me, idx), dict)
                 and _tile_at(me, idx).get("kind") in ("PLANT", "COOP", "PASTURE")
             )
+            animal, crop, est_ops = _zone_animal_crop_ops(me, w)
             _log(
                 f"[hands] d={day} h0 {w} NUM_ACTIVE_HIRES={planner.NUM_ACTIVE_HIRES} "
-                f"qtiles={q} empty={empty} locked={locked} live={live}"
+                f"qtiles={q} empty={empty} locked={locked} live={live} "
+                f"animal={animal} crop={crop} est_ops={est_ops:g}"
             )
 
     def _log_stuck_tiles(self, me: dict, day: int) -> None:
@@ -425,7 +446,12 @@ class Executor:
                 self._route_idx[worker] = 0
             else:
                 drop = self._drop_if_adjacent(fx, fy, private, inv_idx, me)
-                return drop or (["PASS"], f"{worker} done")
+                if drop:
+                    return drop
+                filled = self._idle_filler(worker, fx, fy, me)
+                if filled:
+                    return filled
+                return ["PASS"], f"{worker} done"
 
         idx = route[self._route_idx[worker]]
         tx, ty = workers.TILE_COORDS[idx]
@@ -520,6 +546,9 @@ class Executor:
             if self._route_idx[worker] < len(route):
                 ntx, nty = workers.TILE_COORDS[route[self._route_idx[worker]]]
                 return [_step_toward(fx, fy, ntx, nty)], f"{worker} next"
+            filled = self._idle_filler(worker, fx, fy, me)
+            if filled:
+                return filled
             return ["PASS"], f"{worker} tile-done"
 
         return [_step_toward(fx, fy, tx, ty)], f"{worker} ->t{idx + 1}"
@@ -740,6 +769,34 @@ class Executor:
         )
         if label:
             return ["PICKUP", label, 1], "animal"
+        return None
+
+    def _idle_filler(
+        self, worker: str, fx: int, fy: int, me: dict
+    ) -> tuple[list, str] | None:
+        """Wave 4: park on snake head or extra CARE instead of done/tile-done PASS."""
+        if not zoning.ZONE_IDLE_FILLER:
+            return None
+        route = workers.WORKER_ROUTES.get(worker) or []
+        if not route:
+            return None
+        t0 = route[0]
+        tx, ty = workers.TILE_COORDS[t0]
+        if (fx, fy) != (tx, ty):
+            step = _step_toward(fx, fy, tx, ty)
+            if step != "PASS":
+                return self._emit_action(
+                    worker, [step], f"{worker} fill->t{t0 + 1}"
+                )
+        tile = _tile_at(me, t0)
+        if (
+            isinstance(tile, dict)
+            and tile.get("kind") in ("COOP", "PASTURE")
+            and not tile.get("cared_today")
+        ):
+            return self._emit_action(
+                worker, ["CARE"], f"{worker} fill-CARE", tile_idx=t0
+            )
         return None
 
     def _drop_if_adjacent(
