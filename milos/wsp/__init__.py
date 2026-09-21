@@ -1,7 +1,7 @@
 """Farmer-only WSP sandbox + replan Gantt — self-contained under milos/ (no agent/)."""
 
 from milos.wsp.farmer import FARMER_TILES_FIVE, solve
-from milos.wsp.gantt import accumulate_absolute
+from milos.wsp.gantt import accumulate_absolute, plot_zone_ops_replans
 from milos.wsp.log import WspPlan, load_wsp_plans, parse_wsp_plan_lines
 from milos.wsp.types import SolveResult
 
@@ -20,5 +20,6 @@ __all__ = [
     "load_wsp_plans",
     "parse_wsp_plan_lines",
     "plot_plan",
+    "plot_zone_ops_replans",
     "solve",
 ]

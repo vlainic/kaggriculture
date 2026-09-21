@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 from milos.wsp import data as rollouts
 from milos.wsp.common import parse_profile_key
-from milos.wsp.config import ANIMAL_NAMES, NUM_DAYS
+from milos.wsp.config import ANIMAL_NAMES, FARMER, FARMER_NET_TILE_OPS, NUM_DAYS
 from milos.wsp.log import WspPlan
 
 CROP_STYLE: dict[str, dict[str, str]] = {
@@ -168,4 +168,160 @@ def plot_plan(
     ax.set_title(title or f"WSP plan d={replan_day} horizon={horizon}")
     ax.grid(axis="x", alpha=0.25)
     plt.tight_layout()
+    plt.show()
+
+
+def _profile_days(profile_key: str) -> list:
+    label, suffix = parse_profile_key(profile_key)
+    crops = rollouts.crops()["crops"]
+    if label in crops:
+        return crops[label][suffix]["days"]
+    animals = rollouts.animals()["animals"]
+    if label in animals:
+        return animals[label][suffix]["days"]
+    raise KeyError(profile_key)
+
+
+def placement_daily_tile_ops(
+    profile_key: str,
+    start_abs: int,
+    *,
+    season_days: int = NUM_DAYS,
+) -> list[int]:
+    """Stamp rollout actions onto absolute season days (MIP daily_tile_ops)."""
+    days = _profile_days(profile_key)
+    ops = [0] * season_days
+    for day in days:
+        cal = int(start_abs) + int(day["age"])
+        if cal >= season_days:
+            break
+        if cal < 0:
+            continue
+        ops[cal] += len(day["actions"])
+    return ops
+
+
+def zone_daily_tile_ops(
+    assigned: dict[int, list],
+    tiles: set[int] | frozenset[int] | tuple[int, ...] | list[int],
+    *,
+    season_days: int = NUM_DAYS,
+) -> list[int]:
+    """Sum planned daily_tile_ops across tiles in a zone (absolute starts)."""
+    tile_set = set(tiles)
+    total = [0] * season_days
+    for tile, chain in assigned.items():
+        if tile not in tile_set:
+            continue
+        for profile_key, start in chain or []:
+            for d, n in enumerate(
+                placement_daily_tile_ops(profile_key, int(start), season_days=season_days)
+            ):
+                total[d] += n
+    return total
+
+
+def plot_zone_ops_replans(
+    plans: list[WspPlan],
+    zones: dict[str, set[int] | frozenset[int] | tuple[int, ...] | list[int]],
+    *,
+    season_days: int = NUM_DAYS,
+    ops_limits: dict[str, int] | None = None,
+    cmap_name: str = "turbo",
+    title: str | None = None,
+) -> None:
+    """Per-zone OPS over days: one line+dots per replan (color = replan day).
+
+    Uses accumulate_absolute boards; each line is zone total daily_tile_ops from
+    that replan day through season end. Colorbar is fixed to season days 0..(N-2)
+    (0–28 for a 30-day season), independent of the last replan.
+    """
+    if not plans:
+        fig, ax = plt.subplots(figsize=(8, 2))
+        ax.text(0.5, 0.5, "no wsp_plan events", ha="center", va="center")
+        ax.axis("off")
+        plt.show()
+        return
+
+    scope = set()
+    for tiles in zones.values():
+        scope |= set(tiles)
+    snaps = accumulate_absolute(plans, tiles=scope or None)
+    # same idea as Gantt: skip events with empty delta in scoped tiles
+    snaps = [(p, a, d) for p, a, d in snaps if d]
+    zone_names = [name for name, tiles in zones.items() if tiles]
+    active: list[str] = []
+    for name in zone_names:
+        tile_set = set(zones[name])
+        if any(tile_set & set(assigned) for _, assigned, _ in snaps):
+            active.append(name)
+    if not active or not snaps:
+        fig, ax = plt.subplots(figsize=(8, 2))
+        ax.text(0.5, 0.5, "no zone tiles in plans", ha="center", va="center")
+        ax.axis("off")
+        plt.show()
+        return
+
+    limits = dict(ops_limits or {})
+    if FARMER in active and FARMER not in limits:
+        limits[FARMER] = FARMER_NET_TILE_OPS
+
+    # Fixed season-day color scale (0..28 for NUM_DAYS=30), not replan-index.
+    cbar_vmax = max(1, season_days - 2)
+    cmap = plt.colormaps[cmap_name]
+    norm = plt.Normalize(vmin=0, vmax=cbar_vmax)
+
+    fig, axes = plt.subplots(
+        len(active),
+        1,
+        sharex=True,
+        figsize=(14, max(2.4, 1.8 * len(active) + 0.8)),
+        squeeze=False,
+        layout="constrained",
+    )
+    for zi, name in enumerate(active):
+        ax = axes[zi][0]
+        tile_set = set(zones[name])
+        for plan, assigned, _delta in snaps:
+            ops = zone_daily_tile_ops(assigned, tile_set, season_days=season_days)
+            d0 = min(max(0, int(plan.day)), season_days - 1)
+            xs = list(range(d0, season_days))
+            ys = ops[d0:season_days]
+            ax.plot(xs, ys, "-o", color=cmap(norm(plan.day)), ms=3.5, lw=1.3, alpha=0.9)
+        if name in limits:
+            cap = int(limits[name])
+            ax.axhline(
+                cap,
+                color="#c62828",
+                ls="--",
+                lw=1.4,
+                alpha=0.9,
+                label=f"net_tile_ops={cap}",
+            )
+            # ax.legend(loc="upper right", fontsize=8, framealpha=0.85)
+        ax.set_ylabel(name, fontsize=9)
+        ax.set_ylim(bottom=0)
+        ax.grid(axis="x", alpha=0.25)
+        ax.grid(axis="y", alpha=0.2)
+
+    axes[-1][0].set_xlabel("season day")
+    axes[-1][0].set_xlim(-0.5, season_days - 0.5)
+
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    cbar = fig.colorbar(
+        sm,
+        ax=axes.ravel().tolist(),
+        location="right",
+        fraction=0.035,
+        pad=0.04,
+        aspect=30,
+    )
+    tick_step = 7 if cbar_vmax >= 28 else max(1, cbar_vmax // 4)
+    ticks = list(range(0, cbar_vmax + 1, tick_step))
+    if ticks[-1] != cbar_vmax:
+        ticks.append(cbar_vmax)
+    cbar.set_ticks(ticks)
+    cbar.set_label("replan day")
+    fig.suptitle(title or "Zone OPS by replan (line+dots = planned daily_tile_ops)")
     plt.show()
