@@ -12,6 +12,12 @@ def plot_plan(*args, **kwargs):
     return _plot(*args, **kwargs)
 
 
+def plot_planner_board_actions(*args, **kwargs):
+    from milos.wsp.plan_actions import plot_planner_board_actions as _plot
+
+    return _plot(*args, **kwargs)
+
+
 __all__ = [
     "FARMER_TILES_FIVE",
     "SolveResult",
@@ -20,6 +26,7 @@ __all__ = [
     "load_wsp_plans",
     "parse_wsp_plan_lines",
     "plot_plan",
+    "plot_planner_board_actions",
     "plot_zone_ops_replans",
     "solve",
 ]
