@@ -17,13 +17,24 @@ _PRESTART_PATH = Path(__file__).resolve().parent / "prestart.json"
 
 
 @lru_cache(maxsize=1)
-def _load_prestart() -> tuple[dict[int, list], bool, tuple[str, ...]]:
+def _load_prestart_raw() -> tuple[dict[int, list], bool, tuple[str, ...]]:
     with _PRESTART_PATH.open(encoding="utf-8") as f:
         data = json.load(f)
     assigned = {int(k): list(v) for k, v in data["assigned"].items()}
     complete = bool(data.get("complete", True))
     solved = tuple(data.get("solved_workers", (FARMER,)))
     return assigned, complete, solved
+
+
+def _load_prestart(*, tiles: frozenset[int] | None = None) -> tuple[dict[int, list], bool, tuple[str, ...]]:
+    """Load day-0 prestart; optional tile filter (farmer-only → zone I / 0–4)."""
+    assigned, complete, solved = _load_prestart_raw()
+    if tiles is None:
+        return assigned, complete, solved
+    scoped = {t: chain for t, chain in assigned.items() if t in tiles}
+    # farmer-only sandbox: only claim the farmer worker even if JSON has all FIVE
+    workers = (FARMER,) if tiles == frozenset(FARMER_TILES) else solved
+    return scoped, complete, workers
 
 
 def _empty_locked(horizon: int) -> dict:
@@ -71,10 +82,11 @@ def solve(
     del chains, kwargs
     counts = empty_counts or {FARMER: len(empty_tiles)}
     if _is_prestart_solve(horizon, empty_tiles, counts):
-        assigned, complete, solved_workers = _load_prestart()
+        assigned, complete, solved_workers = _load_prestart(tiles=frozenset(FARMER_TILES))
         print(
-            f"[milos/wsp] farmer prestart loaded tiles={len(assigned)} "
-            f"from {_PRESTART_PATH.name} complete={complete}",
+            f"[milos/wsp] farmer prestart zone I tiles={sorted(assigned)} "
+            f"from {_PRESTART_PATH.name} (full={len(_load_prestart_raw()[0])}) "
+            f"complete={complete}",
             flush=True,
         )
         return SolveResult(assigned, complete, solved_workers)
