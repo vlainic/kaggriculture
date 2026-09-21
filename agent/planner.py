@@ -25,6 +25,9 @@ SEASON_LAST_DAY = 29
 STARTING_MONEY = 3000
 NUM_ACTIVE_HIRES: int = 4
 BUY_LAND_DAY: int | None = None
+ZONE_SOLVE_STREAK: dict[str, int] = {}
+DEAD_HANDS: set[str] = set()
+STUCK_THRESHOLD = 3
 _NE_TILES = tuple(range(LAND1_TILE_COUNT, LAND2_TILE_COUNT))
 _SW_TILES = tuple(range(LAND2_TILE_COUNT, LAND2_TILE_COUNT + 25))
 PROFILE_SUFFIXES = ("no_fert", "with_fert", "no_care", "with_care")
@@ -653,6 +656,40 @@ def _active_hand_hires(solved_workers: tuple[str, ...]) -> int:
     return sum(1 for w in solved_workers if w != "farmer")
 
 
+def update_zone_streaks(
+    day: int,
+    empty_counts: dict[str, int],
+    zone_outcomes: dict[str, str],
+) -> None:
+    """Ratchet: N consecutive non-ok solves with empties → DEAD_HANDS."""
+    global ZONE_SOLVE_STREAK, DEAD_HANDS
+    for worker, outcome in zone_outcomes.items():
+        if worker == "farmer":
+            continue
+        empty_n = int(empty_counts.get(worker, 0))
+        if outcome == "ok":
+            if worker in DEAD_HANDS or ZONE_SOLVE_STREAK.get(worker, 0) > 0:
+                print(
+                    f"[planner] zone_streak worker={worker} d={day} "
+                    f"streak=0 status=recovered",
+                    flush=True,
+                )
+            ZONE_SOLVE_STREAK[worker] = 0
+            DEAD_HANDS.discard(worker)
+            continue
+        if empty_n <= 0 or outcome == "empty":
+            continue
+        streak = ZONE_SOLVE_STREAK.get(worker, 0) + 1
+        ZONE_SOLVE_STREAK[worker] = streak
+        if streak >= STUCK_THRESHOLD and worker not in DEAD_HANDS:
+            DEAD_HANDS.add(worker)
+            print(
+                f"[planner] zone_streak worker={worker} d={day} "
+                f"streak={streak} status=stuck",
+                flush=True,
+            )
+
+
 def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None:
     global NUM_ACTIVE_HIRES, BUY_LAND_DAY
     day = obs["day"]
@@ -835,19 +872,23 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
         )
 
     ordered_hands = [w for w in WORKERS if w in zoning.HAND_WORKERS]
-    active = 0
+    update_zone_streaks(day, empty_counts, getattr(result, "zone_outcomes", {}) or {})
+    # Hire depth = max hand index+1 among healthy solved hands with work.
+    hire_depth = 0
     for w in ordered_hands:
-        if w in result.solved_workers and _zone_has_work(
-            me, w, tile_queues, result.assigned
+        if (
+            w in result.solved_workers
+            and w not in DEAD_HANDS
+            and _zone_has_work(me, w, tile_queues, result.assigned)
         ):
-            active += 1
-        else:
-            break
-    NUM_ACTIVE_HIRES = max(4, active)
+            hire_depth = max(hire_depth, ordered_hands.index(w) + 1)
+    NUM_ACTIVE_HIRES = max(4, hire_depth)
+    dead_note = ",".join(sorted(DEAD_HANDS)) if DEAD_HANDS else ""
     print(
-        f"[planner] hires active={active} "
+        f"[planner] hires active={hire_depth} "
         f"NUM_ACTIVE_HIRES={NUM_ACTIVE_HIRES} "
-        f"solved={','.join(result.solved_workers) or 'none'}",
+        f"solved={','.join(result.solved_workers) or 'none'}"
+        + (f" dead={dead_note}" if dead_note else ""),
         flush=True,
     )
 

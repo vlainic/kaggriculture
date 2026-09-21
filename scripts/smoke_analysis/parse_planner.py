@@ -23,6 +23,11 @@ ZONE_INFEASIBLE_RE = re.compile(
 SKIP_RE = re.compile(
     r"\[planner\] (?:wsp|twoland_wsp) zone=(\w+) skip cascade \((INFEASIBLE|picks=0)\)"
 )
+# Live format (post skip-not-break): [planner] twoland cascade skip=hireX reason=INFEASIBLE
+CASCADE_SKIP_RE = re.compile(
+    r"\[planner\] (?:twoland|threeland) cascade skip=(\w+) "
+    r"reason=(INFEASIBLE|picks0) solved=(\d+)"
+)
 CASCADE_STOP_RE = re.compile(
     r"\[planner\] twoland cascade stop=(\w+) solved=(\d+)"
 )
@@ -301,6 +306,23 @@ def _parse_replan_block(block_lines: list[str], day: int | None) -> dict[str, An
                     "solved_prefix": int(m.group(2)),
                 }
             )
+            continue
+
+        m = CASCADE_SKIP_RE.search(line)
+        if m:
+            reason = m.group(2)
+            reason_norm = reason if reason != "picks0" else "picks=0"
+            skip_cascade.append(
+                {
+                    "day": day,
+                    "worker": m.group(1),
+                    "reason": reason_norm,
+                    "solved_prefix": int(m.group(3)),
+                }
+            )
+            if pending_zone and pending_zone.get("worker") == m.group(1):
+                pending_zone["skipped"] = True
+                pending_zone["skip_reason"] = reason_norm
             continue
 
         m = PROBE_THIN_RE.search(line)

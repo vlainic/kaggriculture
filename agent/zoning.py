@@ -314,20 +314,10 @@ LAND3_WORKERS: tuple[str, ...] = tuple(
 USE_THREE: bool = os.environ.get("KAGGRI_LANDS", "2") == "3"
 CURRENT = THREE if USE_THREE else TWO
 
-# Wave 2: dawn rebalance of WORKER_TILES by animal/crop est_ops (default off).
-ZONE_OPS_BUDGET: bool = os.environ.get("ZONE_OPS_BUDGET", "0") == "1"
 # Construction-time mix pack on first queue write (fixed snakes; default on).
 ZONE_OPS_MIX: bool = os.environ.get("ZONE_OPS_MIX", "1") == "1"
-# Wave 4: replace done/tile-done PASS with park/CARE filler (default off).
-ZONE_IDLE_FILLER: bool = os.environ.get("ZONE_IDLE_FILLER", "0") == "1"
-# Construction-time tile-count resize toward est_ops 20–22 (default off).
-ZONE_TILE_RESIZE: bool = os.environ.get("ZONE_TILE_RESIZE", "0") == "1"
 EST_OPS_ANIMAL = 4.0
 EST_OPS_CROP = 1.5
-EST_OPS_TARGET_LO = 20.0
-EST_OPS_TARGET_HI = 22.0
-# Relative load gap to allow a transfer (below one animal weight so animal moves matter).
-_EST_OPS_GAP = 3.0
 
 
 def _fib_hire_cost(n: int) -> int:
@@ -409,162 +399,6 @@ def tile_est_ops_weight(tile) -> float:
     return 0.0
 
 
-def _board_tile(me: dict, idx: int):
-    x, y = TILE_COORDS[idx]
-    return me["tiles"][y][x]
-
-
-def _sort_route_tiles(tiles: list[int]) -> list[int]:
-    """Column-major snake: ascending x, then descending y within a column."""
-    return sorted(tiles, key=lambda i: (TILE_COORDS[i][0], -TILE_COORDS[i][1]))
-
-
-def _move_rank(tile) -> tuple[int, float]:
-    """Prefer empty, then crop, then animal."""
-    w = tile_est_ops_weight(tile)
-    if not isinstance(tile, dict) or tile.get("kind") == "WEED":
-        return (0, w)
-    if tile.get("kind") == "PLANT":
-        return (1, w)
-    if tile.get("kind") in ("COOP", "PASTURE"):
-        return (2, w)
-    return (5, w)
-
-
-def _is_emptyish(tile) -> bool:
-    return tile is None or (isinstance(tile, dict) and tile.get("kind") == "WEED")
-
-
-def _tile_blocked(tile, day: int) -> bool:
-    """Skip mid-fert window or currently harvestable / fert-ready tiles."""
-    if not isinstance(tile, dict):
-        return False
-    fert_until = tile.get("fertilized_until_day")
-    if fert_until is not None and int(fert_until) >= day:
-        return True
-    if int(tile.get("yield_units") or 0) > 0:
-        return True
-    if tile.get("kind") in ("COOP", "PASTURE") and tile.get("fertilizer_available"):
-        return True
-    return False
-
-
-def _rebalance_land(me: dict, group: tuple[str, ...], day: int) -> list[str]:
-    """Move spare empties toward low-est_ops hands; occupied tiles stay put (halt)."""
-    workers = [w for w in group if w in WORKER_TILES and w != "farmer"]
-    if len(workers) < 2:
-        return []
-
-    max_tiles = max(5, int(EST_OPS_TARGET_HI / EST_OPS_CROP))
-    min_tiles = 2
-
-    locked_kept: dict[str, list[int]] = {w: [] for w in workers}
-    assignment: dict[str, list[int]] = {w: [] for w in workers}
-    for w in workers:
-        for idx in WORKER_TILES[w]:
-            tile = _board_tile(me, idx)
-            if tile == "LOCKED":
-                locked_kept[w].append(idx)
-            else:
-                assignment[w].append(idx)
-
-    owned = [idx for w in workers for idx in assignment[w]]
-    if not owned:
-        return []
-    if not any(tile_est_ops_weight(_board_tile(me, i)) > 0 for i in owned):
-        return []
-
-    notes: list[str] = []
-    # Cap transfers per dawn to limit cascade thrash (52k/60k lesson).
-    max_moves = max(4, len(workers))
-    for _ in range(max_moves):
-        loads = {
-            w: sum(tile_est_ops_weight(_board_tile(me, i)) for i in assignment[w])
-            for w in workers
-        }
-        donors = [w for w in workers if len(assignment[w]) > min_tiles]
-        if not donors:
-            break
-        donor = max(donors, key=lambda w: (loads[w], len(assignment[w])))
-        recvs = [w for w in workers if w != donor and len(assignment[w]) < max_tiles]
-        if not recvs:
-            break
-        recv = min(recvs, key=lambda w: (loads[w], len(assignment[w])))
-        spread = loads[donor] - loads[recv]
-        if spread <= _EST_OPS_GAP:
-            break
-
-        ranked = sorted(
-            assignment[donor],
-            key=lambda i: _move_rank(_board_tile(me, i)),
-        )
-        moved = False
-        for idx in ranked:
-            if len(assignment[donor]) <= min_tiles:
-                break
-            tile = _board_tile(me, idx)
-            rank, weight = _move_rank(tile)
-            if rank >= 5:
-                continue
-            # Halt occupied transfers (Wave 2b regression): empties only.
-            if weight > 0:
-                continue
-            if not _is_emptyish(tile):
-                continue
-            # Empty handoff: only when donor has strictly more empties (anti-thrash).
-            n_empty_d = sum(
-                1 for i in assignment[donor] if _is_emptyish(_board_tile(me, i))
-            )
-            n_empty_r = sum(
-                1 for i in assignment[recv] if _is_emptyish(_board_tile(me, i))
-            )
-            if n_empty_d <= n_empty_r:
-                continue
-            assignment[donor].remove(idx)
-            assignment[recv].append(idx)
-            notes.append(f"t{idx + 1}:{donor}->{recv}(empty)")
-            moved = True
-            break
-        if not moved:
-            break
-
-    if not notes:
-        return []
-
-    for w in workers:
-        merged = locked_kept[w] + _sort_route_tiles(assignment[w])
-        seen: set[int] = set()
-        ordered: list[int] = []
-        for idx in merged:
-            if idx not in seen:
-                seen.add(idx)
-                ordered.append(idx)
-        WORKER_TILES[w] = ordered
-        WORKER_ROUTES[w] = list(ordered)
-    return notes
-
-
-def rebalance_zones_for_ops(me: dict, day: int = 0) -> None:
-    """Dawn reassignment of owned tiles so est_ops load equalizes within each land."""
-    if not ZONE_OPS_BUDGET:
-        return
-    groups: list[tuple[str, ...]] = [LAND1_WORKERS]
-    if LAND2_WORKERS:
-        groups.append(LAND2_WORKERS)
-    if USE_THREE and LAND3_WORKERS:
-        groups.append(LAND3_WORKERS)
-    all_notes: list[str] = []
-    for group in groups:
-        all_notes.extend(_rebalance_land(me, group, day))
-    if all_notes:
-        print(
-            f"[zoning] ZONE_OPS_BUDGET rebalance moves={len(all_notes)} "
-            f"{','.join(all_notes[:12])}"
-            + ("..." if len(all_notes) > 12 else ""),
-            flush=True,
-        )
-
-
 def _register_land3_catalog() -> None:
     """Expose LAND3 tile/ops/cost tables while CURRENT stays TWO."""
     global WORKER_TILES, WORKER_ROUTES, PREAMBLE, HAND_START_HOUR, NET_TILE_OPS
@@ -599,9 +433,6 @@ _layout_name = (
 print(
     f"[zoning] CURRENT={_layout_name} tiles={NUM_TILES} hands={NUM_HIRES} "
     f"KAGGRI_LANDS={os.environ.get('KAGGRI_LANDS', '2')} "
-    f"ZONE_OPS_BUDGET={int(ZONE_OPS_BUDGET)} "
-    f"ZONE_OPS_MIX={int(ZONE_OPS_MIX)} "
-    f"ZONE_IDLE_FILLER={int(ZONE_IDLE_FILLER)} "
-    f"ZONE_TILE_RESIZE={int(ZONE_TILE_RESIZE)}",
+    f"ZONE_OPS_MIX={int(ZONE_OPS_MIX)}",
     flush=True,
 )

@@ -16,7 +16,6 @@ from agent.solvers.common import (
     decode_sort_key,
     land_is_construction,
     repack_land_mix,
-    resize_land_tiles,
 )
 from agent.solvers.types import SolveResult
 from agent.zoning import (
@@ -31,7 +30,6 @@ from agent.zoning import (
     WORKER_TILES,
     WORKERS,
     ZONE_OPS_MIX,
-    ZONE_TILE_RESIZE,
 )
 
 NEW_ZONE_MIN_DAY0_STARTS = 2
@@ -643,19 +641,13 @@ def _construction_mix_and_resize(
     patterns: list,
     horizon: int,
 ) -> dict[int, list]:
-    """ZONE_OPS_MIX then ZONE_TILE_RESIZE for one construction land group."""
+    """ZONE_OPS_MIX pack for one construction land group."""
     if ZONE_OPS_MIX:
         assigned, note = repack_land_mix(
             assigned, workers, empty_set, patterns, horizon
         )
         if note:
             print(f"[planner] ZONE_OPS_MIX {note}", flush=True)
-    if ZONE_TILE_RESIZE:
-        note = resize_land_tiles(
-            assigned, workers, empty_set, patterns, horizon
-        )
-        if note:
-            print(f"[planner] ZONE_TILE_RESIZE {note}", flush=True)
     return assigned
 
 
@@ -685,7 +677,7 @@ def solve(
             f"[planner] twoland prestart tiles={len(assigned)} complete={complete}",
             flush=True,
         )
-        if ZONE_OPS_MIX or ZONE_TILE_RESIZE:
+        if ZONE_OPS_MIX:
             if price_of is None:
                 base = _i0_base_prices()
                 price_of = lambda product, _base=base: _base[product]
@@ -694,7 +686,12 @@ def solve(
             assigned = _construction_mix_and_resize(
                 assigned, LAND1_WORKERS, empty_set, patterns, horizon
             )
-        return SolveResult(assigned, complete, solved_workers)
+        return SolveResult(
+            assigned,
+            complete,
+            solved_workers,
+            zone_outcomes={w: "ok" for w in solved_workers},
+        )
 
     if price_of is None:
         base = _i0_base_prices()
@@ -731,6 +728,7 @@ def solve(
     assigned: dict[int, list] = {}
     solved_workers: list[str] = []
     locked_harvest: dict[str, int] = {}
+    zone_outcomes: dict[str, str] = {}
 
     for worker in worker_list:
         n_empty = empty_counts.get(worker, 0)
@@ -744,6 +742,7 @@ def solve(
                 charge_hire_daily=charge_hire_daily,
             )
             solved_workers.append(worker)
+            zone_outcomes[worker] = "empty"
             continue
 
         zone_empty = [idx for idx in WORKER_TILES[worker] if idx in empty_set]
@@ -772,10 +771,35 @@ def solve(
         )
         if res is None:
             print(
-                f"[planner] twoland cascade stop={worker} solved={len(solved_workers)}",
+                f"[planner] twoland cascade skip={worker} reason=INFEASIBLE "
+                f"solved={len(solved_workers)}",
                 flush=True,
             )
-            break
+            opening = _locked_conservative_handoff(
+                opening,
+                locked,
+                horizon,
+                worker,
+                charge_hire_daily=charge_hire_daily,
+            )
+            zone_outcomes[worker] = "infeasible"
+            continue
+
+        if not res["picked"]:
+            print(
+                f"[planner] twoland cascade skip={worker} reason=picks0 "
+                f"solved={len(solved_workers)}",
+                flush=True,
+            )
+            opening = _locked_conservative_handoff(
+                opening,
+                locked,
+                horizon,
+                worker,
+                charge_hire_daily=charge_hire_daily,
+            )
+            zone_outcomes[worker] = "picks0"
+            continue
 
         assigned.update(_decode_wsp_assignment(worker, empty_set, res["picked"]))
         for pick in res["picked"]:
@@ -783,8 +807,9 @@ def solve(
                 locked_harvest[prod] = locked_harvest.get(prod, 0) + units
         opening = res["conservative"]
         solved_workers.append(worker)
+        zone_outcomes[worker] = "ok"
 
-    if assigned and (ZONE_OPS_MIX or ZONE_TILE_RESIZE):
+    if assigned and ZONE_OPS_MIX:
         if land_is_construction(LAND1_WORKERS, empty_set):
             assigned = _construction_mix_and_resize(
                 assigned, LAND1_WORKERS, empty_set, patterns, horizon
@@ -799,6 +824,7 @@ def solve(
         len(solved_workers) == len(worker_list),
         tuple(solved_workers),
         buy_land=buy_land,
+        zone_outcomes=zone_outcomes,
     )
 
 

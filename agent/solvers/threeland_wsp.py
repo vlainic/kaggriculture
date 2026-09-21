@@ -704,7 +704,12 @@ def solve(
             f"[planner] threeland prestart tiles={len(assigned)} complete={complete}",
             flush=True,
         )
-        return SolveResult(assigned, complete, solved_workers)
+        return SolveResult(
+            assigned,
+            complete,
+            solved_workers,
+            zone_outcomes={w: "ok" for w in solved_workers},
+        )
 
     if price_of is None:
         base = _i0_base_prices()
@@ -765,6 +770,7 @@ def solve(
     assigned: dict[int, list] = {}
     solved_workers: list[str] = []
     locked_harvest: dict[str, int] = {}
+    zone_outcomes: dict[str, str] = {}
 
     for worker in worker_list:
         n_empty = empty_counts.get(worker, 0)
@@ -778,6 +784,7 @@ def solve(
                 charge_hire_daily=charge_hire_daily,
             )
             solved_workers.append(worker)
+            zone_outcomes[worker] = "empty"
             continue
 
         zone_empty = [idx for idx in WORKER_TILES[worker] if idx in empty_set]
@@ -805,23 +812,36 @@ def solve(
             price_of=price_of,
         )
         if res is None:
-            # TODO(two_land_fails §8): cascade break starves later zones (LAND3 behind LAND2).
-            # Do not soft-continue — holes vs positional hands. Need skip/soft-cap design later.
-            remaining = [w for w in worker_list if w not in solved_workers and w != worker]
             print(
-                f"[planner] threeland cascade stop={worker} "
-                f"solved={len(solved_workers)} starved={remaining} "
-                f"sw_active={int(sw_active)}",
+                f"[planner] threeland cascade skip={worker} reason=INFEASIBLE "
+                f"solved={len(solved_workers)}",
                 flush=True,
             )
-            # TODO(two_land_fails §10): no ratchet to drop permanently dead zones from hire count.
-            if sw_active or worker in LAND2_WORKERS or worker in LAND3_WORKERS:
-                print(
-                    f"[planner] threeland dead-zone risk stop={worker} "
-                    f"worker_list={len(worker_list)} solved={solved_workers}",
-                    flush=True,
-                )
-            break
+            opening = _locked_conservative_handoff(
+                opening,
+                locked,
+                horizon,
+                worker,
+                charge_hire_daily=charge_hire_daily,
+            )
+            zone_outcomes[worker] = "infeasible"
+            continue
+
+        if not res["picked"]:
+            print(
+                f"[planner] threeland cascade skip={worker} reason=picks0 "
+                f"solved={len(solved_workers)}",
+                flush=True,
+            )
+            opening = _locked_conservative_handoff(
+                opening,
+                locked,
+                horizon,
+                worker,
+                charge_hire_daily=charge_hire_daily,
+            )
+            zone_outcomes[worker] = "picks0"
+            continue
 
         assigned.update(_decode_wsp_assignment(worker, empty_set, res["picked"]))
         for pick in res["picked"]:
@@ -829,12 +849,14 @@ def solve(
                 locked_harvest[prod] = locked_harvest.get(prod, 0) + units
         opening = res["conservative"]
         solved_workers.append(worker)
+        zone_outcomes[worker] = "ok"
 
     return SolveResult(
         assigned,
         len(solved_workers) == len(worker_list),
         tuple(solved_workers),
         buy_land=buy_land,
+        zone_outcomes=zone_outcomes,
     )
 
 

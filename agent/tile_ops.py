@@ -232,6 +232,9 @@ def next_tile_action(
     if item is None:
         if harvest_only:
             return _harvest_only_fallback(idx, me, day)
+        # Leftover animal product / fert with no queue item — still collect.
+        if isinstance(tile, dict) and tile.get("kind") in ("COOP", "PASTURE"):
+            return _harvest_only_fallback(idx, me, day)
         return None
 
     if tile is None or (tile == "LOCKED" and idx in dawn):
@@ -261,7 +264,8 @@ def next_tile_action(
             act = _animal_action(tile, day, item, private, inv_idx, harvest_only)
             if act:
                 return act
-            if harvest_only:
+            # Don't leave eggs/milk/fert sitting when the age tape omitted HARVEST.
+            if harvest_only or tile_has_harvestable(idx, me, day):
                 return _harvest_only_fallback(idx, me, day)
 
     if harvest_only:
@@ -383,7 +387,7 @@ def _animal_action(
         if act == "FEED":
             inv = _inv_at(private, inv_idx)
             if inv.get("WHEAT", 0) <= 0:
-                return None
+                continue  # don't swallow HARVEST / COLLECT_FERTILIZER
         if act == "CARE" and tile.get("cared_today"):
             continue
         if act == "COLLECT_FERTILIZER" and not tile.get("fertilizer_available"):

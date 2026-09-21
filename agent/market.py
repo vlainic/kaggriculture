@@ -259,9 +259,11 @@ def build_orders(
     if hour in (0, 1, 2):
         if hour == 0:
             h0, h1, h2 = _hire_batches(target_hires)
+            dead = ",".join(sorted(planner.DEAD_HANDS)) if planner.DEAD_HANDS else ""
             print(
                 f"[market] hire_batches target={target_hires} "
-                f"h0={h0} h1={h1} h2={h2}",
+                f"h0={h0} h1={h1} h2={h2}"
+                + (f" dead={dead}" if dead else ""),
                 flush=True,
             )
         hires_needed = _hires_this_hour(hour, target_hires, len(me["hands"]))
