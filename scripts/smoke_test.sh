@@ -36,6 +36,7 @@ tar -czf "$SUBMISSION" -C "$BUILD" .
 ls -lh "$SUBMISSION"
 
 echo "==> Smoke test: main.py vs random (720 steps) [local env]"
+export KAGGRI_VERBOSE=1
 {
 echo "==> Log: ${SMOKE_LOG}"
 python3 -c "

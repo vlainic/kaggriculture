@@ -7,6 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from agent import animal_rollouts, dp_catalog, rollouts, solvers, zoning
+from agent.flags import VERBOSE
 from agent.zoning import (
     LAND1_TILE_COUNT,
     LAND1_WORKERS,
@@ -174,6 +175,22 @@ def _parse_profile_key(profile_key: str) -> tuple[str, str]:
         if profile_key.endswith(token):
             return profile_key[: -len(token)], suffix
     raise ValueError(f"unknown profile key: {profile_key}")
+
+
+def _log_wsp_plan(
+    day: int,
+    horizon: int,
+    result,
+    assigned: dict[int, list],
+) -> None:
+    if not VERBOSE or not assigned:
+        return
+    payload = {str(k): v for k, v in assigned.items()}
+    print(
+        f"[wsp_plan] d={day} horizon={horizon} solver={solvers.CURRENT_SOLVER} "
+        f"complete={int(result.complete)} assigned={json.dumps(payload)}",
+        flush=True,
+    )
 
 
 def _rollout_spec(label: str, profile_name: str, crops_data: dict, animals_data: dict):
@@ -909,6 +926,9 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
         suffix = "" if result.complete else f" partial={len(result.solved_workers)}"
         print(f"[planner] replan assign {', '.join(samples)}{suffix}", flush=True)
 
+    sub = {idx: result.assigned.get(idx, []) for idx in replan_tiles}
+    _log_wsp_plan(day, horizon, result, sub)
+
     opp_log = " ".join(
         f"opp_{p}={n}" for p, n in sorted(opp_counts.items()) if n > 0
     )
@@ -967,6 +987,7 @@ def _build_from_solver() -> dict[int, list]:
     if not result.complete:
         active = ",".join(result.solved_workers)
         print(f"[planner] day-0 partial active={active}", flush=True)
+    _log_wsp_plan(0, NUM_DAYS, result, dict(result.assigned))
     return queues
 
 

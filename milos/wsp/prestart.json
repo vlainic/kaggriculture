@@ -1,0 +1,78 @@
+{
+  "assigned": {
+    "0": [
+      [
+        "WHEAT_no_fert",
+        0
+      ],
+      [
+        "SHEEP_with_care",
+        5
+      ]
+    ],
+    "1": [
+      [
+        "MELON_no_fert",
+        0
+      ],
+      [
+        "SHEEP_with_care",
+        11
+      ]
+    ],
+    "2": [
+      [
+        "MELON_no_fert",
+        0
+      ],
+      [
+        "WHEAT_with_fert",
+        11
+      ],
+      [
+        "MELON_no_fert",
+        17
+      ]
+    ],
+    "3": [
+      [
+        "CARROT_no_fert",
+        0
+      ],
+      [
+        "WHEAT_with_fert",
+        4
+      ],
+      [
+        "WHEAT_with_fert",
+        9
+      ],
+      [
+        "WHEAT_with_fert",
+        14
+      ],
+      [
+        "MELON_no_fert",
+        19
+      ]
+    ],
+    "4": [
+      [
+        "MELON_no_fert",
+        1
+      ],
+      [
+        "WHEAT_with_fert",
+        12
+      ],
+      [
+        "MELON_no_fert",
+        19
+      ]
+    ]
+  },
+  "complete": true,
+  "solved_workers": [
+    "farmer"
+  ]
+}
