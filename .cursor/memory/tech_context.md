@@ -51,6 +51,9 @@ Agents never submit without explicit user request (`kaggle-submission.mdc`).
 | Layout switch | `zoning.CURRENT` | **`TWO`** (live); `KAGGRI_LANDS=3` → THREE; catalog also `FOUR` / `FIVE` |
 | Solver | `solvers.CURRENT_SOLVER` | **`twoland_wsp`** (live); also `threeland_wsp`, `zonewise_wsp`, `zonewise`, `monolithic` |
 | Shed door | `_owned_shed_tiles` | Center tiles valid for PICKUP/DROP **only if `!= LOCKED`** |
+| Cascade fail | skip-continue | INFEASIBLE/`picks0` → skip + locked handoff; not break |
+| `DEAD_HANDS` | `STUCK_THRESHOLD=3` | Hire depth excludes; market/planner `dead=` |
+| `ZONE_OPS_MIX` | default `1` | Construction chain swap; BUDGET/FILLER/RESIZE removed |
 
 ## DP catalog knobs (`agent/dp_catalog.py`)
 
@@ -71,11 +74,19 @@ Agents never submit without explicit user request (`kaggle-submission.mdc`).
 
 ## Diagnostics
 
-- Logs: `[planner]`, `[exec]`, `[snap]`, `Player 0: reward=`
-- Gantt: zonewise notebooks
+- Logs: `[planner]`, `[exec]`, `[snap]`, `[hands]`, `[wsp_plan]` (if `KAGGRI_VERBOSE=1`), `Player 0: reward=`
+- Gantt: zonewise notebooks; **`milos/wsp/gantt.py`** + `experiments/milos-simplification.ipynb` (farmer accumulate)
+- Smoke capacity: `scripts/smoke_analysis/plot.py` → `plot_zone_capacity` (est_ops vs tile/MOVE/PASS)
 - **Replay analysis:** `kaggle_logs/<id>/<id>.json` — `aggregate.episode_table`, `aggregate.kpi`, per-game `drift`, `kpi.*`
 - Replay obs timing: `obs[i]` is post-`action[i]`; sold units from stock delta `obs[i-1]→obs[i]`
 - `docs/two_land_approach.md` — pickups / ops double-count history
+
+## Flags
+
+| Env | Effect |
+| --- | --- |
+| `KAGGRI_VERBOSE=1` | `agent.flags.VERBOSE` — emit `[wsp_plan]` (smoke_test.sh sets this; submission does not) |
+| `KAGGRI_LANDS=3` | ThreeLand layout + `threeland_wsp` |
 
 ## Key docs
 
@@ -86,6 +97,8 @@ Agents never submit without explicit user request (`kaggle-submission.mdc`).
 | `docs/twoland/diagnosis_0911.md` | OneLand vs TwoLand diagnosis; reject static NW caps; post-NE ops crash |
 | `docs/twolands/twoland_readd.md` | TwoLand re-add spec (probe + NE glue + LOCKED carve-out) |
 | `scripts/smoke_analysis/` | Local smoke log KPIs/plots; **layout-aware** via `layout.py` |
+| `milos/wsp/` | Farmer-only WSP sandbox (not in submission) |
+| `experiments/milos-simplification.ipynb` | Milos solve + smoke farmer Gantts |
 | `data/two_lands.md` | TWO layout geometry / hire batches |
 | `scripts/download_submission_logs.sh` | Bulk episode replays from Kaggle CLI |
 | `scripts/summarize_replays.sh` | Batch replay analysis → `<id>.json` |

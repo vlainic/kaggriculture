@@ -14,16 +14,16 @@ Compete on Kaggriculture with an autonomous agent that beats typical heuristic/L
 - Shed cap 100 (excluding seeds)
 - Animal care needs honest shed trips (PICKUP wheat/animal) — undercounting ops lied about score; overcounting (pickups JSON + side counters) crushed animals
 
-## How the current agent is supposed to work (one-land)
+## How the current agent is supposed to work (TwoLand — live)
 
-1. **Import:** bind `zoning.CURRENT` (**FIVE**); WSP day-0 from `wsp_prestart.json`; ops = `daily_tile_ops` (+ hire preamble).
-2. **Dawn replan (WSP, day ≥ 3):** remaining horizon; lock commitments; sequential zones with **full** conservative handoff. INFEASIBLE → break cascade, keep queues.
-3. **Hiring:** `NUM_ACTIVE_HIRES` from solved prefix; market h=0/h=1 hire batches (no land buy).
-4. **Runtime:** snake routes; market sell floor + premium DP; wheat dawn buy.
+1. **Import:** bind `zoning.CURRENT` (**TWO**); WSP day-0 land1 from `wsp_prestart.json`; hire5 probe.
+2. **Dawn replan (WSP, day ≥ 3):** remaining horizon; lock commitments; land cascade with **full** conservative handoff. INFEASIBLE/`picks0` → **skip zone, continue cascade**, keep queues.
+3. **Hiring / land:** `NUM_ACTIVE_HIRES` from healthy hands (excl. `DEAD_HANDS`); `BUY_LAND_DAY` after probe; market hire batches + BUY_LAND; `ZONE_OPS_MIX` on at construction.
+4. **Runtime:** owned-shed first → PICKUP → snake; market sell floor + premium DP; wheat dawn buy.
 
-## TwoLand (paused)
+## Milos sandbox
 
-Prior TwoLand stack (~85–87k smoke but only ~+7k vs OneLand on ladder) hit **post-NE ops/weed collapse**. Multiple recovery attempts (Sept02 overhaul, queue-lock chase, OneLand-parity rewrite) were discarded. Re-open only from an explicit plan / [`docs/twolands/twoland_readd.md`](../../docs/twolands/twoland_readd.md).
+`milos/` is an **experiments-only** farmer WSP (self-contained). Smoke still runs live `agent/`. Use `experiments/milos-simplification.ipynb` for replan Gantts from `[wsp_plan]` logs — not a second submission agent.
 
 ## User workflow preferences
 
@@ -33,3 +33,4 @@ Prior TwoLand stack (~85–87k smoke but only ~+7k vs OneLand on ladder) hit **p
 - Analysis tooling must follow live `zoning.CURRENT` / workers (no hardcoded land2)
 - Do not commit `.cursor/` (gitignore); do not stage `logs.txt`
 - Hard resets / force-pushes: user-driven; do not assume tip matches origin without checking
+- `milos/` stays out of `submission.tar.gz` unless user asks to wire it live

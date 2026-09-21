@@ -60,9 +60,11 @@ obs → executor.step
 - **Cash / W/F (day-0):** balance chain, shed ledgers, hire daily; **`cascade_reserve`** enforces `min_close0` for downstream zones.
 - **Replan (zonewise):** `track_shed=True`; shed W/F from obs; **`min_balance`** on **balance_vars only** (liquidity floor); never on `conservative`.
 - **Replan (WSP):** **`track_shed=False`**, **`min_balance=0`**; `cons = NewIntVar(-200_000, 200_000)` — **no** `cons >= min_balance`; cascade handoff `opening = res["conservative"]` **uncapped** (full handoff); break if `open0 < 0`. Do **not** clamp zone openings to `money/N` or `min(money/2, handoff)` — ladder rejected both.
-- **Dawn replan triage:** empties + WEED only; locked = board + queue suffix; horizon = remaining days. INFEASIBLE → preserve queues (never IDLE wipe).
+- **Cascade fail:** INFEASIBLE/`picks0` → **skip zone, locked handoff, `continue`** (log `cascade skip=`); never IDLE wipe; do **not** hard-stop later lands. `SolveResult.zone_outcomes` records per-worker status.
+- **Dawn replan triage:** empties + WEED only; locked = board + queue suffix; horizon = remaining days.
 - **Zonewise / WSP solvers:** sequential zones; WSP atomic patterns; day-0 `wsp_prestart.json`; replan from d≥3.
-- **Hiring:** `NUM_ACTIVE_HIRES` updated from solved prefix after farmer-ok replan; market `_hire_batches` for h=0/h=1.
+- **`ZONE_OPS_MIX`:** construction-time chain swap on fixed snakes (default on). Dead: BUDGET / IDLE_FILLER / TILE_RESIZE.
+- **Hiring:** `NUM_ACTIVE_HIRES` from healthy solved hands with work, **excluding `DEAD_HANDS`**; market `_hire_batches` + `dead=` log. Ratchet: 3 consecutive non-ok dawns with empties → mark dead; clear on `ok`.
 
 ### Two-land flow (LIVE)
 
@@ -81,6 +83,21 @@ See `docs/twolands/twoland_readd.md`.
 - Snake routes; BUILD only if animal in inv; PLACE same day needs wheat.
 - **PICKUP/DROP only on owned shed tiles** (`_owned_shed_tiles`); locked center → `_step_to_owned_shed`.
 - Mid-zone walk-to-shed / Sept02 preamble rewrites are **failed** — do not reintroduce.
+- Dawn `[hands] h0` logs animal/crop/`est_ops` for **all** `WORKERS` (incl. farmer); eod uses `tiles_dawn=` (tiles needing work at dawn) / `executed=` (non-PASS) / `laps=` — **no** `gap=` (misleading KPI).
+
+### Milos sandbox (`milos/` — not live, not in tarball)
+
+```
+milos/wsp/
+  config.py, data.py (repo data/*.json), types.py, common.py
+  mip.py (farmer CP-SAT), farmer.py, prestart.json (tiles 0–4)
+  gantt.py, log.py
+experiments/milos-simplification.ipynb
+```
+
+- **No `agent/` imports** inside milos. Smoke still runs live `agent/` + `twoland_wsp`.
+- Verbose: `KAGGRI_VERBOSE=1` → `[wsp_plan]` (delta tiles). Notebook `accumulate_absolute` → full farmer board; plot only if delta nonempty.
+- Alphas: past 0.3 / unchanged future 0.6 / delta future **1.0**.
 
 ### Engine facts
 
@@ -98,7 +115,7 @@ See `docs/twolands/twoland_readd.md`.
 4. **Trusting solver obj as bank** — I0 / dump sells.
 5. **Replan on day 0.**
 6. **Committing `.cursor/`.**
-7. **`yield_per_harvest[0]` on every HARVEST.**
+7. **Plotting `[wsp_plan]` deltas as full Gantts** without accumulation.7. **`yield_per_harvest[0]` on every HARVEST.**
 8. **FEED as seed purchase.**
 9. **FERTILIZE before WATER.**
 10. **BUILD pasture without animal in inv.**
