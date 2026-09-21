@@ -9,7 +9,7 @@ from collections.abc import Callable
 from ortools.sat.python import cp_model
 
 from milos.wsp import data as rollouts
-from milos.wsp.common import decode_sort_key
+from milos.wsp.common import decode_sort_key, parse_profile_key
 from milos.wsp.config import (
     ANIMAL_PROFILES,
     CROP_PROFILES,
@@ -23,17 +23,8 @@ from milos.wsp.config import (
     MAX_BUY,
     NUM_DAYS,
     OBJ_EARLY_STOP,
-    PROFILE_SUFFIXES,
     WHEAT_PRICE,
 )
-
-
-def _parse_profile_key(profile_key: str) -> tuple[str, str]:
-    for suffix in PROFILE_SUFFIXES:
-        token = f"_{suffix}"
-        if profile_key.endswith(token):
-            return profile_key[: -len(token)], suffix
-    raise ValueError(f"unknown profile key: {profile_key}")
 
 
 def _rollout_spec(label: str, profile_name: str, crops_data: dict, animals_data: dict):
@@ -108,7 +99,7 @@ def _stamp_placement(
     crops_data: dict,
     animals_data: dict,
 ):
-    label, profile_name = _parse_profile_key(profile_key)
+    label, profile_name = parse_profile_key(profile_key)
     kind, spec, profile = _rollout_spec(label, profile_name, crops_data, animals_data)
     setup_cost = spec["seed_cost"] if kind == "crop" else spec["animal_cost"]
     unit_price = price_of(_harvest_product(label, kind, animals_data))
