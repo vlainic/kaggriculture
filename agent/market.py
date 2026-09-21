@@ -17,8 +17,24 @@ STAPLE_DUMP = frozenset(sell_dp.STAPLE_PRODUCTS)
 DRIP_PER_HOUR = 1
 
 
-def _land2_owned(me: dict) -> bool:
+def _ne_owned(me: dict) -> bool:
     return "NE" in me.get("unlocked_quadrants", [])
+
+
+def _sw_owned(me: dict) -> bool:
+    return "SW" in me.get("unlocked_quadrants", [])
+
+
+def _land2_owned(me: dict) -> bool:
+    return _ne_owned(me)
+
+
+def _next_buy_cost(me: dict) -> int | None:
+    if not _ne_owned(me):
+        return zoning.LAND2_BUY_COST
+    if zoning.USE_THREE and not _sw_owned(me):
+        return zoning.LAND3_BUY_COST
+    return None
 
 
 def _target_hires(me: dict, day: int) -> int:
@@ -26,32 +42,43 @@ def _target_hires(me: dict, day: int) -> int:
     return planner.NUM_ACTIVE_HIRES
 
 
-def _hire_batches(target: int) -> tuple[int, int]:
-    if target <= 2:
-        return (target, 0)
-    if target == 3:
+def _hire_batches_land12(base: int) -> tuple[int, int]:
+    """Split land1+2 hires (base ≤ 9) across h0/h1."""
+    if base <= 2:
+        return (base, 0)
+    if base == 3:
         return (2, 1)
-    if target == 4:
+    if base == 4:
         return (2, 2)
-    if target == 5:
+    if base == 5:
         return (2, 3)
-    if target == 7:
+    if base == 7:
         return (3, 4)
-    if target == 9:
+    if base == 9:
         return (4, 5)
-    h0 = target // 2
-    h1 = target - h0
+    h0 = base // 2
+    h1 = base - h0
     return (h0, h1)
+
+
+def _hire_batches(target: int) -> tuple[int, int, int]:
+    """target = total hands to have today (NUM_ACTIVE_HIRES)."""
+    base = min(target, 9)
+    h0, h1 = _hire_batches_land12(base)
+    h2 = max(0, target - 9)
+    return h0, h1, h2
 
 
 def _hires_this_hour(hour: int, target: int, current_hands: int) -> int:
     if current_hands >= target:
         return 0
-    h0, h1 = _hire_batches(target)
+    h0, h1, h2 = _hire_batches(target)
     if hour == 0:
         return min(h0, target - current_hands)
     if hour == 1:
         return min(h1, target - current_hands)
+    if hour == 2:
+        return min(h2, target - current_hands)
     return 0
 
 
@@ -74,7 +101,7 @@ def _tile_empty(me: dict, idx: int, *, day: int) -> bool:
         return True
     if isinstance(tile, dict) and tile.get("kind") == "WEED":
         return True
-    if planner.is_buy_morning_ne_locked(tile, idx, day):
+    if planner.is_buy_morning_locked(tile, idx, day, me):
         return True
     return False
 
@@ -148,7 +175,7 @@ def _needs_animal_today(
     tile = _tile_at(me, idx)
     if tile is None:
         return item
-    if planner.is_buy_morning_ne_locked(tile, idx, day):
+    if planner.is_buy_morning_locked(tile, idx, day, me):
         return item
     if isinstance(tile, dict) and tile.get("kind") in ("COOP", "PASTURE"):
         if not tile.get("animal"):
@@ -175,7 +202,7 @@ def _needs_build_today(
     tile = _tile_at(me, idx)
     if tile is None:
         return item
-    if planner.is_buy_morning_ne_locked(tile, idx, day):
+    if planner.is_buy_morning_locked(tile, idx, day, me):
         return item
     return None
 
@@ -229,16 +256,26 @@ def build_orders(
     dawn = empty_at_dawn if empty_at_dawn is not None else set()
 
     target_hires = _target_hires(me, day)
-    if hour in (0, 1):
+    if hour in (0, 1, 2):
+        if hour == 0:
+            h0, h1, h2 = _hire_batches(target_hires)
+            dead = ",".join(sorted(planner.DEAD_HANDS)) if planner.DEAD_HANDS else ""
+            print(
+                f"[market] hire_batches target={target_hires} "
+                f"h0={h0} h1={h1} h2={h2}"
+                + (f" dead={dead}" if dead else ""),
+                flush=True,
+            )
         hires_needed = _hires_this_hour(hour, target_hires, len(me["hands"]))
         for _ in range(hires_needed):
             orders.append(["HIRE"])
 
+    buy_cost = _next_buy_cost(me)
     if (
         hour == 0
         and planner.BUY_LAND_DAY is not None
         and day == planner.BUY_LAND_DAY
-        and not _land2_owned(me)
+        and buy_cost is not None
     ):
         orders.insert(0, ["BUY_LAND"])
 
@@ -256,9 +293,9 @@ def build_orders(
     if (
         planner.BUY_LAND_DAY is not None
         and day == planner.BUY_LAND_DAY
-        and not _land2_owned(me)
+        and buy_cost is not None
     ):
-        buy_land_reserved = zoning.LAND2_BUY_COST
+        buy_land_reserved = buy_cost
         money = max(0, money - buy_land_reserved)
     wheat_price = int(prices.get("WHEAT", 0) or 25)
     feed_reserve = wheat_reserve * wheat_price

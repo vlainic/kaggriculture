@@ -137,6 +137,7 @@ def tile_needs_work(
     dig_plant_ok: bool = False,
 ) -> bool:
     tile = _tile_at(me, idx)
+    dawn = empty_at_dawn if empty_at_dawn is not None else set()
     if isinstance(tile, dict) and tile.get("kind") == "WEED":
         return True
     if pending_dig:
@@ -148,13 +149,15 @@ def tile_needs_work(
     item = current_queue_item(idx, queue_idx)
     if item is None:
         return False
-    if tile is None:
-        dawn = empty_at_dawn if empty_at_dawn is not None else set()
+    # Buy-morning expand tiles stay "LOCKED" until market runs; dawn set treats them empty.
+    if tile is None or (tile == "LOCKED" and idx in dawn):
         return can_start_today(idx, dawn, dig_plant_ok) and (
             _start_lifecycle(item, private, inv_idx, harvest_only, idx, dawn, dig_plant_ok)
             is not None
         )
-    if isinstance(tile, dict) and tile.get("kind") in ("COOP", "PASTURE"):
+    if not isinstance(tile, dict):
+        return False
+    if tile.get("kind") in ("COOP", "PASTURE"):
         if tile_needs_feed(tile, day):
             return True
     return _lifecycle_pending(
@@ -229,9 +232,12 @@ def next_tile_action(
     if item is None:
         if harvest_only:
             return _harvest_only_fallback(idx, me, day)
+        # Leftover animal product / fert with no queue item — still collect.
+        if isinstance(tile, dict) and tile.get("kind") in ("COOP", "PASTURE"):
+            return _harvest_only_fallback(idx, me, day)
         return None
 
-    if tile is None:
+    if tile is None or (tile == "LOCKED" and idx in dawn):
         return _start_lifecycle(
             item, private, inv_idx, harvest_only, idx, dawn, dig_plant_ok
         )
@@ -258,7 +264,8 @@ def next_tile_action(
             act = _animal_action(tile, day, item, private, inv_idx, harvest_only)
             if act:
                 return act
-            if harvest_only:
+            # Don't leave eggs/milk/fert sitting when the age tape omitted HARVEST.
+            if harvest_only or tile_has_harvestable(idx, me, day):
                 return _harvest_only_fallback(idx, me, day)
 
     if harvest_only:
@@ -380,7 +387,7 @@ def _animal_action(
         if act == "FEED":
             inv = _inv_at(private, inv_idx)
             if inv.get("WHEAT", 0) <= 0:
-                return None
+                continue  # don't swallow HARVEST / COLLECT_FERTILIZER
         if act == "CARE" and tile.get("cared_today"):
             continue
         if act == "COLLECT_FERTILIZER" and not tile.get("fertilizer_available"):

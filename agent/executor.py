@@ -61,11 +61,28 @@ def _tile_at(me: dict, idx: int):
     return me["tiles"][y][x]
 
 
+def _zone_animal_crop_ops(me: dict, worker: str) -> tuple[int, int, float]:
+    """Count animal/crop structures in a zone; est_ops = animal*4 + crop*1.5."""
+    animal = 0
+    crop = 0
+    for idx in workers.WORKER_TILES[worker]:
+        tile = _tile_at(me, idx)
+        if not isinstance(tile, dict):
+            continue
+        kind = tile.get("kind")
+        if kind in ("COOP", "PASTURE"):
+            animal += 1
+        elif kind == "PLANT":
+            crop += 1
+    est_ops = animal * zoning.EST_OPS_ANIMAL + crop * zoning.EST_OPS_CROP
+    return animal, crop, est_ops
+
+
 def _dawn_empty(me: dict, idx: int, day: int) -> bool:
     tile = _tile_at(me, idx)
     if tile is None:
         return True
-    if planner.is_buy_morning_ne_locked(tile, idx, day):
+    if planner.is_buy_morning_locked(tile, idx, day, me):
         return True
     return False
 
@@ -96,6 +113,7 @@ class Executor:
     def __init__(self) -> None:
         self._route_idx = {w: 0 for w in workers.WORKERS}
         self._preamble_idx = {w: 0 for w in workers.WORKERS}
+        self._route_laps = {w: 0 for w in workers.WORKERS}
         self._endgame_done = {w: set() for w in workers.WORKERS}
         self._tile_state: dict[int, dict] = {}
         self._empty_at_dawn: set[int] = set()
@@ -103,6 +121,8 @@ class Executor:
         self._day = 0
         self._hour = 0
         self._tile_ops_today = {w: 0 for w in workers.WORKERS}
+        self._planned_ops = {w: 0 for w in workers.HAND_WORKERS}
+        self._executed_nonpass = {w: 0 for w in workers.HAND_WORKERS}
         for idx in range(workers.NUM_TILES):
             queue = script.TILE_QUEUES.get(idx, [])
             first_lag = queue[0].start_lag if queue else 0
@@ -145,6 +165,7 @@ class Executor:
         if hour == 0:
             self._log_snap(obs, me, day, hour)
             self._log_hand_queues(me, day)
+            self._snapshot_planned_ops(me, private, day)
             self._log_stuck_tiles(me, day)
         if hour == 1:
             self._log_hand_positions(me, day)
@@ -168,6 +189,11 @@ class Executor:
                 for i in range(len(me["hands"]))
             ]
         hands = [r[0] for r in hand_results]
+
+        for i, (act, _note) in enumerate(hand_results):
+            w = workers.worker_for_hand_idx(i)
+            if act and act[0] != "PASS" and w in self._executed_nonpass:
+                self._executed_nonpass[w] = self._executed_nonpass.get(w, 0) + 1
 
         if orders:
             _log(f"[exec] d={day} h={hour} market {' '.join(_fmt(o) for o in orders)}")
@@ -198,12 +224,16 @@ class Executor:
                 + (f" {note}" if note else "")
             )
 
+        if hour == 23:
+            self._log_hand_eod(day)
+
         return {"farmer": farmer, "hands": hands, "market": orders}
 
     def _on_new_day(self, me: dict, day: int) -> None:
         for w in workers.WORKERS:
             self._route_idx[w] = 0
             self._preamble_idx[w] = 0
+            self._route_laps[w] = 0
             self._tile_ops_today[w] = 0
 
         for idx in range(workers.NUM_TILES):
@@ -237,7 +267,7 @@ class Executor:
         ne_locked = sum(
             1
             for idx in range(workers.NUM_TILES)
-            if planner.is_buy_morning_ne_locked(_tile_at(me, idx), idx, day)
+            if planner.is_buy_morning_locked(_tile_at(me, idx), idx, day, me)
         )
         _log(
             f"[exec] d={day} dawn_empty={len(self._empty_at_dawn)} "
@@ -247,26 +277,130 @@ class Executor:
             self._endgame_done = {w: set() for w in workers.WORKERS}
 
     def _log_hand_queues(self, me: dict, day: int) -> None:
-        for w in workers.HAND_WORKERS:
+        for w in workers.WORKERS:
+            tiles = workers.WORKER_TILES.get(w, ())
+            if not tiles:
+                continue
             q = sum(
-                1 for idx in workers.WORKER_TILES[w] if script.TILE_QUEUES.get(idx)
+                1 for idx in tiles if script.TILE_QUEUES.get(idx)
             )
-            empty = sum(1 for idx in workers.WORKER_TILES[w] if _tile_at(me, idx) is None)
+            empty = sum(1 for idx in tiles if _tile_at(me, idx) is None)
             locked = sum(
                 1
-                for idx in workers.WORKER_TILES[w]
-                if planner.is_buy_morning_ne_locked(_tile_at(me, idx), idx, day)
+                for idx in tiles
+                if planner.is_buy_morning_locked(_tile_at(me, idx), idx, day, me)
             )
             live = sum(
                 1
-                for idx in workers.WORKER_TILES[w]
+                for idx in tiles
                 if isinstance(_tile_at(me, idx), dict)
                 and _tile_at(me, idx).get("kind") in ("PLANT", "COOP", "PASTURE")
             )
+            animal, crop, est_ops = _zone_animal_crop_ops(me, w)
             _log(
                 f"[hands] d={day} h0 {w} NUM_ACTIVE_HIRES={planner.NUM_ACTIVE_HIRES} "
-                f"qtiles={q} empty={empty} locked={locked} live={live}"
+                f"qtiles={q} empty={empty} locked={locked} live={live} "
+                f"animal={animal} crop={crop} est_ops={est_ops:g}"
             )
+
+    def _snapshot_planned_ops(self, me: dict, private: dict, day: int) -> None:
+        """Dawn: count tiles still needing work (planned non-PASS units)."""
+        for w in workers.HAND_WORKERS:
+            inv_idx = self._inv_idx(w)
+            n = 0
+            for idx in workers.WORKER_TILES.get(w, ()):
+                st = self._tile_state[idx]
+                if tile_ops.tile_needs_work(
+                    idx,
+                    me,
+                    private,
+                    day,
+                    inv_idx,
+                    st["queue_idx"],
+                    st["lag"],
+                    st["gap"],
+                    st["pending_dig"],
+                    harvest_only=False,
+                    empty_at_dawn=self._empty_at_dawn,
+                    dig_plant_ok=st["dig_plant_ok"],
+                ):
+                    n += 1
+            self._planned_ops[w] = n
+            self._executed_nonpass[w] = 0
+
+    def _log_hand_eod(self, day: int) -> None:
+        for w in workers.HAND_WORKERS:
+            planned = int(self._planned_ops.get(w, 0))
+            executed = int(self._executed_nonpass.get(w, 0))
+            laps = int(self._route_laps.get(w, 0))
+            _log(
+                f"[hands] d={day} {w} eod tiles_dawn={planned} "
+                f"executed={executed} laps={laps}"
+            )
+
+    def _tile_wants_visit(
+        self,
+        idx: int,
+        me: dict,
+        private: dict,
+        day: int,
+        inv_idx: int,
+        harvest_only: bool,
+    ) -> bool:
+        if tile_ops.tile_has_harvestable(idx, me, day):
+            return True
+        st = self._tile_state[idx]
+        return tile_ops.tile_needs_work(
+            idx,
+            me,
+            private,
+            day,
+            inv_idx,
+            st["queue_idx"],
+            st["lag"],
+            st["gap"],
+            st["pending_dig"],
+            harvest_only=harvest_only,
+            empty_at_dawn=self._empty_at_dawn,
+            dig_plant_ok=st["dig_plant_ok"],
+        )
+
+    def _seek_route_work(
+        self,
+        worker: str,
+        me: dict,
+        private: dict,
+        day: int,
+        inv_idx: int,
+        harvest_only: bool,
+        *,
+        from_idx: int,
+    ) -> bool:
+        """Advance route_idx to the next tile that still needs a visit."""
+        route = workers.WORKER_ROUTES[worker]
+        n = len(route)
+        if n == 0:
+            return False
+        did_wrap = False
+        for offset in range(1, n + 1):
+            ri = from_idx + offset
+            if ri >= n:
+                if not self._zone_pending(
+                    worker, me, private, day, inv_idx, harvest_only
+                ):
+                    self._route_idx[worker] = n
+                    return False
+                ri %= n
+                did_wrap = True
+            if self._tile_wants_visit(
+                route[ri], me, private, day, inv_idx, harvest_only
+            ):
+                if did_wrap:
+                    self._route_laps[worker] = self._route_laps.get(worker, 0) + 1
+                self._route_idx[worker] = ri
+                return True
+        self._route_idx[worker] = n
+        return False
 
     def _log_stuck_tiles(self, me: dict, day: int) -> None:
         if not _DEBUG:
@@ -421,11 +555,15 @@ class Executor:
 
         route = workers.WORKER_ROUTES[worker]
         if self._route_idx[worker] >= len(route):
-            if self._zone_pending(worker, me, private, day, inv_idx, harvest_only):
-                self._route_idx[worker] = 0
+            if self._seek_route_work(
+                worker, me, private, day, inv_idx, harvest_only, from_idx=-1
+            ):
+                pass  # wrapped onto first pending tile
             else:
                 drop = self._drop_if_adjacent(fx, fy, private, inv_idx, me)
-                return drop or (["PASS"], f"{worker} done")
+                if drop:
+                    return drop
+                return ["PASS"], f"{worker} done"
 
         idx = route[self._route_idx[worker]]
         tx, ty = workers.TILE_COORDS[idx]
@@ -475,6 +613,7 @@ class Executor:
                 )
 
             tile = _tile_at(me, idx)
+            feed_skip = False
             if tile_ops.tile_needs_feed(tile, day):
                 inv = (
                     private["inventories"][inv_idx]
@@ -510,17 +649,20 @@ class Executor:
                             )
                     _dbg(
                         f"[pick] d={self._day} h={self._hour} {worker} "
-                        f"want=WHEAT feed-wait pos=({fx},{fy}) adj={int(adj)} "
+                        f"want=WHEAT feed-skip pos=({fx},{fy}) adj={int(adj)} "
                         f"owned={int(on_owned)} shed={shed_w} inv={inv_w}"
                     )
-                    return ["PASS"], f"{worker} feed-wait"
-                return ["PASS"], f"{worker} feed-wait"
+                feed_skip = True
 
-            self._route_idx[worker] += 1
-            if self._route_idx[worker] < len(route):
+            cur = self._route_idx[worker]
+            if self._seek_route_work(
+                worker, me, private, day, inv_idx, harvest_only, from_idx=cur
+            ):
                 ntx, nty = workers.TILE_COORDS[route[self._route_idx[worker]]]
-                return [_step_toward(fx, fy, ntx, nty)], f"{worker} next"
-            return ["PASS"], f"{worker} tile-done"
+                note = f"{worker} feed-skip" if feed_skip else f"{worker} next"
+                return [_step_toward(fx, fy, ntx, nty)], note
+            done = f"{worker} feed-skip" if feed_skip else f"{worker} tile-done"
+            return ["PASS"], done
 
         return [_step_toward(fx, fy, tx, ty)], f"{worker} ->t{idx + 1}"
 

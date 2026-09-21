@@ -48,8 +48,8 @@ Agents never submit without explicit user request (`kaggle-submission.mdc`).
 | Ops cap | **`daily_tile_ops` + hire preamble** | No wheat/animal/fert side counters with pickups JSON |
 | Animals JSON | `animal_with_pickups.json` | |
 | Catalog | `dp_catalog.build_catalog` | `lags`, insert tolerance / max_variants |
-| Layout switch | `zoning.CURRENT` | **`TWO`** (live); catalog also `FOUR` / `FIVE` |
-| Solver | `solvers.CURRENT_SOLVER` | **`twoland_wsp`** (live); also `zonewise_wsp`, `zonewise`, `monolithic` |
+| Layout switch | `zoning.CURRENT` | **`TWO`** (live); `KAGGRI_LANDS=3` → THREE; catalog also `FOUR` / `FIVE` |
+| Solver | `solvers.CURRENT_SOLVER` | **`twoland_wsp`** (live); also `threeland_wsp`, `zonewise_wsp`, `zonewise`, `monolithic` |
 | Shed door | `_owned_shed_tiles` | Center tiles valid for PICKUP/DROP **only if `!= LOCKED`** |
 
 ## DP catalog knobs (`agent/dp_catalog.py`)

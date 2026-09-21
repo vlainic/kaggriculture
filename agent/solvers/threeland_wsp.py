@@ -1,4 +1,4 @@
-"""TwoLand WSP: land1 day-0 prestart + hire5 probe + NE cascade after BUY_LAND."""
+"""ThreeLand WSP: land1 prestart + NE@1k hire5 probe + SW@2k hire10 probe + cascade."""
 
 from __future__ import annotations
 
@@ -12,11 +12,7 @@ from pathlib import Path
 from ortools.sat.python import cp_model
 
 from agent import animal_rollouts
-from agent.solvers.common import (
-    decode_sort_key,
-    land_is_construction,
-    repack_land_mix,
-)
+from agent.solvers.common import decode_sort_key
 from agent.solvers.types import SolveResult
 from agent.zoning import (
     HAND_DAILY_COST,
@@ -25,15 +21,19 @@ from agent.zoning import (
     LAND1_WORKERS,
     LAND2_BUY_COST,
     LAND2_WORKERS,
+    LAND3_BUY_COST,
+    LAND3_WORKERS,
     NET_TILE_OPS,
     NUM_TILES,
     WORKER_TILES,
     WORKERS,
-    ZONE_OPS_MIX,
 )
 
 NEW_ZONE_MIN_DAY0_STARTS = 2
 LAND2_PROBE_WORKER = LAND2_WORKERS[0]
+LAND3_PROBE_WORKER = LAND3_WORKERS[0]
+# CURRENT may be TWO; include catalog LAND3 hands for hire cost / preamble ops.
+_ALL_HANDS = frozenset(HAND_WORKERS) | frozenset(LAND3_WORKERS)
 
 NUM_DAYS = 30
 WHEAT_PRICE = 25
@@ -94,14 +94,14 @@ def _locked_conservative_handoff(
     hire = HAND_DAILY_COST.get(worker, 0) if charge_hire_daily else 0
     locked_spend = locked.get("spend_by_day", [0] * horizon)
     for d in range(horizon):
-        if worker in HAND_WORKERS:
+        if worker in _ALL_HANDS:
             start_d = opening[d] if d < len(opening) else opening[-1]
         elif d == 0:
             start_d = opening[0]
         else:
             start_d = opening[d] + (conservative[d - 1] - opening[0])
         spend_d = locked_spend[d]
-        if charge_hire_daily and worker in HAND_WORKERS:
+        if charge_hire_daily and worker in _ALL_HANDS:
             spend_d -= hire
         conservative.append(start_d + spend_d)
     return conservative
@@ -116,7 +116,9 @@ def _is_prestart_solve(
         return False
     if any(empty_counts.get(w, 0) != len(WORKER_TILES[w]) for w in LAND1_WORKERS):
         return False
-    return all(empty_counts.get(w, 0) == 0 for w in LAND2_WORKERS)
+    if any(empty_counts.get(w, 0) != 0 for w in LAND2_WORKERS):
+        return False
+    return all(empty_counts.get(w, 0) == 0 for w in LAND3_WORKERS)
 
 
 def _count_day0_starts(picked: list) -> int:
@@ -137,7 +139,7 @@ def _empty_locked_dict(horizon: int) -> dict:
     }
 
 
-def _probe_buy_land(
+def _probe_buy_ne(
     patterns,
     horizon,
     opening,
@@ -166,12 +168,53 @@ def _probe_buy_land(
         price_of=price_of,
     )
     if res is None:
-        print("[planner] twoland probe hire5 INFEASIBLE defer", flush=True)
+        print("[planner] threeland probe hire5 INFEASIBLE defer", flush=True)
         return False
     day0 = _count_day0_starts(res["picked"])
     ok = day0 >= NEW_ZONE_MIN_DAY0_STARTS
     print(
-        f"[planner] twoland probe hire5 day0={day0} "
+        f"[planner] threeland probe hire5 day0={day0} "
+        f"{'buy_land tomorrow' if ok else 'defer'}",
+        flush=True,
+    )
+    return ok
+
+
+def _probe_buy_sw(
+    patterns,
+    horizon,
+    opening,
+    price_of,
+    *,
+    max_time,
+    charge_hire_daily,
+) -> bool:
+    """Throwaway hire10 solve @ $2k; signal only (no assignment write)."""
+    probe_opening = list(opening)
+    probe_opening[0] -= LAND3_BUY_COST
+    res = _solve_zone(
+        LAND3_PROBE_WORKER,
+        patterns,
+        horizon=horizon,
+        empty_tiles=list(WORKER_TILES[LAND3_PROBE_WORKER]),
+        locked=_empty_locked_dict(horizon),
+        locked_counts={},
+        opening_balances=probe_opening,
+        w_open=0,
+        f_open=0,
+        max_time=max_time,
+        charge_hire_daily=charge_hire_daily,
+        track_shed=False,
+        min_balance=0,
+        price_of=price_of,
+    )
+    if res is None:
+        print("[planner] threeland probe hire10 INFEASIBLE defer", flush=True)
+        return False
+    day0 = _count_day0_starts(res["picked"])
+    ok = day0 >= NEW_ZONE_MIN_DAY0_STARTS
+    print(
+        f"[planner] threeland probe hire10 day0={day0} "
         f"{'buy_land tomorrow' if ok else 'defer'}",
         flush=True,
     )
@@ -470,7 +513,7 @@ def _solve_zone(
             for tile in zone_empty:
                 terms.append(x[pi, tile] * n)
         locked_ops = locked["daily_tile_ops"][day]
-        if worker in HAND_WORKERS:
+        if worker in _ALL_HANDS:
             animal_terms = [
                 x[pi, tile]
                 for pi, pat in enumerate(patterns)
@@ -550,11 +593,11 @@ def _solve_zone(
             day_terms.append(-FERT_PRICE * buy_f[d])
             spend_terms.append(-WHEAT_PRICE * buy_w[d])
             spend_terms.append(-FERT_PRICE * buy_f[d])
-        if charge_hire_daily and worker in HAND_WORKERS:
+        if charge_hire_daily and worker in _ALL_HANDS:
             day_terms.append(-hire)
             spend_terms.append(-hire)
 
-        if worker in HAND_WORKERS:
+        if worker in _ALL_HANDS:
             prev = (
                 opening_balances[d]
                 if d < len(opening_balances)
@@ -570,7 +613,7 @@ def _solve_zone(
         model.Add(bal == prev + (sum(day_terms) if day_terms else 0))
         balance_vars.append(bal)
 
-        if worker in HAND_WORKERS:
+        if worker in _ALL_HANDS:
             start_d = prev
         elif d == 0:
             start_d = opening_balances[0]
@@ -634,23 +677,6 @@ def _solve_zone(
     }
 
 
-def _construction_mix_and_resize(
-    assigned: dict[int, list],
-    workers: tuple[str, ...],
-    empty_set: set[int],
-    patterns: list,
-    horizon: int,
-) -> dict[int, list]:
-    """ZONE_OPS_MIX pack for one construction land group."""
-    if ZONE_OPS_MIX:
-        assigned, note = repack_land_mix(
-            assigned, workers, empty_set, patterns, horizon
-        )
-        if note:
-            print(f"[planner] ZONE_OPS_MIX {note}", flush=True)
-    return assigned
-
-
 def solve(
     chains: list,
     *,
@@ -667,25 +693,17 @@ def solve(
     cascade_reserve: bool = False,
     min_balance: int = 0,
     price_of: Callable[[str], int] | None = None,
-    land_owned: bool = False,
+    ne_owned: bool = False,
+    sw_owned: bool = False,
     buy_morning: bool = False,
 ) -> SolveResult:
     del chains, cascade_reserve
     if _is_prestart_solve(horizon, empty_tiles, empty_counts):
         assigned, complete, solved_workers = _load_prestart()
         print(
-            f"[planner] twoland prestart tiles={len(assigned)} complete={complete}",
+            f"[planner] threeland prestart tiles={len(assigned)} complete={complete}",
             flush=True,
         )
-        if ZONE_OPS_MIX:
-            if price_of is None:
-                base = _i0_base_prices()
-                price_of = lambda product, _base=base: _base[product]
-            patterns = build_patterns(horizon, price_of)
-            empty_set = set(empty_tiles)
-            assigned = _construction_mix_and_resize(
-                assigned, LAND1_WORKERS, empty_set, patterns, horizon
-            )
         return SolveResult(
             assigned,
             complete,
@@ -697,33 +715,57 @@ def solve(
         base = _i0_base_prices()
         price_of = lambda product, _base=base: _base[product]
 
-    ne_active = land_owned or buy_morning
-    worker_list = LAND1_WORKERS + (LAND2_WORKERS if ne_active else ())
+    ne_active = ne_owned or (buy_morning and not ne_owned)
+    sw_active = sw_owned or (buy_morning and ne_owned and not sw_owned)
+    worker_list = (
+        LAND1_WORKERS
+        + (LAND2_WORKERS if ne_active else ())
+        + (LAND3_WORKERS if sw_active else ())
+    )
 
     empty_set = set(empty_tiles)
     per_zone_time = max_time / max(1, len(worker_list))
     opening = [starting_money] * horizon
-    if buy_morning and not land_owned:
+    if buy_morning and not ne_owned:
         opening[0] -= LAND2_BUY_COST
+    elif buy_morning and ne_owned and not sw_owned:
+        opening[0] -= LAND3_BUY_COST
 
     patterns = build_patterns(horizon, price_of)
 
     buy_land = False
-    if not land_owned and not buy_morning:
-        buy_land = _probe_buy_land(
-            patterns,
-            horizon,
-            opening,
-            price_of,
-            max_time=max(1.5, max_time * 0.15),
-            charge_hire_daily=charge_hire_daily,
-        )
+    if not buy_morning:
+        if not ne_owned:
+            buy_land = _probe_buy_ne(
+                patterns,
+                horizon,
+                opening,
+                price_of,
+                max_time=max(1.5, max_time * 0.15),
+                charge_hire_daily=charge_hire_daily,
+            )
+        elif not sw_owned:
+            buy_land = _probe_buy_sw(
+                patterns,
+                horizon,
+                opening,
+                price_of,
+                max_time=max(1.5, max_time * 0.15),
+                charge_hire_daily=charge_hire_daily,
+            )
 
     print(
-        f"[planner] twoland cascade workers={len(worker_list)} "
-        f"ne_active={int(ne_active)} open0={opening[0]}",
+        f"[planner] threeland cascade workers={len(worker_list)} "
+        f"ne_active={int(ne_active)} sw_active={int(sw_active)} open0={opening[0]}",
         flush=True,
     )
+    if sw_active:
+        # ops = daily_tile_ops only + hire animal preamble (+0/1); tape includes PICKUP
+        print(
+            "[planner] threeland ops-note land3 "
+            "cap=NET_TILE_OPS animal_preamble=+0/1 tape_includes_PICKUP",
+            flush=True,
+        )
 
     assigned: dict[int, list] = {}
     solved_workers: list[str] = []
@@ -732,7 +774,7 @@ def solve(
 
     for worker in worker_list:
         n_empty = empty_counts.get(worker, 0)
-        locked = locked_by_worker[worker]
+        locked = locked_by_worker.get(worker) or _empty_locked_dict(horizon)
         if n_empty == 0:
             opening = _locked_conservative_handoff(
                 opening,
@@ -771,7 +813,7 @@ def solve(
         )
         if res is None:
             print(
-                f"[planner] twoland cascade skip={worker} reason=INFEASIBLE "
+                f"[planner] threeland cascade skip={worker} reason=INFEASIBLE "
                 f"solved={len(solved_workers)}",
                 flush=True,
             )
@@ -787,7 +829,7 @@ def solve(
 
         if not res["picked"]:
             print(
-                f"[planner] twoland cascade skip={worker} reason=picks0 "
+                f"[planner] threeland cascade skip={worker} reason=picks0 "
                 f"solved={len(solved_workers)}",
                 flush=True,
             )
@@ -808,16 +850,6 @@ def solve(
         opening = res["conservative"]
         solved_workers.append(worker)
         zone_outcomes[worker] = "ok"
-
-    if assigned and ZONE_OPS_MIX:
-        if land_is_construction(LAND1_WORKERS, empty_set):
-            assigned = _construction_mix_and_resize(
-                assigned, LAND1_WORKERS, empty_set, patterns, horizon
-            )
-        if ne_active and land_is_construction(LAND2_WORKERS, empty_set):
-            assigned = _construction_mix_and_resize(
-                assigned, LAND2_WORKERS, empty_set, patterns, horizon
-            )
 
     return SolveResult(
         assigned,

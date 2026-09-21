@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -17,9 +17,11 @@ class SolveResult:
     solved_workers: Workers that successfully solved. Empty on full failure.
                     Zonewise uses this for conservative handoff; apply_replan
                     writes only tiles in the solved prefix (farmer first).
+    zone_outcomes: Per-worker cascade outcome — ok / infeasible / picks0 / empty.
     """
 
     assigned: dict[int, list]
     complete: bool
     solved_workers: tuple[str, ...]
     buy_land: bool = False
+    zone_outcomes: dict[str, str] = field(default_factory=dict)

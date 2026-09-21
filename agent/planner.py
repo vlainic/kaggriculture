@@ -10,6 +10,7 @@ from agent import animal_rollouts, dp_catalog, rollouts, solvers, zoning
 from agent.zoning import (
     LAND1_TILE_COUNT,
     LAND1_WORKERS,
+    LAND2_TILE_COUNT,
     NUM_TILES,
     TILE_COORDS,
     WORKER_TILES,
@@ -24,7 +25,11 @@ SEASON_LAST_DAY = 29
 STARTING_MONEY = 3000
 NUM_ACTIVE_HIRES: int = 4
 BUY_LAND_DAY: int | None = None
-_NE_TILES = tuple(range(LAND1_TILE_COUNT, NUM_TILES))
+ZONE_SOLVE_STREAK: dict[str, int] = {}
+DEAD_HANDS: set[str] = set()
+STUCK_THRESHOLD = 3
+_NE_TILES = tuple(range(LAND1_TILE_COUNT, LAND2_TILE_COUNT))
+_SW_TILES = tuple(range(LAND2_TILE_COUNT, LAND2_TILE_COUNT + 25))
 PROFILE_SUFFIXES = ("no_fert", "with_fert", "no_care", "with_care")
 ANIMAL_NAMES = frozenset(animal_rollouts.animal_names())
 CROP_PROFILE = "no_fert"
@@ -45,18 +50,41 @@ ZERO_DAILY_KEYS = (
 _cached_queues: dict | None = None
 
 
-def _land2_owned(me: dict) -> bool:
+def _ne_owned(me: dict) -> bool:
     return "NE" in me.get("unlocked_quadrants", [])
 
 
-def is_buy_morning_ne_locked(tile, idx: int, day: int) -> bool:
-    """NE tiles still read LOCKED at h0 on the morning we BUY_LAND."""
-    return (
-        tile == "LOCKED"
-        and idx >= LAND1_TILE_COUNT
-        and BUY_LAND_DAY is not None
-        and day == BUY_LAND_DAY
-    )
+def _sw_owned(me: dict) -> bool:
+    return "SW" in me.get("unlocked_quadrants", [])
+
+
+def _land2_owned(me: dict) -> bool:
+    """Alias for NE owned (TwoLand callers)."""
+    return _ne_owned(me)
+
+
+def is_buy_morning_locked(tile, idx: int, day: int, me: dict) -> bool:
+    """LOCKED expand tiles still read LOCKED at h0 on BUY_LAND morning."""
+    if tile != "LOCKED" or BUY_LAND_DAY is None or day != BUY_LAND_DAY:
+        return False
+    if not _ne_owned(me):
+        return idx in _NE_TILES
+    if not _sw_owned(me):
+        return idx in _SW_TILES
+    return False
+
+
+def is_buy_morning_ne_locked(tile, idx: int, day: int, me: dict | None = None) -> bool:
+    """Back-compat wrapper; prefer is_buy_morning_locked with me."""
+    if me is None:
+        # Without me, only NE range (TwoLand-safe when SW not in NUM_TILES)
+        return (
+            tile == "LOCKED"
+            and idx in _NE_TILES
+            and BUY_LAND_DAY is not None
+            and day == BUY_LAND_DAY
+        )
+    return is_buy_morning_locked(tile, idx, day, me)
 
 
 def _zone_has_work(
@@ -628,6 +656,40 @@ def _active_hand_hires(solved_workers: tuple[str, ...]) -> int:
     return sum(1 for w in solved_workers if w != "farmer")
 
 
+def update_zone_streaks(
+    day: int,
+    empty_counts: dict[str, int],
+    zone_outcomes: dict[str, str],
+) -> None:
+    """Ratchet: N consecutive non-ok solves with empties → DEAD_HANDS."""
+    global ZONE_SOLVE_STREAK, DEAD_HANDS
+    for worker, outcome in zone_outcomes.items():
+        if worker == "farmer":
+            continue
+        empty_n = int(empty_counts.get(worker, 0))
+        if outcome == "ok":
+            if worker in DEAD_HANDS or ZONE_SOLVE_STREAK.get(worker, 0) > 0:
+                print(
+                    f"[planner] zone_streak worker={worker} d={day} "
+                    f"streak=0 status=recovered",
+                    flush=True,
+                )
+            ZONE_SOLVE_STREAK[worker] = 0
+            DEAD_HANDS.discard(worker)
+            continue
+        if empty_n <= 0 or outcome == "empty":
+            continue
+        streak = ZONE_SOLVE_STREAK.get(worker, 0) + 1
+        ZONE_SOLVE_STREAK[worker] = streak
+        if streak >= STUCK_THRESHOLD and worker not in DEAD_HANDS:
+            DEAD_HANDS.add(worker)
+            print(
+                f"[planner] zone_streak worker={worker} d={day} "
+                f"streak={streak} status=stuck",
+                flush=True,
+            )
+
+
 def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None:
     global NUM_ACTIVE_HIRES, BUY_LAND_DAY
     day = obs["day"]
@@ -641,9 +703,17 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
 
     player = obs["player"]
     me = obs["farms"][player]
-    land_owned = _land2_owned(me)
+    ne_owned = _ne_owned(me)
+    sw_owned = _sw_owned(me)
+    land_owned = ne_owned  # twoland kwargs alias
+    next_land_missing = not ne_owned or (
+        solvers.CURRENT_SOLVER == "threeland_wsp" and not sw_owned
+    )
+    # Buy day consumed (market already ran) — re-arm probe for the next quadrant.
+    if BUY_LAND_DAY is not None and day > BUY_LAND_DAY:
+        BUY_LAND_DAY = None
     buy_morning = (
-        BUY_LAND_DAY is not None and day == BUY_LAND_DAY and not land_owned
+        BUY_LAND_DAY is not None and day == BUY_LAND_DAY and next_land_missing
     )
 
     st_map = tile_state or {}
@@ -675,17 +745,24 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
     replan_tiles = []
     locked_tiles = 0
     force_ne = 0
+    force_sw = 0
     empty_counts = {w: 0 for w in WORKERS}
     locked_by_worker = {w: _empty_locked(horizon) for w in WORKERS}
+
+    buying_ne = buy_morning and not ne_owned
+    buying_sw = buy_morning and ne_owned and not sw_owned
 
     for idx in range(NUM_TILES):
         tile = _tile_at(me, idx)
         worker = worker_for_tile(idx)
         st = st_map.get(idx, {})
-        ne_force = buy_morning and idx in _NE_TILES and tile == "LOCKED"
+        ne_force = buying_ne and idx in _NE_TILES and tile == "LOCKED"
+        sw_force = buying_sw and idx in _SW_TILES and tile == "LOCKED"
         if ne_force:
             force_ne += 1
-        if ne_force or _replan_eligible(idx, tile, st, tile_queues):
+        if sw_force:
+            force_sw += 1
+        if ne_force or sw_force or _replan_eligible(idx, tile, st, tile_queues):
             replan_tiles.append(idx)
             empty_counts[worker] += 1
         else:
@@ -728,9 +805,9 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
     replan_min_balance = 0 if _wsp_solver() else liquidity_floor
 
     print(
-        f"[planner] twoland d={day} land_owned={int(land_owned)} "
+        f"[planner] lands d={day} ne_owned={int(ne_owned)} sw_owned={int(sw_owned)} "
         f"buy_morning={int(buy_morning)} BUY_LAND_DAY={BUY_LAND_DAY} "
-        f"force_ne={force_ne} empty={len(replan_tiles)}",
+        f"force_ne={force_ne} force_sw={force_sw} empty={len(replan_tiles)}",
         flush=True,
     )
 
@@ -749,6 +826,8 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
         price_of=price_of,
         land_owned=land_owned,
         buy_morning=buy_morning,
+        ne_owned=ne_owned,
+        sw_owned=sw_owned,
     )
 
     if not result.complete and (
@@ -771,14 +850,21 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
     )
 
     if buy_morning:
-        ne_written = any(tile_queues.get(idx) for idx in _NE_TILES)
-        if not ne_written:
+        if buying_ne:
+            written = any(tile_queues.get(idx) for idx in _NE_TILES)
+            label = "NE"
+        else:
+            written = any(tile_queues.get(idx) for idx in _SW_TILES)
+            label = "SW"
+        if not written:
             print(
-                f"[planner] d={day} buy-morning NE unwritten -> abort buy",
+                f"[planner] d={day} buy-morning {label} unwritten -> abort buy",
                 flush=True,
             )
             BUY_LAND_DAY = None
-    elif not land_owned and BUY_LAND_DAY is None and result.buy_land:
+        # On success keep BUY_LAND_DAY through this day (market + is_buy_morning_locked).
+        # Cleared at next dawn when day > BUY_LAND_DAY so SW can probe.
+    elif next_land_missing and BUY_LAND_DAY is None and result.buy_land:
         BUY_LAND_DAY = day + 1
         print(
             f"[planner] d={day} probe OK -> BUY_LAND_DAY={BUY_LAND_DAY}",
@@ -786,19 +872,23 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
         )
 
     ordered_hands = [w for w in WORKERS if w in zoning.HAND_WORKERS]
-    active = 0
+    update_zone_streaks(day, empty_counts, getattr(result, "zone_outcomes", {}) or {})
+    # Hire depth = max hand index+1 among healthy solved hands with work.
+    hire_depth = 0
     for w in ordered_hands:
-        if w in result.solved_workers and _zone_has_work(
-            me, w, tile_queues, result.assigned
+        if (
+            w in result.solved_workers
+            and w not in DEAD_HANDS
+            and _zone_has_work(me, w, tile_queues, result.assigned)
         ):
-            active += 1
-        else:
-            break
-    NUM_ACTIVE_HIRES = max(4, active)
+            hire_depth = max(hire_depth, ordered_hands.index(w) + 1)
+    NUM_ACTIVE_HIRES = max(4, hire_depth)
+    dead_note = ",".join(sorted(DEAD_HANDS)) if DEAD_HANDS else ""
     print(
-        f"[planner] twoland hires active={active} "
+        f"[planner] hires active={hire_depth} "
         f"NUM_ACTIVE_HIRES={NUM_ACTIVE_HIRES} "
-        f"solved={','.join(result.solved_workers) or 'none'}",
+        f"solved={','.join(result.solved_workers) or 'none'}"
+        + (f" dead={dead_note}" if dead_note else ""),
         flush=True,
     )
 
@@ -832,7 +922,7 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
 
 
 def _build_from_solver() -> dict[int, list]:
-    if solvers.CURRENT_SOLVER == "twoland_wsp":
+    if solvers.CURRENT_SOLVER in ("twoland_wsp", "threeland_wsp"):
         empty_tiles = list(range(LAND1_TILE_COUNT))
         empty_counts = {
             w: (len(WORKER_TILES[w]) if w in LAND1_WORKERS else 0) for w in WORKERS
@@ -886,7 +976,7 @@ def get_tile_queues(fallback: Callable[[], dict]) -> dict:
         try:
             _cached_queues = _build_from_solver()
         except (RuntimeError, OSError, ValueError, KeyError, TypeError) as exc:
-            if zoning.CURRENT in (zoning.FIVE, zoning.TWO):
+            if zoning.CURRENT in (zoning.FIVE, zoning.TWO, zoning.THREE):
                 raise RuntimeError(
                     f"day-0 solver failed on {zoning.CURRENT} layout (no empty fallback): {exc}"
                 ) from exc

@@ -15,6 +15,8 @@ __all__ = [
     "plot_earnings_by_day",
     "plot_earnings_by_zone",
     "plot_worker_actions",
+    "plot_stuck_skip_freq",
+    "plot_zone_capacity",
     "summarize_distribution",
     "load_lines",
     "SEASON_DAYS",
@@ -41,6 +43,20 @@ def plot_earnings_by_zone(report: dict[str, Any], *, title: str | None = None) -
 
 def plot_worker_actions(report: dict[str, Any], *, title: str | None = None) -> None:
     from smoke_analysis.plot import plot_worker_actions as _plot
+
+    return _plot(report, title=title)
+
+
+def plot_stuck_skip_freq(
+    reports: list[dict[str, Any]], *, title: str | None = None
+) -> None:
+    from smoke_analysis.plot import plot_stuck_skip_freq as _plot
+
+    return _plot(reports, title=title)
+
+
+def plot_zone_capacity(report: dict[str, Any], *, title: str | None = None) -> None:
+    from smoke_analysis.plot import plot_zone_capacity as _plot
 
     return _plot(report, title=title)
 
@@ -105,6 +121,9 @@ def analyze(path: str | Path) -> dict[str, Any]:
         workers=list(workers),
     )
 
+    hands_dawn = parse_exec.parse_hands_dawn(lines, season_days=SEASON_DAYS)
+    hands_eod = parse_exec.parse_hands_eod(lines, season_days=SEASON_DAYS)
+
     return {
         "log_path": str(path),
         "log_stem": path.stem,
@@ -122,6 +141,7 @@ def analyze(path: str | Path) -> dict[str, Any]:
         "earnings": earnings,
         "actions": actions,
         "hires": hires,
+        "hands": {**hands_dawn, **hands_eod},
         "planner": planner,
         "kpi": kpi,
         "workers": list(workers),
@@ -138,7 +158,18 @@ def summarize_distribution(reports: list[dict[str, Any]]) -> str:
         return "no reports"
     rewards = [r["reward"] for r in reports if r.get("reward") is not None]
     seeds = [r.get("seed") for r in reports if r.get("seed") is not None]
-    stuck_counts = [
+    stuck_fires = [
+        sum(
+            1
+            for e in ((r.get("planner") or {}).get("zone_streak_events") or [])
+            if e.get("status") == "stuck"
+        )
+        for r in reports
+    ]
+    skip_counts = [
+        len((r.get("planner") or {}).get("skip_cascade") or []) for r in reports
+    ]
+    stuck_worker_counts = [
         len((r.get("kpi") or {}).get("stuck_zones", {}).get("workers_stuck") or [])
         for r in reports
     ]
@@ -153,9 +184,23 @@ def summarize_distribution(reports: list[dict[str, Any]]) -> str:
         )
     if seeds:
         lines.append(f"seeds (observed): {seeds}")
-    if stuck_counts:
-        n_stuck = sum(1 for c in stuck_counts if c > 0)
-        lines.append(f"stuck_runs={n_stuck}/{len(reports)} stuck_counts={stuck_counts}")
+    if stuck_fires:
+        n_any = sum(1 for c in stuck_fires if c > 0)
+        mean_f = sum(stuck_fires) / len(stuck_fires)
+        lines.append(
+            f"stuck_fires: runs_with={n_any}/{len(reports)} "
+            f"mean={mean_f:.1f} values={stuck_fires}"
+        )
+    if skip_counts:
+        mean_s = sum(skip_counts) / len(skip_counts)
+        lines.append(
+            f"skip_cascade: mean={mean_s:.1f} values={skip_counts}"
+        )
+    if stuck_worker_counts:
+        n_stuck = sum(1 for c in stuck_worker_counts if c > 0)
+        lines.append(
+            f"stuck_runs={n_stuck}/{len(reports)} stuck_worker_counts={stuck_worker_counts}"
+        )
     return "\n".join(lines)
 
 

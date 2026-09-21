@@ -420,3 +420,165 @@ def _plot_infeasible(ax, report: dict[str, Any]) -> None:
     ax.set_xlabel("replan day")
     ax.set_title("INFEASIBLE events (e=1 = leftover tile)")
     ax.set_xlim(-0.5, SEASON_DAYS - 0.5)
+
+
+def plot_stuck_skip_freq(
+    reports: list[dict[str, Any]], *, title: str | None = None
+) -> None:
+    """Two-panel bar chart: stuck fires / run and cascade skips / run."""
+    if not reports:
+        fig, ax = plt.subplots(figsize=(6, 2))
+        ax.text(0.5, 0.5, "no reports", ha="center", va="center")
+        ax.axis("off")
+        plt.show()
+        return
+
+    stuck_fires = [
+        sum(
+            1
+            for e in ((r.get("planner") or {}).get("zone_streak_events") or [])
+            if e.get("status") == "stuck"
+        )
+        for r in reports
+    ]
+    skip_counts = [
+        len((r.get("planner") or {}).get("skip_cascade") or []) for r in reports
+    ]
+    labels = []
+    for i, r in enumerate(reports):
+        seed = r.get("seed")
+        stem = r.get("log_stem") or f"run{i}"
+        labels.append(str(seed) if seed is not None else stem)
+
+    fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(12, 4), sharey=False)
+    fig.suptitle(title or "Stuck fires vs cascade skips (per smoke run)", fontsize=11)
+
+    x = np.arange(len(reports))
+    ax0.bar(x, stuck_fires, color="#c62828", alpha=0.85)
+    mean_s = float(np.mean(stuck_fires)) if stuck_fires else 0.0
+    ax0.axhline(mean_s, color="#6a1b9a", ls="--", lw=1, label=f"mean={mean_s:.1f}")
+    ax0.set_xticks(x, labels, rotation=45, ha="right", fontsize=8)
+    ax0.set_ylabel("stuck events")
+    ax0.set_title("zone_streak status=stuck")
+    ax0.legend(fontsize=8)
+
+    ax1.bar(x, skip_counts, color="#1565c0", alpha=0.85)
+    mean_k = float(np.mean(skip_counts)) if skip_counts else 0.0
+    ax1.axhline(mean_k, color="#6a1b9a", ls="--", lw=1, label=f"mean={mean_k:.1f}")
+    ax1.set_xticks(x, labels, rotation=45, ha="right", fontsize=8)
+    ax1.set_ylabel("skip events")
+    ax1.set_title("cascade skip=")
+    ax1.legend(fontsize=8)
+
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_zone_capacity(report: dict[str, Any], *, title: str | None = None) -> None:
+    """Per-zone daily tile ops vs dawn est_ops and net_tile_ops cap."""
+    import sys
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    from agent import zoning
+
+    workers = list(report.get("workers") or [])
+    if not workers:
+        fig, ax = plt.subplots(figsize=(6, 2))
+        ax.text(0.5, 0.5, "no workers", ha="center", va="center")
+        ax.axis("off")
+        plt.show()
+        return
+
+    actions = report.get("actions") or {}
+    by_wd = actions.get("by_worker_by_day") or {}
+    hands = report.get("hands") or {}
+    est_by_w = hands.get("est_ops_by_worker_by_day") or {}
+    stem = title or report.get("log_stem") or "smoke"
+
+    n = len(workers)
+    ncols = min(3, n)
+    nrows = int(np.ceil(n / ncols))
+    fig, axes = plt.subplots(
+        nrows, ncols, figsize=(5 * ncols, 2.8 * nrows), sharex=True, squeeze=False
+    )
+    days = np.arange(SEASON_DAYS)
+
+    for i, worker in enumerate(workers):
+        ax = axes[i // ncols, i % ncols]
+        daily = by_wd.get(worker) or [{} for _ in range(SEASON_DAYS)]
+        tile_ops = np.array([daily[d].get("tile_ops", 0) for d in range(SEASON_DAYS)])
+        move = np.array([daily[d].get("move", 0) for d in range(SEASON_DAYS)])
+        pass_h = np.array([daily[d].get("pass", 0) for d in range(SEASON_DAYS)])
+        reactive = np.array([daily[d].get("reactive", 0) for d in range(SEASON_DAYS)])
+        bottom_move = tile_ops
+        bottom_pass = tile_ops + move
+        bottom_react = bottom_pass + pass_h
+
+        ax.bar(days, tile_ops, color="#1565c0", alpha=0.85, label="tile ops")
+        ax.bar(
+            days,
+            move,
+            bottom=bottom_move,
+            color="#78909c",
+            alpha=0.75,
+            label="MOVE",
+        )
+        ax.bar(
+            days,
+            pass_h,
+            bottom=bottom_pass,
+            color=ACTION_COLORS["PASS"],
+            edgecolor="#90a4ae",
+            linewidth=0.3,
+            alpha=0.95,
+            label="PASS",
+        )
+        if reactive.any():
+            ax.bar(
+                days,
+                reactive,
+                bottom=bottom_react,
+                color="#ef6c00",
+                alpha=0.85,
+                label="reactive feed",
+            )
+
+        est_series = est_by_w.get(worker) or [None] * SEASON_DAYS
+        est_y = np.array(
+            [float(v) if v is not None else np.nan for v in est_series[:SEASON_DAYS]]
+        )
+        ax.plot(days, est_y, "o", color="#c62828", ms=3, lw=0, label="est_ops dawn")
+
+        cap = zoning.NET_TILE_OPS.get(worker)
+        if cap is not None:
+            ax.axhline(
+                cap,
+                color="#2e7d32",
+                ls="--",
+                lw=1,
+                label=f"net_tile_ops={cap}",
+            )
+
+        buy_day = report.get("buy_land_day")
+        if buy_day is not None:
+            ax.axvline(buy_day, color="#9e9e9e", ls=":", lw=0.8)
+
+        ax.set_title(worker, fontsize=10)
+        ax.set_xlim(-0.5, SEASON_DAYS - 0.5)
+        ax.set_ylim(0, HOURS_PER_DAY + 0.5)
+        ax.set_ylabel("actions/day")
+        if i == 0:
+            ax.legend(fontsize=6, loc="upper left")
+
+    for j in range(n, nrows * ncols):
+        axes[j // ncols, j % ncols].axis("off")
+
+    fig.suptitle(
+        f"{stem} — zone capacity (bars=actual, dots=est_ops, dash=net_tile_ops)",
+        fontsize=11,
+    )
+    plt.tight_layout()
+    plt.show()

@@ -4,7 +4,7 @@
 
 **Sept02 overhaul patterns are REJECTED.** Do not copy Wave 2–8 “safety rails” (`cons≥0`, WSP `track_shed=True`, formula `net_tile_ops`, fert dawn pipeline) into live agent. Pre-overhaul WSP: **`track_shed=False`**, **`min_balance=0`**, **unbounded `conservative`**, hand-calibrated `NET_TILE_OPS`. See `progress.md` FAILURE banner.
 
-## Current: TwoLand WSP + snake executor (Sep 15)
+## Current: TwoLand WSP + snake executor (Sep 18)
 
 ```
 import:
@@ -16,12 +16,13 @@ obs → executor.step
   ├─ hour0: reset routes; dawn replan if 0 < day < SEASON_LAST; HIRE / BUY_LAND
   │         replan: lock commitments → CP-SAT empties only; NE LOCKED carve-out on buy-morning
   │         WSP: track_shed=False, min_balance=0; full conservative handoff
+  │         BUY_LAND_DAY cleared next dawn (day > BUY_LAND_DAY)
   ├─ market: dump SELL; buy animals; NUM_ACTIVE_HIRES batches; BUY_LAND reserved
   └─ snake: owned-shed first → PICKUP → compass → tile ops
 ```
 
 `main.py` → `executor.step`.  
-`CURRENT_SOLVER = "twoland_wsp"`.
+`CURRENT_SOLVER = "twoland_wsp"` (default). `KAGGRI_LANDS=3` → `threeland_wsp`.
 
 ### Shed-adjacent **ONLY IF OWNED** (engine + executor)
 
@@ -36,9 +37,9 @@ obs → executor.step
 ### Zone layouts (`agent/zoning.py`)
 
 - **`Layout` / `Zone` dataclasses** — coords, visit order (= route), preamble, `start_hour`, `net_tile_ops`, `is_hand`.
-- **Catalog:** `FOUR` + `FIVE` + **`TWO`**. **`CURRENT = TWO`** (live).
+- **Catalog:** `FOUR` + `FIVE` + **`TWO`** + `THREE`. **`CURRENT = TWO`** (live).
 - Live TWO: land1 ops **18/17/16/14/13**, land2 **16/14/13/12/11**.
-- Module constants: `LAND1_TILE_COUNT`, `LAND1_WORKERS`, `LAND2_WORKERS`, `LAND2_BUY_COST`.
+- Module constants: `LAND1_TILE_COUNT`, `LAND1_WORKERS`, `LAND2_WORKERS`, `LAND2_BUY_COST` (+ LAND3_* for opt-in).
 - **`bind(layout)`** fills module aliases; **`NET_TILE_OPS = z.net_tile_ops`**.
 - Hire cash: fib sum of active hands (`planner.NUM_ACTIVE_HIRES`).
 

@@ -137,6 +137,10 @@ def parse_worker_actions(
         grid[row, col] = ai + 1  # 1-based for imshow; idle stays NaN
 
         counts[bucket] += 1
+        note = ""
+        nm = re.search(r" owned=\d+(?: (.+))?$", line)
+        if nm and nm.group(1):
+            note = nm.group(1).strip()
         events.append(
             {
                 "worker": worker,
@@ -144,9 +148,12 @@ def parse_worker_actions(
                 "hour": hour,
                 "verb": verb,
                 "bucket": bucket,
+                "note": note,
                 "raw_line": line.strip(),
             }
         )
+
+    by_worker_day = _aggregate_capacity(events, worker_list, season_days)
 
     return {
         "action_order": list(ACTION_ORDER),
@@ -155,4 +162,39 @@ def parse_worker_actions(
         "grid": grid,
         "events": events,
         "counts_by_bucket": dict(counts),
+        "by_worker_by_day": by_worker_day,
     }
+
+
+def _aggregate_capacity(
+    events: list[dict[str, Any]],
+    workers: list[str],
+    season_days: int,
+) -> dict[str, list[dict[str, int]]]:
+    """Daily tile ops, MOVE, PASS, reactive feed paths (one bar segment per hour)."""
+    empty = {"tile_ops": 0, "move": 0, "pass": 0, "pickup": 0, "reactive": 0}
+    out: dict[str, list[dict[str, int]]] = {
+        w: [dict(empty) for _ in range(season_days)] for w in workers
+    }
+    reactive_markers = ("feed->shed", "feed-skip", "feed-wait")
+    for ev in events:
+        worker = ev["worker"]
+        day = ev["day"]
+        if worker not in out or not (0 <= day < season_days):
+            continue
+        row = out[worker][day]
+        note = ev.get("note") or ""
+        bucket = ev["bucket"]
+        if any(m in note for m in reactive_markers):
+            row["reactive"] += 1
+            continue
+        if bucket == "MOVE":
+            row["move"] += 1
+        elif bucket == "PASS":
+            row["pass"] += 1
+        elif bucket == "PICKUP":
+            row["pickup"] += 1
+            row["tile_ops"] += 1
+        else:
+            row["tile_ops"] += 1
+    return out

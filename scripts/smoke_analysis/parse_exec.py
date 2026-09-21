@@ -90,6 +90,64 @@ def smoke_passed(lines: list[str]) -> bool:
     return any("Smoke test passed." in line for line in lines)
 
 
+HANDS_H0_RE = re.compile(
+    r"\[hands\] d=(\d+) h0 (\w+) .* animal=(\d+) crop=(\d+) est_ops=([\d.]+)"
+)
+HANDS_EOD_RE = re.compile(
+    r"\[hands\] d=(\d+) (\w+) eod (?:planned|tiles_dawn)=(\d+) "
+    r"executed=(\d+)(?: gap=-?\d+)? laps=(\d+)"
+)
+
+
+def parse_hands_dawn(lines: list[str], *, season_days: int = 30) -> dict[str, Any]:
+    """Per-worker per-day dawn est_ops from [hands] h0 lines."""
+    est_ops: dict[str, list[float | None]] = {}
+    animal: dict[str, list[int | None]] = {}
+    crop: dict[str, list[int | None]] = {}
+    for line in lines:
+        m = HANDS_H0_RE.search(line)
+        if not m:
+            continue
+        day = int(m.group(1))
+        worker = m.group(2)
+        if not (0 <= day < season_days):
+            continue
+        est_ops.setdefault(worker, [None] * season_days)
+        animal.setdefault(worker, [None] * season_days)
+        crop.setdefault(worker, [None] * season_days)
+        est_ops[worker][day] = float(m.group(5))
+        animal[worker][day] = int(m.group(3))
+        crop[worker][day] = int(m.group(4))
+    return {
+        "est_ops_by_worker_by_day": est_ops,
+        "animal_by_worker_by_day": animal,
+        "crop_by_worker_by_day": crop,
+    }
+
+
+def parse_hands_eod(lines: list[str], *, season_days: int = 30) -> dict[str, Any]:
+    """EOD executed + laps (tiles_dawn is diagnostic only, not comparable to executed)."""
+    executed: dict[str, list[int]] = defaultdict(lambda: [0] * season_days)
+    laps: dict[str, list[int]] = defaultdict(lambda: [0] * season_days)
+    tiles_dawn: dict[str, list[int]] = defaultdict(lambda: [0] * season_days)
+    for line in lines:
+        m = HANDS_EOD_RE.search(line)
+        if not m:
+            continue
+        day = int(m.group(1))
+        worker = m.group(2)
+        if not (0 <= day < season_days):
+            continue
+        tiles_dawn[worker][day] = int(m.group(3))
+        executed[worker][day] = int(m.group(4))
+        laps[worker][day] = int(m.group(5))
+    return {
+        "executed_by_worker_by_day": dict(executed),
+        "laps_by_worker_by_day": dict(laps),
+        "tiles_dawn_by_worker_by_day": dict(tiles_dawn),
+    }
+
+
 def parse_start_blocks(lines: list[str]) -> list[dict[str, Any]]:
     blocks: list[dict[str, Any]] = []
     for line in lines:
