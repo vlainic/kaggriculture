@@ -1,4 +1,4 @@
-"""Milos experiments — not included in Kaggle submission bundle."""
+"""Milos farmer-only submission + WSP sandbox."""
 
 from milos.planner import (
     PlanBoard,
@@ -9,12 +9,11 @@ from milos.planner import (
     empty_board,
     merge_wsp_plan,
 )
-from milos.zoning import FARMER, FARMER_TILES, NET_TILE_OPS, NUM_TILES, WORKERS, WORKER_TILES, worker_for_tile
+from milos.zoning import FARMER, FARMER_TILES, NUM_TILES, WORKERS, WORKER_TILES, worker_for_tile
 
 __all__ = [
     "FARMER",
     "FARMER_TILES",
-    "NET_TILE_OPS",
     "NUM_TILES",
     "PlanBoard",
     "WORKERS",

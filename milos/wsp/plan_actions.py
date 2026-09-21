@@ -131,6 +131,88 @@ def board_planned_events(
     return events
 
 
+def _placement_active(profile_key: str, age: int) -> bool:
+    """True while age ≥ 0 and crop is still occupying the tile (animals stay forever)."""
+    if age < 0:
+        return False
+    label, suffix = parse_profile_key(profile_key)
+    crops = rollouts.crops()["crops"]
+    if label in crops:
+        return age < rollouts.tile_free_age(label, suffix)
+    return True
+
+
+def day_executor_io(
+    board: dict[int, list],
+    day: int,
+    *,
+    tiles: tuple[int, ...] = FARMER_TILES,
+) -> dict[str, Any]:
+    """One calendar day of planned executor I/O from an absolute planner board.
+
+    INPUT: active placements (age ≥ 0, not past crop free-age) + that day's ops.
+    OUTPUT: hour-stamped tape from ``board_planned_events`` (PASS-filled).
+    """
+    inputs: list[dict[str, Any]] = []
+    for tile in tiles:
+        for profile_key, start_abs in board.get(tile) or []:
+            age = day - int(start_abs)
+            if not _placement_active(profile_key, age):
+                continue
+            ops = _actions_at_age(profile_key, age)
+            inputs.append(
+                {
+                    "tile": tile,
+                    "profile": profile_key,
+                    "start": int(start_abs),
+                    "age": age,
+                    "ops": ops,
+                }
+            )
+
+    outputs = [
+        ev
+        for ev in board_planned_events(board, tiles=tiles)
+        if int(ev["day"]) == day
+    ]
+    return {"day": day, "input": inputs, "output": outputs}
+
+
+def print_day_executor_io(
+    board: dict[int, list],
+    *,
+    days: range | None = None,
+    tiles: tuple[int, ...] = FARMER_TILES,
+    show_pass: bool = False,
+) -> None:
+    """Print per-day INPUT (active placements) / OUTPUT (hour tape) for initial plan."""
+    day_range = days if days is not None else range(SEASON_DAYS)
+    for day in day_range:
+        io = day_executor_io(board, day, tiles=tiles)
+        print(f"=== d={day} ===")
+        print("INPUT (active placements → ops):")
+        if not io["input"]:
+            print("  (none)")
+        else:
+            for row in io["input"]:
+                ops = ",".join(row["ops"]) if row["ops"] else "—"
+                print(
+                    f"  t{row['tile'] + 1} {row['profile']} "
+                    f"start={row['start']} age={row['age']} ops=[{ops}]"
+                )
+        print("OUTPUT (executor hour tape):")
+        shown = 0
+        for ev in io["output"]:
+            if not show_pass and ev["verb"] == "PASS":
+                continue
+            tile = f" t{ev['tile'] + 1}" if ev["tile"] is not None else ""
+            print(f"  h{ev['hour']:02d} {ev['verb']}{tile}")
+            shown += 1
+        if shown == 0:
+            print("  (all PASS)" if not show_pass else "  (none)")
+        print()
+
+
 def events_to_action_grid(
     events: list[dict[str, Any]],
     *,

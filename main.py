@@ -1,6 +1,6 @@
-"""Scripted one-land farming agent."""
+"""Milos farmer-only submission entry."""
 
-from agent.executor import step as _step
+from milos.executor import step as _step
 
 
 def agent(obs):

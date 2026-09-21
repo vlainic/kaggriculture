@@ -1,0 +1,183 @@
+"""Hardcoded one-land plan from data/handmade_pseudoplan.md (1-based tiles in docs)."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Literal
+
+from milos import planner, zoning
+from milos.zoning import (
+    HAND_WORKERS,
+    NUM_TILES,
+    TILE_COORDS,
+    WORKER_TILES,
+    WORKERS,
+)
+
+Kind = Literal["crop", "animal"]
+SEASON_LAST_DAY = 29
+WHEAT_RESERVE_CAP = 10
+FERT_RESERVE_CAP = 10
+WHEAT_PICKUP_PER_HAND = 2
+
+CROP_PROFILE = "no_fert"
+ANIMAL_PROFILE = "with_care"
+
+
+@dataclass(frozen=True)
+class QueueItem:
+    kind: Kind
+    label: str
+    profile: str = CROP_PROFILE
+    start_lag: int = 0
+    replant_gap: int = 0
+    dig_before: bool = False
+
+
+def _repeat(kind: Kind, label: str, n: int, **kw) -> list[QueueItem]:
+    return [QueueItem(kind, label, **kw) for _ in range(n)]
+
+
+def _wheat(n: int = 1, **kw) -> list[QueueItem]:
+    return _repeat("crop", "WHEAT", n, profile=CROP_PROFILE, **kw)
+
+
+def _carrot(n: int = 1, **kw) -> list[QueueItem]:
+    return _repeat("crop", "CARROT", n, profile=CROP_PROFILE, **kw)
+
+
+def _melon(n: int = 1, **kw) -> list[QueueItem]:
+    return _repeat("crop", "MELON", n, profile=CROP_PROFILE, **kw)
+
+
+def _animal(label: str, **kw) -> QueueItem:
+    return QueueItem("animal", label, profile=ANIMAL_PROFILE, **kw)
+
+
+def _build_tile_queues() -> dict[int, list[QueueItem]]:
+    return {idx: [] for idx in range(NUM_TILES)}
+
+
+from milos.planner import get_tile_queues
+
+TILE_QUEUES: dict[int, list[QueueItem]] = get_tile_queues(_build_tile_queues)
+
+
+def _tile_at(me: dict, idx: int):
+    x, y = TILE_COORDS[idx]
+    return me["tiles"][y][x]
+
+
+def zone_animal_feed_count(
+    me: dict, worker: str, tile_state: dict, *, day: int | None = None
+) -> int:
+    """Live animals plus animals queued for place today in this zone."""
+    count = 0
+    for idx in WORKER_TILES[worker]:
+        tile = _tile_at(me, idx)
+        if isinstance(tile, dict) and tile.get("animal"):
+            count += 1
+            continue
+        st = tile_state.get(idx, {})
+        if st.get("lag", 0) > 0 or st.get("gap", 0) > 0:
+            continue
+        qi = st.get("queue_idx", 0)
+        queue = TILE_QUEUES.get(idx, [])
+        if qi >= len(queue):
+            continue
+        item = queue[qi]
+        if item.kind != "animal":
+            continue
+        emptyish = tile is None or (
+            day is not None and planner.is_buy_morning_locked(tile, idx, day, me)
+        )
+        if emptyish:
+            count += 1
+            continue
+        if isinstance(tile, dict) and tile.get("kind") in ("COOP", "PASTURE"):
+            if not tile.get("animal"):
+                count += 1
+    return count
+
+
+def zone_needs_feed_wheat(me: dict, worker: str, tile_state: dict) -> bool:
+    """True if zone has live animals or is placing one today (needs FEED wheat)."""
+    return zone_animal_feed_count(me, worker, tile_state) > 0
+
+
+def wheat_pickup_needed(
+    me: dict, worker: str, tile_state: dict, inv: dict, *, day: int | None = None
+) -> int:
+    need = zone_animal_feed_count(me, worker, tile_state, day=day)
+    if need <= 0:
+        return 0
+    return max(0, need - inv.get("WHEAT", 0))
+
+
+def _animals_needed_for_zone(
+    me: dict, worker: str, tile_state: dict, *, day: int | None = None
+) -> dict[str, int]:
+    needed: dict[str, int] = {}
+    for idx in WORKER_TILES[worker]:
+        st = tile_state.get(idx, {})
+        if st.get("lag", 0) > 0 or st.get("gap", 0) > 0:
+            continue
+        qi = st.get("queue_idx", 0)
+        queue = TILE_QUEUES.get(idx, [])
+        if qi >= len(queue):
+            continue
+        item = queue[qi]
+        if item.kind != "animal":
+            continue
+        tile = _tile_at(me, idx)
+        emptyish = tile is None or (
+            day is not None and planner.is_buy_morning_locked(tile, idx, day, me)
+        )
+        if emptyish:
+            needed[item.label] = needed.get(item.label, 0) + 1
+            continue
+        if not isinstance(tile, dict):
+            continue
+        if tile.get("kind") not in ("COOP", "PASTURE"):
+            continue
+        if tile.get("animal"):
+            continue
+        needed[item.label] = needed.get(item.label, 0) + 1
+    return needed
+
+
+def next_animal_pickup(
+    me: dict, worker: str, tile_state: dict, private: dict, inv_idx: int
+) -> str | None:
+    inv = (
+        private["inventories"][inv_idx]
+        if inv_idx < len(private["inventories"])
+        else {}
+    )
+    needed = _animals_needed_for_zone(me, worker, tile_state)
+    shed = private.get("shed", {})
+    for label in sorted(needed):
+        if inv.get(label, 0) < needed[label] and shed.get(label, 0) > 0:
+            return label
+    return None
+
+
+def _inventory_index(worker: str) -> int:
+    if worker == "farmer":
+        return 0
+    return HAND_WORKERS.index(worker) + 1
+
+
+def total_wheat_feed_need(
+    me: dict, tile_state: dict, private: dict, *, day: int | None = None
+) -> int:
+    total = 0
+    for worker in WORKERS:
+        inv_idx = _inventory_index(worker)
+        inv = (
+            private["inventories"][inv_idx]
+            if inv_idx < len(private["inventories"])
+            else {}
+        )
+        total += wheat_pickup_needed(me, worker, tile_state, inv, day=day)
+    return total

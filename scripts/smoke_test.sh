@@ -21,11 +21,11 @@ if [[ ! -d vendor/ortools ]]; then
   bash "$ROOT/scripts/vendor_ortools.sh"
 fi
 
-echo "==> Building ${SUBMISSION} (main.py + agent/ + data/ + vendored ortools)"
+echo "==> Building ${SUBMISSION} (main.py + milos/ + data/ + vendored ortools)"
 rm -rf "$BUILD"
 mkdir -p "$BUILD"
 cp main.py "$BUILD/"
-cp -a agent "$BUILD/"
+cp -a milos "$BUILD/"
 mkdir -p "$BUILD/data"
 cp data/crop_rollouts.json data/animal_with_pickups.json data/handmade_dp_candidates.json "$BUILD/data/"
 cp -a vendor/. "$BUILD/"
