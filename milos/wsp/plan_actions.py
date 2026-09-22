@@ -148,10 +148,9 @@ def day_executor_io(
     *,
     tiles: tuple[int, ...] = FARMER_TILES,
 ) -> dict[str, Any]:
-    """One calendar day of planned executor I/O from an absolute planner board.
+    """Synthetic planned tape for one day (NOT live executor output).
 
-    INPUT: active placements (age ≥ 0, not past crop free-age) + that day's ops.
-    OUTPUT: hour-stamped tape from ``board_planned_events`` (PASS-filled).
+    See ``milos.diagnostics.print_planner_executor_trace`` for real queue + step I/O.
     """
     inputs: list[dict[str, Any]] = []
     for tile in tiles:
@@ -185,7 +184,7 @@ def print_day_executor_io(
     tiles: tuple[int, ...] = FARMER_TILES,
     show_pass: bool = False,
 ) -> None:
-    """Print per-day INPUT (active placements) / OUTPUT (hour tape) for initial plan."""
+    """Print synthetic planned tape per day (heatmap model — not executor returns)."""
     day_range = days if days is not None else range(SEASON_DAYS)
     for day in day_range:
         io = day_executor_io(board, day, tiles=tiles)
