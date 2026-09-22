@@ -150,6 +150,8 @@ def analyze(path: str | Path) -> dict[str, Any]:
         "land2_tile_min": layout["land2_tile_min"],
         "has_land2": layout["has_land2"],
         "land2_probe_worker": layout.get("land2_probe_worker"),
+        "net_tile_ops": dict(layout.get("net_tile_ops") or {}),
+        "package": layout.get("package"),
     }
 
 
@@ -209,7 +211,8 @@ def summarize(report: dict[str, Any]) -> str:
     land2 = report.get("land2_workers") or []
     lines = [
         f"log={report.get('log_stem')} seed={report.get('seed')} "
-        f"layout={report.get('layout')} land2={len(land2)} workers "
+        f"layout={report.get('layout')} package={report.get('package')} "
+        f"land2={len(land2)} workers "
         f"reward={report.get('reward')} "
         f"smoke_passed={report.get('smoke_passed')} buy_land_day={report.get('buy_land_day')}",
         f"PASS total={report.get('passes', {}).get('total')} "

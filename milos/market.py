@@ -1,10 +1,10 @@
-"""Market orders for scripted one-land agent."""
+"""Market orders for milos farmer-only agent."""
 
 from __future__ import annotations
 
 from collections import Counter
 
-from milos import animal_rollouts, planner, pricing, rollouts, script, sell_dp, workers, zoning
+from milos import animal_rollouts, planner, pricing, rollouts, script, sell_dp, workers
 from milos.script import TILE_QUEUES, QueueItem
 
 MAX_ORDERS = 10
@@ -15,61 +15,6 @@ LIVESTOCK = frozenset(animal_rollouts.animal_names())
 PREMIUM_DRIP = frozenset(sell_dp.PREMIUM_PRODUCTS)
 STAPLE_DUMP = frozenset(sell_dp.STAPLE_PRODUCTS)
 DRIP_PER_HOUR = 1
-
-
-def _target_hires(me: dict, day: int) -> int:
-    del me, day
-    if not zoning.HAND_WORKERS:
-        return 0
-    return planner.NUM_ACTIVE_HIRES
-
-
-def _hire_batches_land12(base: int) -> tuple[int, int]:
-    """Split land1+2 hires (base ≤ 9) across h0/h1."""
-    if base <= 2:
-        return (base, 0)
-    if base == 3:
-        return (2, 1)
-    if base == 4:
-        return (2, 2)
-    if base == 5:
-        return (2, 3)
-    if base == 7:
-        return (3, 4)
-    if base == 9:
-        return (4, 5)
-    h0 = base // 2
-    h1 = base - h0
-    return (h0, h1)
-
-
-def _hire_batches(target: int) -> tuple[int, int, int]:
-    """target = total hands to have today (NUM_ACTIVE_HIRES)."""
-    base = min(target, 9)
-    h0, h1 = _hire_batches_land12(base)
-    h2 = max(0, target - 9)
-    return h0, h1, h2
-
-
-def _hires_this_hour(hour: int, target: int, current_hands: int) -> int:
-    if current_hands >= target:
-        return 0
-    h0, h1, h2 = _hire_batches(target)
-    if hour == 0:
-        return min(h0, target - current_hands)
-    if hour == 1:
-        return min(h1, target - current_hands)
-    if hour == 2:
-        return min(h2, target - current_hands)
-    return 0
-
-
-def _active_hire_reserve(target_hires: int, current_hands: int) -> int:
-    reserve = 0
-    for i in range(current_hands, target_hires):
-        if i < len(workers.HAND_WORKERS):
-            reserve += zoning.HAND_DAILY_COST.get(workers.HAND_WORKERS[i], 0)
-    return reserve
 
 
 def _tile_at(me: dict, idx: int):
@@ -151,15 +96,13 @@ def _needs_animal_today(
 
 def needed_buys(
     me: dict,
-    private: dict,
     day: int,
     tile_state: dict,
     empty_at_dawn: set[int],
-) -> tuple[Counter[str], Counter[str], int]:
-    """Return (seeds, animals, wheat_pickup_need)."""
+) -> tuple[Counter[str], Counter[str]]:
+    """Return (seeds, animals) needed for today's queue heads."""
     seeds: Counter[str] = Counter()
     animals: Counter[str] = Counter()
-    wheat_need = 0
 
     for idx in range(workers.NUM_TILES):
         st = tile_state.get(idx, {})
@@ -179,9 +122,7 @@ def needed_buys(
         if animal:
             animals[animal.label] += 1
 
-    wheat_need = script.total_wheat_feed_need(me, tile_state, private, day=day)
-
-    return seeds, animals, wheat_need
+    return seeds, animals
 
 
 def build_orders(
@@ -197,24 +138,7 @@ def build_orders(
     orders: list[list] = []
     dawn = empty_at_dawn if empty_at_dawn is not None else set()
 
-    target_hires = _target_hires(me, day)
-    if hour in (0, 1, 2):
-        if hour == 0:
-            h0, h1, h2 = _hire_batches(target_hires)
-            dead = ",".join(sorted(planner.DEAD_HANDS)) if planner.DEAD_HANDS else ""
-            print(
-                f"[market] hire_batches target={target_hires} "
-                f"h0={h0} h1={h1} h2={h2}"
-                + (f" dead={dead}" if dead else ""),
-                flush=True,
-            )
-        hires_needed = _hires_this_hour(hour, target_hires, len(me["hands"]))
-        for _ in range(hires_needed):
-            orders.append(["HIRE"])
-
-    needed_seeds, needed_animals, wheat_need = needed_buys(
-        me, private, day, tile_state, dawn
-    )
+    needed_seeds, needed_animals = needed_buys(me, day, tile_state, dawn)
     wheat_feed_need = script.total_wheat_feed_need(me, tile_state, private, day=day)
     live_animals = _count_live_animals(me)
     wheat_reserve = max(wheat_feed_need, live_animals)
@@ -223,23 +147,17 @@ def build_orders(
     shed = private["shed"]
     money = int(me["money"])
     wheat_price = int(prices.get("WHEAT", 0) or 25)
-    feed_reserve = wheat_reserve * wheat_price
-    hire_reserve = _active_hire_reserve(target_hires, len(me["hands"]))
-    spendable = max(0, money - feed_reserve - hire_reserve)
-
-    if hour == 0 and day < script.SEASON_LAST_DAY:
-        wheat_in_shed = shed.get("WHEAT", 0)
-        dawn_wheat_need = wheat_feed_need
-        if wheat_in_shed < dawn_wheat_need + 1:
-            deficit = dawn_wheat_need + 1 - wheat_in_shed
-            cost = wheat_price
-            buy = min(deficit, money // cost) if cost else 0
-            if buy > 0:
-                orders.append(["BUY_PRODUCT", "WHEAT", buy])
-                money -= buy * cost
-                spendable = max(0, money - feed_reserve - hire_reserve)
+    spendable = max(0, money - wheat_reserve * wheat_price)
 
     if day < script.SEASON_LAST_DAY:
+        deficit = wheat_feed_need - int(shed.get("WHEAT", 0))
+        if deficit > 0:
+            buy = min(deficit, money // wheat_price) if wheat_price else 0
+            if buy > 0:
+                orders.append(["BUY_PRODUCT", "WHEAT", buy])
+                money -= buy * wheat_price
+                spendable = max(0, money - wheat_reserve * wheat_price)
+
         for crop, count in needed_seeds.items():
             deficit = count - seeds.get(crop, 0)
             if deficit <= 0:
@@ -264,15 +182,6 @@ def build_orders(
                 spendable -= buy * cost
                 money -= buy * cost
 
-        wheat_in_shed = shed.get("WHEAT", 0)
-        if wheat_need > wheat_in_shed:
-            deficit = wheat_need - wheat_in_shed
-            cost = int(prices.get("WHEAT", 0) or 0)
-            buy = min(deficit, money // cost) if cost else 0
-            if buy > 0:
-                orders.append(["BUY_PRODUCT", "WHEAT", buy])
-                money -= buy * cost
-
     sells = _sell_orders(
         private, me, day, hour, wheat_reserve, prices, obs["market"]["inventory"]
     )
@@ -280,8 +189,7 @@ def build_orders(
         sells = sells[: max(0, MAX_ORDERS - len(orders))]
     orders.extend(sells)
 
-    out = orders[:MAX_ORDERS]
-    return out
+    return orders[:MAX_ORDERS]
 
 
 def _staple_sell_orders(
@@ -409,21 +317,6 @@ def _sell_orders(
     return sells
 
 
-def defer_farmer_hour0(hour: int, orders: list[list], me: dict, day: int) -> bool:
-    """Engine runs farmer before market on h=0 — PASS until buys execute."""
-    if day >= script.SEASON_LAST_DAY:
-        return False
-    if hour != 0:
-        return False
-    if len(me["hands"]) < 2:
-        return True
-    for order in orders:
-        if order and order[0] in (
-            "BUY_SEED",
-            "BUY_ANIMAL",
-            "BUY_PRODUCT",
-            "HIRE",
-            "BUY_LAND",
-        ):
-            return True
-    return False
+def defer_farmer_hour0(hour: int, day: int) -> bool:
+    """Engine runs farmer before market on h=0 — always PASS until market hour."""
+    return hour == 0 and day < script.SEASON_LAST_DAY

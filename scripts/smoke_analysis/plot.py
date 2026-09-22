@@ -476,14 +476,6 @@ def plot_stuck_skip_freq(
 
 def plot_zone_capacity(report: dict[str, Any], *, title: str | None = None) -> None:
     """Per-zone daily tile ops vs dawn est_ops and net_tile_ops cap."""
-    import sys
-    from pathlib import Path
-
-    root = Path(__file__).resolve().parents[2]
-    if str(root) not in sys.path:
-        sys.path.insert(0, str(root))
-    from agent import zoning
-
     workers = list(report.get("workers") or [])
     if not workers:
         fig, ax = plt.subplots(figsize=(6, 2))
@@ -496,6 +488,7 @@ def plot_zone_capacity(report: dict[str, Any], *, title: str | None = None) -> N
     by_wd = actions.get("by_worker_by_day") or {}
     hands = report.get("hands") or {}
     est_by_w = hands.get("est_ops_by_worker_by_day") or {}
+    caps = report.get("net_tile_ops") or {}
     stem = title or report.get("log_stem") or "smoke"
 
     n = len(workers)
@@ -552,7 +545,7 @@ def plot_zone_capacity(report: dict[str, Any], *, title: str | None = None) -> N
         )
         ax.plot(days, est_y, "o", color="#c62828", ms=3, lw=0, label="est_ops dawn")
 
-        cap = zoning.NET_TILE_OPS.get(worker)
+        cap = caps.get(worker)
         if cap is not None:
             ax.axhline(
                 cap,
