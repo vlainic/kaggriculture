@@ -93,6 +93,8 @@ def smoke_passed(lines: list[str]) -> bool:
 HANDS_H0_RE = re.compile(
     r"\[hands\] d=(\d+) h0 (\w+) .* animal=(\d+) crop=(\d+) est_ops=([\d.]+)"
 )
+THEO_TILE_RE = re.compile(r"\[theo\] d=(\d+) (\w+) (.+)$")
+THEO_TILE_PART_RE = re.compile(r"t(\d+)=([^ ]+)")
 HANDS_EOD_RE = re.compile(
     r"\[hands\] d=(\d+) (\w+) eod (?:planned|tiles_dawn)=(\d+) "
     r"executed=(\d+)(?: gap=-?\d+)? laps=(\d+)"
@@ -100,26 +102,45 @@ HANDS_EOD_RE = re.compile(
 
 
 def parse_hands_dawn(lines: list[str], *, season_days: int = 30) -> dict[str, Any]:
-    """Per-worker per-day dawn est_ops from [hands] h0 lines."""
+    """Per-worker per-day dawn est_ops + per-tile theo verb lists from [theo] lines."""
     est_ops: dict[str, list[float | None]] = {}
     animal: dict[str, list[int | None]] = {}
     crop: dict[str, list[int | None]] = {}
+    # worker -> day -> {tile_num: [verbs]}
+    theo_by_tile: dict[str, list[dict[int, list[str]] | None]] = {}
     for line in lines:
         m = HANDS_H0_RE.search(line)
-        if not m:
+        if m:
+            day = int(m.group(1))
+            worker = m.group(2)
+            if not (0 <= day < season_days):
+                continue
+            est_ops.setdefault(worker, [None] * season_days)
+            animal.setdefault(worker, [None] * season_days)
+            crop.setdefault(worker, [None] * season_days)
+            est_ops[worker][day] = float(m.group(5))
+            animal[worker][day] = int(m.group(3))
+            crop[worker][day] = int(m.group(4))
             continue
-        day = int(m.group(1))
-        worker = m.group(2)
+        tm = THEO_TILE_RE.search(line)
+        if not tm:
+            continue
+        day = int(tm.group(1))
+        worker = tm.group(2)
         if not (0 <= day < season_days):
             continue
-        est_ops.setdefault(worker, [None] * season_days)
-        animal.setdefault(worker, [None] * season_days)
-        crop.setdefault(worker, [None] * season_days)
-        est_ops[worker][day] = float(m.group(5))
-        animal[worker][day] = int(m.group(3))
-        crop[worker][day] = int(m.group(4))
+        theo_by_tile.setdefault(worker, [None] * season_days)
+        by_t: dict[int, list[str]] = {}
+        rest = tm.group(3).strip()
+        if rest != "-":
+            for part in THEO_TILE_PART_RE.finditer(rest):
+                tnum = int(part.group(1))
+                verbs = [v for v in part.group(2).split(",") if v]
+                by_t[tnum] = verbs
+        theo_by_tile[worker][day] = by_t
     return {
         "est_ops_by_worker_by_day": est_ops,
+        "theo_by_tile_by_worker_by_day": theo_by_tile,
         "animal_by_worker_by_day": animal,
         "crop_by_worker_by_day": crop,
     }

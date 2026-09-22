@@ -141,6 +141,13 @@ def parse_worker_actions(
         nm = re.search(r" owned=\d+(?: (.+))?$", line)
         if nm and nm.group(1):
             note = nm.group(1).strip()
+        elif worker == "farmer":
+            # rest is "PLANT WHEAT farmer t1" or "NORTH farmer ->t2" or "PASS market-hour"
+            fi = rest.find(" farmer ")
+            if fi >= 0:
+                note = rest[fi + 1 :].strip()
+            elif len(parts) >= 2:
+                note = " ".join(parts[1:])
         events.append(
             {
                 "worker": worker,

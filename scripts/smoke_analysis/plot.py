@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from typing import Any
 
@@ -575,3 +576,50 @@ def plot_zone_capacity(report: dict[str, Any], *, title: str | None = None) -> N
     )
     plt.tight_layout()
     plt.show()
+
+    events = actions.get("events") or []
+    theo_by_w = hands.get("theo_by_tile_by_worker_by_day") or {}
+    tile_note_re = re.compile(r"(?<!>)t(\d+)$")
+    # worker -> day -> {tile_num: [verbs]}
+    act_by_wd: dict[str, dict[int, dict[int, list[str]]]] = {w: {} for w in workers}
+    for ev in events:
+        w = ev.get("worker")
+        d = ev.get("day")
+        if w not in act_by_wd or d is None:
+            continue
+        if ev.get("bucket") in ("MOVE", "PASS"):
+            continue
+        note = ev.get("note") or ""
+        m = tile_note_re.search(note)
+        if not m:
+            continue
+        tnum = int(m.group(1))
+        day_map = act_by_wd[w].setdefault(int(d), {})
+        day_map.setdefault(tnum, []).append(str(ev.get("verb") or ""))
+
+    for worker in workers:
+        theo_days = theo_by_w.get(worker) or [None] * SEASON_DAYS
+        print(f"{worker}: per-tile theo vs act (mismatches only)")
+        n_mismatch = 0
+        for d in range(SEASON_DAYS):
+            theo_map = dict(theo_days[d] or {})
+            act_map = dict(act_by_wd.get(worker, {}).get(d) or {})
+            tiles = sorted(set(theo_map) | set(act_map))
+            day_rows = []
+            for tnum in tiles:
+                theo_v = theo_map.get(tnum) or []
+                act_v = act_map.get(tnum) or []
+                if theo_v == act_v:
+                    continue
+                day_rows.append((tnum, theo_v, act_v))
+            if not day_rows:
+                continue
+            n_mismatch += 1
+            print(f"  d={d}")
+            for tnum, theo_v, act_v in day_rows:
+                theo_s = " ".join(theo_v) if theo_v else "-"
+                act_s = " ".join(act_v) if act_v else "-"
+                print(f"    t{tnum}  theo: {theo_s}")
+                print(f"         act:  {act_s}")
+        if n_mismatch == 0:
+            print("  (all tiles match)")

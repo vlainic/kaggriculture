@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import re
 
 from milos import market, planner, rollouts, script, sell_dp, sim_apply, tile_ops, workers, zoning
 from milos.zoning import NET_TILE_OPS
@@ -265,7 +266,7 @@ class Executor:
 
     def forecast_day_counts(
         self, obs: dict, me: dict, private: dict, day: int
-    ) -> dict[str, int]:
+    ) -> dict:
         """Dry-run farmer hours 0..23 after h0 market on copied state."""
         saved_cursor = self._cursor
         saved_tile_state = copy.deepcopy(self._tile_state)
@@ -290,13 +291,16 @@ class Executor:
         sim_apply.apply_market_orders(me_c, priv_c, orders, prices)
 
         counts = {"tile_ops": 0, "move": 0, "pass": 0}
+        by_tile: dict[int, list[str]] = {}
         harvest_only = day >= script.SEASON_LAST_DAY
+        tile_note_re = re.compile(r"(?<!>)t(\d+)$")
 
         for hour in range(24):
+            note = ""
             if market.defer_farmer_hour0(hour, day):
                 action = ["PASS"]
             else:
-                action, _ = self._farmer_action(
+                action, note = self._farmer_action(
                     me_c, priv_c, day, hour, harvest_only
                 )
                 sim_apply.apply_farmer_action(
@@ -307,12 +311,19 @@ class Executor:
                     self._tile_state,
                     inv_idx=self._inv_idx("farmer"),
                 )
+            verb = action[0] if action else "PASS"
             bucket = self._classify_forecast_bucket(action)
             counts[bucket] += 1
+            if bucket == "tile_ops":
+                m = tile_note_re.search(note or "")
+                if m:
+                    tnum = int(m.group(1))
+                    by_tile.setdefault(tnum, []).append(verb)
 
         self._cursor = saved_cursor
         self._tile_state = saved_tile_state
         self._tile_ops_today = saved_ops
+        counts["by_tile"] = by_tile
         return counts
 
     def _log_hand_queues(self, obs: dict, me: dict, private: dict, day: int) -> None:
@@ -340,12 +351,18 @@ class Executor:
             if w == "farmer":
                 fc = forecast
             else:
-                fc = {"tile_ops": 0, "move": 0, "pass": 0}
+                fc = {"tile_ops": 0, "move": 0, "pass": 0, "by_tile": {}}
             _log(
                 f"[hands] d={day} h0 {w} NUM_ACTIVE_HIRES={planner.NUM_ACTIVE_HIRES} "
                 f"qtiles={q} empty={empty} locked={locked} live={live} "
                 f"animal={animal} crop={crop} est_ops={fc['tile_ops']:g}"
             )
+            if w == "farmer":
+                parts = []
+                for tnum in sorted(fc.get("by_tile") or {}):
+                    verbs = ",".join(fc["by_tile"][tnum])
+                    parts.append(f"t{tnum}={verbs}")
+                _log(f"[theo] d={day} {w} " + (" ".join(parts) if parts else "-"))
 
     def _log_stuck_tiles(self, me: dict, day: int) -> None:
         if not _DEBUG:
