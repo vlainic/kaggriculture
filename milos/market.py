@@ -150,13 +150,14 @@ def build_orders(
     spendable = max(0, money - wheat_reserve * wheat_price)
 
     if day < script.SEASON_LAST_DAY:
-        deficit = wheat_feed_need - int(shed.get("WHEAT", 0))
-        if deficit > 0:
-            buy = min(deficit, money // wheat_price) if wheat_price else 0
-            if buy > 0:
-                orders.append(["BUY_PRODUCT", "WHEAT", buy])
-                money -= buy * wheat_price
-                spendable = max(0, money - wheat_reserve * wheat_price)
+        if hour == 0:
+            deficit = wheat_feed_need - int(shed.get("WHEAT", 0))
+            if deficit > 0:
+                buy = min(deficit, money // wheat_price) if wheat_price else 0
+                if buy > 0:
+                    orders.append(["BUY_PRODUCT", "WHEAT", buy])
+                    money -= buy * wheat_price
+                    spendable = max(0, money - wheat_reserve * wheat_price)
 
         for crop, count in needed_seeds.items():
             deficit = count - seeds.get(crop, 0)

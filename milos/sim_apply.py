@@ -148,6 +148,23 @@ def apply_farmer_action(
         )
         return
 
+    if verb in ("BUILD_COOP", "BUILD_PASTURE"):
+        kind = "COOP" if verb == "BUILD_COOP" else "PASTURE"
+        _set_tile(
+            me,
+            idx,
+            {
+                "kind": kind,
+                "animal": None,
+                "placed_day": day,
+                "fed_today": False,
+                "cared_today": False,
+                "yield_units": 0,
+                "fertilizer_available": False,
+            },
+        )
+        return
+
     if not isinstance(tile, dict):
         if verb == "DIG":
             _set_tile(me, idx, None)
@@ -169,8 +186,8 @@ def apply_farmer_action(
             crop = tile["crop"]
             y = int(tile.get("yield_units", 0))
             if y > 0:
-                inv[crop] = inv.get(crop, 0) + y
-                tile["yield_units"] = 0
+                take = y if crop in ONE_TIME_CROPS else min(y, 1)
+                inv[crop] = inv.get(crop, 0) + take
                 if crop in ONE_TIME_CROPS:
                     item = tile_ops.current_queue_item(idx, st["queue_idx"])
                     qi, lag, gap, dig = on_lifecycle_end(
@@ -182,6 +199,8 @@ def apply_farmer_action(
                     st["pending_dig"] = dig
                     st["active"] = False
                     _set_tile(me, idx, None)
+                else:
+                    tile["yield_units"] = y - take
         elif tile.get("kind") in ("COOP", "PASTURE"):
             animal = tile.get("animal")
             y = int(tile.get("yield_units", 0))
@@ -198,23 +217,6 @@ def apply_farmer_action(
         ):
             _set_tile(me, idx, None)
             st["dig_plant_ok"] = True
-        return
-
-    if verb in ("BUILD_COOP", "BUILD_PASTURE"):
-        kind = "COOP" if verb == "BUILD_COOP" else "PASTURE"
-        _set_tile(
-            me,
-            idx,
-            {
-                "kind": kind,
-                "animal": None,
-                "placed_day": day,
-                "fed_today": False,
-                "cared_today": False,
-                "yield_units": 0,
-                "fertilizer_available": False,
-            },
-        )
         return
 
     if verb == "PLACE" and len(action) >= 2:

@@ -117,6 +117,8 @@ class Executor:
     def __init__(self) -> None:
         self._cursor = 0
         self._endgame_done = {w: set() for w in workers.WORKERS}
+        self._endgame_exhausted = {w: set() for w in workers.WORKERS}
+        self._endgame_harvested = {w: set() for w in workers.WORKERS}
         self._tile_state: dict[int, dict] = {}
         self._empty_at_dawn: set[int] = set()
         self._day0_productive = False
@@ -216,6 +218,8 @@ class Executor:
         self._cursor = 0
         for w in workers.WORKERS:
             self._tile_ops_today[w] = 0
+            self._endgame_exhausted[w] = set()
+            self._endgame_harvested[w] = set()
 
         for idx in range(workers.NUM_TILES):
             st = self._tile_state[idx]
@@ -271,6 +275,13 @@ class Executor:
         saved_cursor = self._cursor
         saved_tile_state = copy.deepcopy(self._tile_state)
         saved_ops = dict(self._tile_ops_today)
+        saved_endgame_done = {w: set(s) for w, s in self._endgame_done.items()}
+        saved_endgame_exhausted = {
+            w: set(s) for w, s in self._endgame_exhausted.items()
+        }
+        saved_endgame_harvested = {
+            w: set(s) for w, s in self._endgame_harvested.items()
+        }
 
         me_c = copy.deepcopy(me)
         priv_c = copy.deepcopy(private)
@@ -292,6 +303,7 @@ class Executor:
 
         counts = {"tile_ops": 0, "move": 0, "pass": 0}
         by_tile: dict[int, list[str]] = {}
+        extra_verbs: list[str] = []
         harvest_only = day >= script.SEASON_LAST_DAY
         tile_note_re = re.compile(r"(?<!>)t(\d+)$")
 
@@ -319,11 +331,17 @@ class Executor:
                 if m:
                     tnum = int(m.group(1))
                     by_tile.setdefault(tnum, []).append(verb)
+                else:
+                    extra_verbs.append(verb)
 
         self._cursor = saved_cursor
         self._tile_state = saved_tile_state
         self._tile_ops_today = saved_ops
+        self._endgame_done = saved_endgame_done
+        self._endgame_exhausted = saved_endgame_exhausted
+        self._endgame_harvested = saved_endgame_harvested
         counts["by_tile"] = by_tile
+        counts["extra_verbs"] = extra_verbs
         return counts
 
     def _log_hand_queues(self, obs: dict, me: dict, private: dict, day: int) -> None:
@@ -363,6 +381,27 @@ class Executor:
                     verbs = ",".join(fc["by_tile"][tnum])
                     parts.append(f"t{tnum}={verbs}")
                 _log(f"[theo] d={day} {w} " + (" ".join(parts) if parts else "-"))
+                extra = fc.get("extra_verbs") or []
+                _log(
+                    f"[theo_extra] d={day} {w} "
+                    + (",".join(extra) if extra else "-")
+                )
+
+    def _mark_endgame_tile_exhausted(
+        self, worker: str, idx: int, me: dict, action: list
+    ) -> None:
+        """Do not repeat HARVEST on same tile after DROP clears _endgame_done."""
+        if not action:
+            return
+        verb = action[0]
+        if verb == "HARVEST":
+            self._endgame_harvested[worker].add(idx)
+            return
+        tile = _tile_at(me, idx)
+        if not isinstance(tile, dict):
+            return
+        if verb == "COLLECT_FERTILIZER" and tile.get("fertilizer_available"):
+            self._endgame_exhausted[worker].add(idx)
 
     def _log_stuck_tiles(self, me: dict, day: int) -> None:
         if not _DEBUG:
@@ -537,6 +576,8 @@ class Executor:
                         f"[harv] d={self._day} h={self._hour} {worker} t{idx + 1} "
                         f"kind={t.get('kind') if isinstance(t, dict) else t} yield={y}"
                     )
+                if action[0] in ("HARVEST", "COLLECT_FERTILIZER"):
+                    self._mark_endgame_tile_exhausted(worker, idx, me, action)
                 return self._emit_action(
                     worker, action, f"{worker} t{idx + 1}", tile_idx=idx
                 )
@@ -550,12 +591,19 @@ class Executor:
 
     def _endgame_tile_needs_work(
         self,
+        worker: str,
         idx: int,
         me: dict,
         private: dict,
         day: int,
         inv_idx: int,
     ) -> bool:
+        if idx in self._endgame_exhausted.get(worker, ()):
+            return False
+        if idx in self._endgame_harvested.get(worker, ()):
+            tile = _tile_at(me, idx)
+            if isinstance(tile, dict) and tile.get("kind") == "PLANT":
+                return False
         if tile_ops.tile_has_harvestable(idx, me, day):
             return True
         st = self._tile_state[idx]
@@ -592,7 +640,15 @@ class Executor:
         for idx in workers.WORKER_TILES[worker]:
             if idx in self._endgame_done[worker]:
                 continue
-            if not self._endgame_tile_needs_work(idx, me, private, day, inv_idx):
+            if idx in self._endgame_exhausted.get(worker, ()):
+                continue
+            if idx in self._endgame_harvested.get(worker, ()):
+                tile = _tile_at(me, idx)
+                if isinstance(tile, dict) and tile.get("kind") == "PLANT":
+                    continue
+            if not self._endgame_tile_needs_work(
+                worker, idx, me, private, day, inv_idx
+            ):
                 continue
             tx, ty = workers.TILE_COORDS[idx]
             dist = _manhattan(fx, fy, tx, ty)
@@ -652,6 +708,7 @@ class Executor:
         if action:
             if action[0] in ("HARVEST", "COLLECT_FERTILIZER"):
                 self._endgame_done[worker].add(target)
+                self._mark_endgame_tile_exhausted(worker, target, me, action)
             return action, f"{worker} t{target + 1}"
 
         self._endgame_done[worker].add(target)

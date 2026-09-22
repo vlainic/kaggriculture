@@ -95,6 +95,7 @@ HANDS_H0_RE = re.compile(
 )
 THEO_TILE_RE = re.compile(r"\[theo\] d=(\d+) (\w+) (.+)$")
 THEO_TILE_PART_RE = re.compile(r"t(\d+)=([^ ]+)")
+THEO_EXTRA_RE = re.compile(r"\[theo_extra\] d=(\d+) (\w+) (.+)$")
 HANDS_EOD_RE = re.compile(
     r"\[hands\] d=(\d+) (\w+) eod (?:planned|tiles_dawn)=(\d+) "
     r"executed=(\d+)(?: gap=-?\d+)? laps=(\d+)"
@@ -108,6 +109,7 @@ def parse_hands_dawn(lines: list[str], *, season_days: int = 30) -> dict[str, An
     crop: dict[str, list[int | None]] = {}
     # worker -> day -> {tile_num: [verbs]}
     theo_by_tile: dict[str, list[dict[int, list[str]] | None]] = {}
+    theo_extra: dict[str, list[list[str] | None]] = {}
     for line in lines:
         m = HANDS_H0_RE.search(line)
         if m:
@@ -121,6 +123,19 @@ def parse_hands_dawn(lines: list[str], *, season_days: int = 30) -> dict[str, An
             est_ops[worker][day] = float(m.group(5))
             animal[worker][day] = int(m.group(3))
             crop[worker][day] = int(m.group(4))
+            continue
+        ex = THEO_EXTRA_RE.search(line)
+        if ex:
+            day = int(ex.group(1))
+            worker = ex.group(2)
+            if not (0 <= day < season_days):
+                continue
+            theo_extra.setdefault(worker, [None] * season_days)
+            rest = ex.group(3).strip()
+            if rest == "-":
+                theo_extra[worker][day] = []
+            else:
+                theo_extra[worker][day] = [v for v in rest.split(",") if v]
             continue
         tm = THEO_TILE_RE.search(line)
         if not tm:
@@ -141,6 +156,7 @@ def parse_hands_dawn(lines: list[str], *, season_days: int = 30) -> dict[str, An
     return {
         "est_ops_by_worker_by_day": est_ops,
         "theo_by_tile_by_worker_by_day": theo_by_tile,
+        "theo_extra_by_worker_by_day": theo_extra,
         "animal_by_worker_by_day": animal,
         "crop_by_worker_by_day": crop,
     }

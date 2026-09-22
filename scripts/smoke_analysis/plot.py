@@ -578,10 +578,13 @@ def plot_zone_capacity(report: dict[str, Any], *, title: str | None = None) -> N
     plt.show()
 
     events = actions.get("events") or []
+    by_wd = actions.get("by_worker_by_day") or {}
+    est_by_w = hands.get("est_ops_by_worker_by_day") or {}
     theo_by_w = hands.get("theo_by_tile_by_worker_by_day") or {}
+    theo_extra_w = hands.get("theo_extra_by_worker_by_day") or {}
     tile_note_re = re.compile(r"(?<!>)t(\d+)$")
-    # worker -> day -> {tile_num: [verbs]}
     act_by_wd: dict[str, dict[int, dict[int, list[str]]]] = {w: {} for w in workers}
+    act_extra_wd: dict[str, dict[int, list[str]]] = {w: {} for w in workers}
     for ev in events:
         w = ev.get("worker")
         d = ev.get("day")
@@ -589,37 +592,58 @@ def plot_zone_capacity(report: dict[str, Any], *, title: str | None = None) -> N
             continue
         if ev.get("bucket") in ("MOVE", "PASS"):
             continue
+        verb = str(ev.get("verb") or "")
         note = ev.get("note") or ""
         m = tile_note_re.search(note)
-        if not m:
-            continue
-        tnum = int(m.group(1))
-        day_map = act_by_wd[w].setdefault(int(d), {})
-        day_map.setdefault(tnum, []).append(str(ev.get("verb") or ""))
+        if m:
+            tnum = int(m.group(1))
+            day_map = act_by_wd[w].setdefault(int(d), {})
+            day_map.setdefault(tnum, []).append(verb)
+        else:
+            act_extra_wd[w].setdefault(int(d), []).append(verb)
+
+    def _fmt_ops(words: list[str]) -> str:
+        return " ".join(words) if words else "-"
 
     for worker in workers:
         theo_days = theo_by_w.get(worker) or [None] * SEASON_DAYS
-        print(f"{worker}: per-tile theo vs act (mismatches only)")
+        extra_days = theo_extra_w.get(worker) or [None] * SEASON_DAYS
+        est_series = est_by_w.get(worker) or [None] * SEASON_DAYS
+        daily = by_wd.get(worker) or [{} for _ in range(SEASON_DAYS)]
+        print(f"{worker}: theo vs act (mismatch days only; matches chart tile_ops totals)")
         n_mismatch = 0
         for d in range(SEASON_DAYS):
             theo_map = dict(theo_days[d] or {})
             act_map = dict(act_by_wd.get(worker, {}).get(d) or {})
-            tiles = sorted(set(theo_map) | set(act_map))
+            theo_x = list(extra_days[d] or [])
+            act_x = list(act_extra_wd.get(worker, {}).get(d) or [])
+            theo_total = est_series[d]
+            act_total = int((daily[d] or {}).get("tile_ops", 0))
+            theo_attr = sum(len(v) for v in theo_map.values())
+            act_attr = sum(len(v) for v in act_map.values())
+
             day_rows = []
-            for tnum in tiles:
+            for tnum in sorted(set(theo_map) | set(act_map)):
                 theo_v = theo_map.get(tnum) or []
                 act_v = act_map.get(tnum) or []
-                if theo_v == act_v:
-                    continue
-                day_rows.append((tnum, theo_v, act_v))
-            if not day_rows:
+                if theo_v != act_v:
+                    day_rows.append((tnum, theo_v, act_v))
+
+            totals_match = theo_total is not None and int(theo_total) == act_total
+            if totals_match and not day_rows and theo_x == act_x:
                 continue
             n_mismatch += 1
             print(f"  d={d}")
+            if theo_total is not None and not totals_match:
+                print(
+                    f"    totals: theo={int(theo_total)} act={act_total} "
+                    f"(on tiles: theo={theo_attr} act={act_attr})"
+                )
+            if theo_x != act_x or (theo_x or act_x):
+                print(f"    shed theo: {_fmt_ops(theo_x)}")
+                print(f"    shed act:  {_fmt_ops(act_x)}")
             for tnum, theo_v, act_v in day_rows:
-                theo_s = " ".join(theo_v) if theo_v else "-"
-                act_s = " ".join(act_v) if act_v else "-"
-                print(f"    t{tnum}  theo: {theo_s}")
-                print(f"         act:  {act_s}")
+                print(f"    t{tnum}  theo: {_fmt_ops(theo_v)}")
+                print(f"         act:  {_fmt_ops(act_v)}")
         if n_mismatch == 0:
-            print("  (all tiles match)")
+            print("  (all days match chart + tiles + shed)")
