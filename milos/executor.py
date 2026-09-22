@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from milos import market, planner, rollouts, script, sell_dp, tile_ops, workers, zoning
+import copy
+
+from milos import market, planner, rollouts, script, sell_dp, sim_apply, tile_ops, workers, zoning
 from milos.zoning import NET_TILE_OPS
 
 _DEBUG = True
@@ -13,6 +15,7 @@ _TILE_OP_VERBS = frozenset({
     "PLANT", "WATER", "FERTILIZE", "HARVEST", "FEED", "CARE", "DIG", "PLACE",
     "BUILD_COOP", "BUILD_PASTURE", "COLLECT_FERTILIZER", "PICKUP", "DROP",
 })
+_MOVE_VERBS = frozenset({"NORTH", "SOUTH", "EAST", "WEST"})
 
 
 def _log(msg: str) -> None:
@@ -160,7 +163,7 @@ class Executor:
 
         if hour == 0:
             self._log_snap(obs, me, day, hour)
-            self._log_hand_queues(me, day)
+            self._log_hand_queues(obs, me, private, day)
             self._log_stuck_tiles(me, day)
         orders = market.build_orders(
             obs, me, private, day, hour, self._tile_state, self._empty_at_dawn
@@ -253,7 +256,67 @@ class Executor:
         if day >= script.SEASON_LAST_DAY:
             self._endgame_done = {w: set() for w in workers.WORKERS}
 
-    def _log_hand_queues(self, me: dict, day: int) -> None:
+    def _classify_forecast_bucket(self, action: list) -> str:
+        if not action or action[0] == "PASS":
+            return "pass"
+        if action[0] in _MOVE_VERBS:
+            return "move"
+        return "tile_ops"
+
+    def forecast_day_counts(
+        self, obs: dict, me: dict, private: dict, day: int
+    ) -> dict[str, int]:
+        """Dry-run farmer hours 0..23 after h0 market on copied state."""
+        saved_cursor = self._cursor
+        saved_tile_state = copy.deepcopy(self._tile_state)
+        saved_ops = dict(self._tile_ops_today)
+
+        me_c = copy.deepcopy(me)
+        priv_c = copy.deepcopy(private)
+        self._cursor = 0
+        self._tile_ops_today = {w: 0 for w in workers.WORKERS}
+        self._tile_state = copy.deepcopy(saved_tile_state)
+
+        prices = obs["market"]["prices"]
+        orders = market.build_orders(
+            obs,
+            me_c,
+            priv_c,
+            day,
+            0,
+            self._tile_state,
+            self._empty_at_dawn,
+        )
+        sim_apply.apply_market_orders(me_c, priv_c, orders, prices)
+
+        counts = {"tile_ops": 0, "move": 0, "pass": 0}
+        harvest_only = day >= script.SEASON_LAST_DAY
+
+        for hour in range(24):
+            if market.defer_farmer_hour0(hour, day):
+                action = ["PASS"]
+            else:
+                action, _ = self._farmer_action(
+                    me_c, priv_c, day, hour, harvest_only
+                )
+                sim_apply.apply_farmer_action(
+                    me_c,
+                    priv_c,
+                    day,
+                    action,
+                    self._tile_state,
+                    inv_idx=self._inv_idx("farmer"),
+                )
+            bucket = self._classify_forecast_bucket(action)
+            counts[bucket] += 1
+
+        self._cursor = saved_cursor
+        self._tile_state = saved_tile_state
+        self._tile_ops_today = saved_ops
+        return counts
+
+    def _log_hand_queues(self, obs: dict, me: dict, private: dict, day: int) -> None:
+        forecast = self.forecast_day_counts(obs, me, private, day)
         for w in workers.WORKERS:
             tiles = workers.WORKER_TILES.get(w, ())
             if not tiles:
@@ -273,11 +336,15 @@ class Executor:
                 if isinstance(_tile_at(me, idx), dict)
                 and _tile_at(me, idx).get("kind") in ("PLANT", "COOP", "PASTURE")
             )
-            animal, crop, est_ops = _zone_animal_crop_ops(me, w)
+            animal, crop, _ = _zone_animal_crop_ops(me, w)
+            if w == "farmer":
+                fc = forecast
+            else:
+                fc = {"tile_ops": 0, "move": 0, "pass": 0}
             _log(
                 f"[hands] d={day} h0 {w} NUM_ACTIVE_HIRES={planner.NUM_ACTIVE_HIRES} "
                 f"qtiles={q} empty={empty} locked={locked} live={live} "
-                f"animal={animal} crop={crop} est_ops={est_ops:g}"
+                f"animal={animal} crop={crop} est_ops={fc['tile_ops']:g}"
             )
 
     def _log_stuck_tiles(self, me: dict, day: int) -> None:

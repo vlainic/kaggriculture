@@ -475,7 +475,7 @@ def plot_stuck_skip_freq(
 
 
 def plot_zone_capacity(report: dict[str, Any], *, title: str | None = None) -> None:
-    """Per-zone daily tile ops vs dawn est_ops and net_tile_ops cap."""
+    """Per-zone daily tile ops vs dawn executor dry-run forecast and net_tile_ops cap."""
     workers = list(report.get("workers") or [])
     if not workers:
         fig, ax = plt.subplots(figsize=(6, 2))
@@ -543,7 +543,7 @@ def plot_zone_capacity(report: dict[str, Any], *, title: str | None = None) -> N
         est_y = np.array(
             [float(v) if v is not None else np.nan for v in est_series[:SEASON_DAYS]]
         )
-        ax.plot(days, est_y, "o", color="#c62828", ms=3, lw=0, label="est_ops dawn")
+        ax.plot(days, est_y, "o", color="#c62828", ms=3, lw=0, label="theo tile_ops")
 
         cap = caps.get(worker)
         if cap is not None:
@@ -570,7 +570,7 @@ def plot_zone_capacity(report: dict[str, Any], *, title: str | None = None) -> N
         axes[j // ncols, j % ncols].axis("off")
 
     fig.suptitle(
-        f"{stem} — zone capacity (bars=actual, dots=est_ops, dash=net_tile_ops)",
+        f"{stem} — zone capacity (bars=actual, dots=theo tile_ops, dash=net_tile_ops)",
         fontsize=11,
     )
     plt.tight_layout()
