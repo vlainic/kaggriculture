@@ -65,8 +65,8 @@ def _tile_at(me: dict, idx: int):
     return me["tiles"][y][x]
 
 
-def _zone_animal_crop_ops(me: dict, worker: str) -> tuple[int, int, float]:
-    """Count animal/crop structures in a zone; est_ops = animal*4 + crop*1.5."""
+def _zone_animal_crop_ops(me: dict, worker: str) -> tuple[int, int]:
+    """Count COOP/PASTURE and PLANT structures in a zone (for [hands] diagnostics)."""
     animal = 0
     crop = 0
     for idx in workers.WORKER_TILES[worker]:
@@ -78,17 +78,14 @@ def _zone_animal_crop_ops(me: dict, worker: str) -> tuple[int, int, float]:
             animal += 1
         elif kind == "PLANT":
             crop += 1
-    est_ops = animal * zoning.EST_OPS_ANIMAL + crop * zoning.EST_OPS_CROP
-    return animal, crop, est_ops
+    return animal, crop
 
 
 def _dawn_empty(me: dict, idx: int, day: int) -> bool:
     tile = _tile_at(me, idx)
     if tile is None:
         return True
-    if planner.is_buy_morning_locked(tile, idx, day, me):
-        return True
-    return False
+    return planner.is_buy_morning_locked(tile, idx, day, me)
 
 
 def _zone_empty(me: dict, worker: str) -> int:
@@ -365,7 +362,7 @@ class Executor:
                 if isinstance(_tile_at(me, idx), dict)
                 and _tile_at(me, idx).get("kind") in ("PLANT", "COOP", "PASTURE")
             )
-            animal, crop, _ = _zone_animal_crop_ops(me, w)
+            animal, crop = _zone_animal_crop_ops(me, w)
             if w == "farmer":
                 fc = forecast
             else:

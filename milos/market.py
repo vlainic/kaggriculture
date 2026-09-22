@@ -28,9 +28,7 @@ def _tile_empty(me: dict, idx: int, *, day: int) -> bool:
         return True
     if isinstance(tile, dict) and tile.get("kind") == "WEED":
         return True
-    if planner.is_buy_morning_locked(tile, idx, day, me):
-        return True
-    return False
+    return planner.is_buy_morning_locked(tile, idx, day, me)
 
 
 def _count_live_animals(me: dict) -> int:
@@ -88,9 +86,8 @@ def _needs_animal_today(
         return item
     if planner.is_buy_morning_locked(tile, idx, day, me):
         return item
-    if isinstance(tile, dict) and tile.get("kind") in ("COOP", "PASTURE"):
-        if not tile.get("animal"):
-            return item
+    if isinstance(tile, dict) and tile.get("kind") in ("COOP", "PASTURE") and not tile.get("animal"):
+        return item
     return None
 
 
