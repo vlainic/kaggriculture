@@ -398,6 +398,8 @@ def _animal_action(
                 continue  # don't swallow HARVEST / COLLECT_FERTILIZER
         if act == "CARE" and tile.get("cared_today"):
             continue
+        if act == "CARE" and not tile.get("fed_today"):
+            continue
         if act == "COLLECT_FERTILIZER" and not tile.get("fertilizer_available"):
             continue
         if act == "HARVEST" and tile.get("yield_units", 0) <= 0:

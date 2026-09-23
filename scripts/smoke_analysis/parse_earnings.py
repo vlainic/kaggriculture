@@ -7,6 +7,7 @@ from collections import defaultdict
 from typing import Any
 
 from smoke_analysis.parse_snap import dawn_snaps
+from smoke_analysis.parse_actor import parse_exec_actor
 
 EXEC_RE = re.compile(r"\[exec\] d=(\d+) h=(\d+)")
 SELL_REV_RE = re.compile(r"\bsell_rev=(\d+)\b")
@@ -34,27 +35,10 @@ _PRICE_KEYS = frozenset(
 )
 
 
-def _worker_for_hand(hand_idx: int, hand_workers: tuple[str, ...]) -> str:
-    if 0 <= hand_idx < len(hand_workers):
-        return hand_workers[hand_idx]
-    return hand_workers[-1] if hand_workers else f"hand{hand_idx}"
-
-
 def _tile_worker(tile_idx: int, worker_tiles: dict[str, tuple[int, ...]]) -> str | None:
     for worker, tiles in worker_tiles.items():
         if tile_idx in tiles:
             return worker
-    return None
-
-
-def _parse_actor(line: str, hand_workers: tuple[str, ...]) -> tuple[str, str] | None:
-    if " farmer " in line:
-        return "farmer", line.split(" farmer ", 1)[1].strip()
-    hm = re.search(r" hand(\d+)(?:=\w+)? ", line)
-    if hm:
-        hand_idx = int(hm.group(1))
-        rest = line[hm.end() :].strip()
-        return _worker_for_hand(hand_idx, hand_workers), rest
     return None
 
 
@@ -130,7 +114,7 @@ def parse_earnings(
                 sell_by_day[day] += int(rm.group(1))
             continue
 
-        parsed = _parse_actor(line, hand_workers)
+        parsed = parse_exec_actor(line, hand_workers)
         if not parsed:
             continue
         actor, rest = parsed

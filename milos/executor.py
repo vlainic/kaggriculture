@@ -371,21 +371,25 @@ class Executor:
             self._tile_state,
             self._empty_at_dawn,
         )
-        sim_apply.apply_market_orders(me_c, priv_c, orders, prices)
-        if day <= script.SEASON_LAST_DAY:
-            self._bind_hands(me_c, day, 0)
+        hire_orders = [o for o in orders if o and o[0] == "HIRE"]
+        pre_hire_orders = [o for o in orders if o and o[0] != "HIRE"]
+        sim_apply.apply_market_orders(me_c, priv_c, pre_hire_orders, prices)
 
         by_worker = {w: self._empty_forecast_counts() for w in workers.WORKERS}
         harvest_only = day >= script.SEASON_LAST_DAY
         tile_note_re = re.compile(r"(?<!>)t(\d+)$")
 
         for hour in range(24):
+            if hour == 1 and day <= script.SEASON_LAST_DAY:
+                sim_apply.apply_market_orders(me_c, priv_c, hire_orders, prices)
+                self._slot_to_worker = {}
+                for hw in workers.HAND_WORKERS:
+                    self._route_idx[hw] = 0
+                    self._preamble_idx[hw] = 0
+                self._bind_hands(me_c, day, hour)
+
             if market.defer_farmer_hour0(hour, day):
                 by_worker["farmer"]["pass"] += 1
-                for i in range(len(me_c.get("hands", []))):
-                    w = self._worker_for_slot(i, me_c, day, hour)
-                    if w and w in by_worker:
-                        by_worker[w]["pass"] += 1
                 continue
 
             action, note = self._worker_action(
@@ -408,6 +412,8 @@ class Executor:
                 self._tile_state,
                 inv_idx=self._inv_idx("farmer"),
             )
+            if hour < 1 and day <= script.SEASON_LAST_DAY:
+                continue
             for i in range(len(me_c.get("hands", []))):
                 w = self._worker_for_slot(i, me_c, day, hour)
                 if w is None or w not in by_worker:
@@ -603,6 +609,8 @@ class Executor:
         fy: int,
         inv_idx: int,
     ) -> tuple[list, str] | None:
+        if self._zone_ops_remaining(worker) <= 0:
+            return None
         if (fx, fy) not in _owned_shed_tiles(me):
             return None
         inv = self._private_inv(private, inv_idx)
@@ -637,6 +645,9 @@ class Executor:
         steps = workers.PREAMBLE.get(worker, [])
         pi = self._preamble_idx[worker]
         if pi >= len(steps):
+            return None
+        if self._zone_ops_remaining(worker) <= 0:
+            self._preamble_idx[worker] = len(steps)
             return None
         step = steps[pi]
         if step == "PICKUP":
@@ -718,6 +729,10 @@ class Executor:
         )
         if action and action[0] == "FEED" and inv.get("WHEAT", 0) <= 0:
             action = None
+        if action and action[0] == "CARE":
+            tile = _tile_at(me, idx)
+            if not isinstance(tile, dict) or not tile.get("fed_today"):
+                action = None
         if action:
             if action[0] in ("PLANT", "PLACE", "BUILD_COOP", "BUILD_PASTURE"):
                 st["active"] = True
