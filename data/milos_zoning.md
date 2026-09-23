@@ -1,9 +1,9 @@
 # MILOS FINAL
 
-All 4 hires bought at h=0!
-- market h=0:
-    - wheat priority
-    - then animal
+All 4 hires bought at h=0 (when implemented: HIRE orders first in the h=0 market list).
+- market h=0 only (no mid-day BUY wheat / animal / seed):
+    - wheat (feed reserve)
+    - then animal (shed pickup before PLACE)
     - finally plant seed
 
 ## Tile numbering:
