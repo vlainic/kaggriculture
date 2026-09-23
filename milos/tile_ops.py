@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from milos import animal_rollouts, rollouts, script, workers
-from milos.script import QueueItem, TILE_QUEUES
+from milos.script import TILE_QUEUES, QueueItem
 
 STRAWBERRY_LAST_AGE = 16
 ONE_TIME_CROPS = frozenset({"WHEAT", "CARROT", "MELON"})
@@ -36,9 +36,8 @@ def zone_has_animal(me: dict, tile_idx: int) -> bool:
         if tile_idx in tiles:
             for idx in tiles:
                 tile = _tile_at(me, idx)
-                if isinstance(tile, dict) and tile.get("kind") in ("COOP", "PASTURE"):
-                    if tile.get("animal"):
-                        return True
+                if isinstance(tile, dict) and tile.get("kind") in ("COOP", "PASTURE") and tile.get("animal"):
+                    return True
             return False
     return False
 
@@ -157,9 +156,8 @@ def tile_needs_work(
         )
     if not isinstance(tile, dict):
         return False
-    if tile.get("kind") in ("COOP", "PASTURE"):
-        if tile_needs_feed(tile, day):
-            return True
+    if tile.get("kind") in ("COOP", "PASTURE") and tile_needs_feed(tile, day):
+        return True
     return _lifecycle_pending(
         tile, day, item, inv_idx, private, harvest_only, idx, me
     )
@@ -219,9 +217,8 @@ def next_tile_action(
     if isinstance(tile, dict) and tile.get("kind") == "WEED":
         return ["DIG"]
 
-    if pending_dig:
-        if tile is None or isinstance(tile, dict):
-            return ["DIG"]
+    if pending_dig and (tile is None or isinstance(tile, dict)):
+        return ["DIG"]
 
     if lag > 0 or gap > 0:
         if harvest_only:
@@ -323,8 +320,11 @@ def _crop_action(
     if not harvest_only:
         if "WATER" in actions and not tile.get("watered_today"):
             return ["WATER"]
-        if me is not None and private is not None and tile_idx >= 0:
-            if _may_fertilize_today(
+        if (
+            me is not None
+            and private is not None
+            and tile_idx >= 0
+            and _may_fertilize_today(
                 tile,
                 day,
                 me,
@@ -333,8 +333,9 @@ def _crop_action(
                 inv_idx,
                 fert_today=fert_today,
                 zone_ops_remaining=zone_ops_remaining,
-            ):
-                return ["FERTILIZE"]
+            )
+        ):
+            return ["FERTILIZE"]
 
     for act in actions:
         if harvest_only:
