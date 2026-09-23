@@ -512,6 +512,7 @@ def replan(obs: dict, tile_state: dict, wheat_feed_reserve: int = 0) -> None:
 
 def schedule_active(day: int) -> bool:
     return bool(_schedule and _schedule.get("active") and _schedule.get("day") == day)
+    # return False
 
 
 def plan_sell_qty(
