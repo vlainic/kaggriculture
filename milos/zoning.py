@@ -1,4 +1,4 @@
-"""Milos farmer-only layout (FIVE zone I) — live submission geometry."""
+"""Milos layouts — farmer-only sandbox and live five-zone OneLand."""
 
 from __future__ import annotations
 
@@ -9,6 +9,14 @@ from milos.wsp.config import EST_OPS_ANIMAL, EST_OPS_CROP, FARMER_NET_TILE_OPS
 
 _SHED_DOOR = (4, 4)
 _SHED_ADJACENT = frozenset({(4, 4), (5, 4), (4, 5), (5, 5)})
+
+# Spawn corner → hire zone (identity at dawn, not HIRE order).
+SPAWN_TO_HIRE: dict[tuple[int, int], str] = {
+    (4, 4): "hire1",
+    (5, 4): "hire2",
+    (4, 5): "hire3",
+    (5, 5): "hire4",
+}
 
 
 @dataclass(frozen=True)
@@ -27,6 +35,10 @@ class Layout:
     zones: tuple[Zone, ...]
     shed_door: tuple[int, int]
     shed_adjacent: frozenset[tuple[int, int]]
+
+
+def _column(x: int, t0: int) -> tuple[tuple[int, int], ...]:
+    return tuple((x, y) for y in range(4, -1, -1))
 
 
 MILOS_FARMER = Layout(
@@ -51,7 +63,61 @@ MILOS_FARMER = Layout(
     shed_adjacent=_SHED_ADJACENT,
 )
 
-CURRENT = MILOS_FARMER
+MILOS_ONELAND = Layout(
+    coords=(
+        *_column(4, 0),
+        *_column(0, 5),
+        *_column(1, 10),
+        *_column(2, 15),
+        *_column(3, 20),
+    ),
+    zones=(
+        Zone(
+            name="farmer",
+            tiles=(0, 1, 2, 3, 4),
+            preamble=(),
+            start_hour=0,
+            net_tile_ops=18,
+            is_hand=False,
+        ),
+        Zone(
+            name="hire1",
+            tiles=(5, 6, 7, 8, 9),
+            preamble=("PICKUP", "WEST", "WEST", "WEST", "WEST"),
+            start_hour=0,
+            net_tile_ops=14,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire2",
+            tiles=(10, 11, 12, 13, 14),
+            preamble=("WEST", "PICKUP", "WEST", "WEST", "WEST"),
+            start_hour=0,
+            net_tile_ops=14,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire3",
+            tiles=(15, 16, 17, 18, 19),
+            preamble=("NORTH", "PICKUP", "WEST", "WEST"),
+            start_hour=0,
+            net_tile_ops=15,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire4",
+            tiles=(20, 21, 22, 23, 24),
+            preamble=("WEST", "NORTH", "PICKUP", "WEST"),
+            start_hour=0,
+            net_tile_ops=15,
+            is_hand=True,
+        ),
+    ),
+    shed_door=_SHED_DOOR,
+    shed_adjacent=_SHED_ADJACENT,
+)
+
+CURRENT = MILOS_ONELAND
 
 TILE_COORDS: tuple[tuple[int, int], ...] = ()
 NUM_TILES = 0
@@ -122,7 +188,8 @@ def tile_est_ops_weight(tile) -> float:
 
 
 bind(CURRENT)
+_layout_tag = "milos_oneland" if CURRENT is MILOS_ONELAND else "milos_farmer"
 print(
-    f"[zoning] CURRENT=milos_farmer tiles={NUM_TILES} hands={NUM_HIRES}",
+    f"[zoning] CURRENT={_layout_tag} tiles={NUM_TILES} hands={NUM_HIRES}",
     flush=True,
 )

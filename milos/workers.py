@@ -1,4 +1,4 @@
-"""Worker zones, routes, hire-order mapping for scripted one-land agent."""
+"""Worker zones, routes, spawn-tile hire binding for scripted OneLand agent."""
 
 from __future__ import annotations
 
@@ -15,8 +15,8 @@ HAND_START_HOUR = zoning.HAND_START_HOUR
 SHED_DOOR = zoning.SHED_DOOR
 SHED_ADJACENT = zoning.SHED_ADJACENT
 NUM_HIRES = zoning.NUM_HIRES
+SPAWN_TO_HIRE = zoning.SPAWN_TO_HIRE
 
-# Hand order follows HAND_WORKERS in the active layout (see zoning.CURRENT).
 HAND_ORDER = HAND_WORKERS
 
 
@@ -30,7 +30,13 @@ def worker_for_hand_idx(hand_idx: int) -> str:
     return HAND_WORKERS[-1]
 
 
-def inventory_index(worker: str) -> int:
+def hire_worker_for_hand_pos(pos: tuple[int, int]) -> str | None:
+    return SPAWN_TO_HIRE.get(pos)
+
+
+def inventory_index(worker: str, *, hand_slot: int | None = None) -> int:
     if worker == "farmer":
         return 0
+    if hand_slot is not None:
+        return hand_slot + 1
     return hand_index(worker) + 1

@@ -5,17 +5,17 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from milos.wsp import data as wsp_data
-from milos.wsp.farmer import solve
+from milos.wsp.oneland import solve
 from milos.wsp.log import WspPlan
 from milos.wsp.types import SolveResult
 from milos.wsp.config import ANIMAL_NAMES, NUM_DAYS, PROFILE_SUFFIXES
-from milos.zoning import FARMER, FARMER_TILES, NUM_TILES, WORKER_TILES, WORKERS
+from milos.zoning import FARMER, NUM_TILES, WORKER_TILES, WORKERS
 
 PlanBoard = dict[int, list]
 
 
 def empty_board() -> PlanBoard:
-    return {t: [] for t in FARMER_TILES}
+    return {t: [] for t in range(NUM_TILES)}
 
 
 def chains_to_absolute(replan_day: int, assigned_relative: dict[int, list]) -> PlanBoard:
@@ -37,7 +37,7 @@ def apply_solver_result(
 ) -> set[int]:
     """Write horizon-relative solver chains onto board as absolute starts."""
     delta: set[int] = set()
-    tile_set = set(FARMER_TILES)
+    tile_set = set(range(NUM_TILES))
     for idx in replan_tiles:
         if idx not in tile_set:
             continue
@@ -56,7 +56,7 @@ def merge_wsp_plan(
     tiles: set[int] | frozenset[int] | None = None,
 ) -> set[int]:
     """Apply one [wsp_plan] delta (relative starts) onto absolute board."""
-    scope = set(tiles) if tiles is not None else set(FARMER_TILES)
+    scope = set(tiles) if tiles is not None else set(range(NUM_TILES))
     delta: set[int] = set()
     for tile, chain in plan.assigned.items():
         if tile not in scope:
@@ -75,7 +75,7 @@ def build_day0(
     **kwargs,
 ) -> tuple[PlanBoard, SolveResult]:
     """Day-0 farmer solve → absolute board + raw SolveResult (relative chains)."""
-    empty = list(FARMER_TILES)
+    empty = list(range(NUM_TILES))
     if price_of is None:
         base = wsp_data.i0_base_prices()
         price_of = lambda product, _base=base: _base[product]
@@ -84,7 +84,7 @@ def build_day0(
         [],
         horizon=NUM_DAYS,
         empty_tiles=empty,
-        empty_counts={FARMER: len(empty)},
+        empty_counts={w: len(WORKER_TILES[w]) for w in WORKERS},
         starting_money=starting_money,
         max_time=max_time,
         track_shed=track_shed,
@@ -105,9 +105,9 @@ from milos.flags import VERBOSE
 
 SEASON_LAST_DAY = 29
 
-CURRENT_SOLVER = "milos_farmer"
+CURRENT_SOLVER = "milos_oneland"
 STARTING_MONEY = 3000
-NUM_ACTIVE_HIRES = 0
+NUM_ACTIVE_HIRES = 4
 BUY_LAND_DAY: int | None = None
 DEAD_HANDS: set[str] = set()
 _cached_queues: dict | None = None
@@ -168,7 +168,7 @@ def apply_replan(
     tile_state: dict | None,
     horizon: int,
 ) -> int:
-    if not result.solved_workers or result.solved_workers[0] != WORKERS[0]:
+    if not result.solved_workers:
         return 0
 
     written = 0
@@ -201,7 +201,7 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
     from milos.replan_lock import any_replan_eligible, build_replan_lock
 
     day = obs["day"]
-    if day < 1 or day >= SEASON_LAST_DAY:
+    if day < 2 or day >= SEASON_LAST_DAY:
         return
     horizon = NUM_DAYS - day
     if horizon <= 0:
@@ -242,7 +242,7 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
         [],
         horizon=horizon,
         empty_tiles=replan_tiles,
-        empty_counts={FARMER: len(replan_tiles)},
+        empty_counts={w: sum(1 for t in replan_tiles if t in WORKER_TILES[w]) for w in WORKERS},
         locked_by_worker=locked_by_worker,
         starting_money=int(me["money"]),
         max_time=15.0,
@@ -251,9 +251,7 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
         price_of=price_of,
     )
 
-    if not result.complete or (
-        not result.solved_workers or result.solved_workers[0] != WORKERS[0]
-    ):
+    if not result.solved_workers:
         print(
             f"[planner] replan d={day} INFEASIBLE keep={len(replan_tiles)} "
             f"active={','.join(result.solved_workers) or 'none'}",
@@ -355,9 +353,9 @@ def chain_to_queue_items(chain: list, horizon: int = NUM_DAYS) -> list:
 
 def _build_from_solver() -> dict[int, list]:
     _board, result = build_day0(starting_money=STARTING_MONEY, max_time=20.0)
-    if not result.solved_workers or result.solved_workers[0] != WORKERS[0]:
+    if not result.solved_workers:
         active = ",".join(result.solved_workers) or "none"
-        raise RuntimeError(f"day-0 {CURRENT_SOLVER} farmer failed: active={active}")
+        raise RuntimeError(f"day-0 {CURRENT_SOLVER} failed: active={active}")
 
     queues = {idx: [] for idx in range(NUM_TILES)}
     for worker in result.solved_workers:

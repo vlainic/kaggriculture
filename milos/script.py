@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from milos import planner, zoning
+from milos import planner, workers, rollouts, animal_rollouts, zoning
 from milos.zoning import (
     HAND_WORKERS,
     NUM_TILES,
@@ -162,10 +162,42 @@ def next_animal_pickup(
     return None
 
 
-def _inventory_index(worker: str) -> int:
-    if worker == "farmer":
+def zone_fert_pickup_needed(
+    me: dict, worker: str, tile_state: dict, inv: dict, *, day: int | None = None
+) -> int:
+    if inv.get("FERTILIZER", 0) > 0:
         return 0
-    return HAND_WORKERS.index(worker) + 1
+    uses = 0
+    for idx in WORKER_TILES[worker]:
+        st = tile_state.get(idx, {})
+        if st.get("lag", 0) > 0 or st.get("gap", 0) > 0:
+            continue
+        tile = _tile_at(me, idx)
+        if not isinstance(tile, dict):
+            continue
+        if tile.get("kind") == "PLANT":
+            crop = tile.get("crop")
+            age = (day if day is not None else 0) - tile.get("planted_day", day or 0)
+            qi = st.get("queue_idx", 0)
+            queue = TILE_QUEUES.get(idx, [])
+            profile = queue[qi].profile if qi < len(queue) else "no_fert"
+            acts = rollouts.actions_at_age(crop, age, profile) if crop else []
+            if "FERTILIZE" in acts:
+                uses += 1
+        elif tile.get("animal"):
+            animal = tile["animal"]
+            age = (day if day is not None else 0) - tile.get("placed_day", day or 0)
+            qi = st.get("queue_idx", 0)
+            queue = TILE_QUEUES.get(idx, [])
+            profile = queue[qi].profile if qi < len(queue) else "with_care"
+            acts = animal_rollouts.actions_at_age(animal, age, profile)
+            if "FERTILIZE" in acts:
+                uses += 1
+    return uses
+
+
+def _inventory_index(worker: str, *, hand_slot: int | None = None) -> int:
+    return workers.inventory_index(worker, hand_slot=hand_slot)
 
 
 def total_wheat_feed_need(

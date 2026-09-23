@@ -6,9 +6,9 @@ from collections.abc import Callable
 
 from milos import animal_rollouts, rollouts
 from milos.wsp import data as wsp_data
-from milos.wsp.config import PROFILE_SUFFIXES
+from milos.wsp.config import ANIMAL_NAMES, PROFILE_SUFFIXES
 from milos.workers import TILE_COORDS
-from milos.zoning import FARMER, NUM_TILES
+from milos.zoning import NUM_TILES, WORKERS, worker_for_tile
 
 CROP_PROFILE = "no_fert"
 ANIMAL_PROFILE = "with_care"
@@ -45,10 +45,27 @@ def _add_daily(dst: list[int], src: list[int], horizon: int) -> None:
         dst[i] += src[i]
 
 
+def _on_tile_ops_count(acts: list) -> int:
+    return len([a for a in acts if a != "PICKUP"])
+
+
+def _empty_daily_place(horizon: int) -> dict[str, list[int]]:
+    from milos.wsp.config import ANIMAL_NAMES
+
+    return {name: [0] * horizon for name in ANIMAL_NAMES}
+
+
+def _merge_daily_place(dst: dict, src: dict, horizon: int) -> None:
+    for an, arr in src.items():
+        for i in range(horizon):
+            dst[an][i] = max(dst[an][i], arr[i])
+
+
 def empty_locked(horizon: int) -> dict:
     return _zero_daily(horizon) | {
         "cash_by_day": [0] * horizon,
         "spend_by_day": [0] * horizon,
+        "daily_place": _empty_daily_place(horizon),
     }
 
 
@@ -132,6 +149,7 @@ def _stamp_profile_segment(
     )
 
     out = _zero_daily(horizon)
+    daily_place = _empty_daily_place(horizon)
     cash_by_day = [0] * horizon
     spend_by_day = [0] * horizon
 
@@ -144,7 +162,7 @@ def _stamp_profile_segment(
             if rel >= horizon:
                 continue
             acts = day["actions"]
-            out["daily_tile_ops"][rel] += len(acts)
+            out["daily_tile_ops"][rel] += _on_tile_ops_count(acts)
             out["daily_feed"][rel] += feed_by_age.get(age, 0)
             out["daily_fert"][rel] += fert_use_by_age.get(age, 0)
             out["daily_collect"][rel] += collect_by_age.get(age, 0)
@@ -160,7 +178,9 @@ def _stamp_profile_segment(
                 break
             occupied = True
             acts = day["actions"]
-            out["daily_tile_ops"][rel] += len(acts)
+            out["daily_tile_ops"][rel] += _on_tile_ops_count(acts)
+            if "PLACE" in acts:
+                daily_place[label][rel] = 1
             out["daily_animal_active"][rel] = 1
             out["daily_feed"][rel] += feed_by_age.get(age, 0)
             out["daily_fert"][rel] += fert_use_by_age.get(age, 0)
@@ -182,6 +202,7 @@ def _stamp_profile_segment(
         "weight": sum(cash_by_day),
         "cash_by_day": cash_by_day,
         "spend_by_day": spend_by_day,
+        "daily_place": daily_place,
         **out,
     }
 
@@ -216,6 +237,7 @@ def _stamp_chain(
     animals_data: dict,
 ):
     out = _zero_daily(horizon)
+    daily_place = _empty_daily_place(horizon)
     cash_by_day = [0] * horizon
     spend_by_day = [0] * horizon
     for profile_key, start_day in chain:
@@ -226,12 +248,14 @@ def _stamp_chain(
             continue
         for key in LOCKED_DAILY_KEYS:
             _add_daily(out[key], seg[key], horizon)
+        _merge_daily_place(daily_place, seg.get("daily_place", {}), horizon)
         _add_daily(cash_by_day, seg["cash_by_day"], horizon)
         _add_daily(spend_by_day, seg["spend_by_day"], horizon)
     return {
         "weight": sum(cash_by_day),
         "cash_by_day": cash_by_day,
         "spend_by_day": spend_by_day,
+        "daily_place": daily_place,
         **out,
     }
 
@@ -375,6 +399,7 @@ def _stamp_tile_commitment(
     gap = st.get("gap", 0)
 
     out = _zero_daily(horizon)
+    daily_place = _empty_daily_place(horizon)
     cash_by_day = [0] * horizon
     spend_by_day = [0] * horizon
 
@@ -383,6 +408,7 @@ def _stamp_tile_commitment(
         if seg:
             for key in LOCKED_DAILY_KEYS:
                 _add_daily(out[key], seg[key], horizon)
+            _merge_daily_place(daily_place, seg.get("daily_place", {}), horizon)
             _add_daily(cash_by_day, seg["cash_by_day"], horizon)
             _add_daily(spend_by_day, seg["spend_by_day"], horizon)
 
@@ -391,6 +417,7 @@ def _stamp_tile_commitment(
         suffix_seg = _stamp_chain(raw, horizon, price_of, crops_data, animals_data)
         for key in LOCKED_DAILY_KEYS:
             _add_daily(out[key], suffix_seg[key], horizon)
+        _merge_daily_place(daily_place, suffix_seg.get("daily_place", {}), horizon)
         _add_daily(cash_by_day, suffix_seg["cash_by_day"], horizon)
         _add_daily(spend_by_day, suffix_seg["spend_by_day"], horizon)
 
@@ -400,6 +427,7 @@ def _stamp_tile_commitment(
         "weight": sum(cash_by_day),
         "cash_by_day": cash_by_day,
         "spend_by_day": spend_by_day,
+        "daily_place": daily_place,
         **out,
     }
 
@@ -412,6 +440,11 @@ def _aggregate_locked(
 ) -> None:
     for key in LOCKED_DAILY_KEYS:
         _add_daily(locked_by_worker[worker][key], seg[key], horizon)
+    _merge_daily_place(
+        locked_by_worker[worker]["daily_place"],
+        seg.get("daily_place", {}),
+        horizon,
+    )
     _add_daily(locked_by_worker[worker]["cash_by_day"], seg["cash_by_day"], horizon)
     _add_daily(locked_by_worker[worker]["spend_by_day"], seg["spend_by_day"], horizon)
 
@@ -450,11 +483,12 @@ def build_replan_lock(
     animals_data = wsp_data.animals()
     replan_tiles: list[int] = []
     locked_tiles = 0
-    locked_by_worker = {FARMER: empty_locked(horizon)}
+    locked_by_worker = {w: empty_locked(horizon) for w in WORKERS}
 
     for idx in range(NUM_TILES):
         tile = _tile_at(me, idx)
         st = st_map.get(idx, {})
+        worker = worker_for_tile(idx)
         if replan_eligible(idx, tile, st, tile_queues):
             replan_tiles.append(idx)
         else:
@@ -470,7 +504,7 @@ def build_replan_lock(
                 animals_data,
             )
             if seg:
-                _aggregate_locked(locked_by_worker, FARMER, seg, horizon)
+                _aggregate_locked(locked_by_worker, worker, seg, horizon)
                 locked_tiles += 1
 
     return replan_tiles, locked_by_worker, locked_tiles

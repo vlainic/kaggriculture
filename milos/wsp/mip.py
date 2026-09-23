@@ -11,6 +11,7 @@ from ortools.sat.python import cp_model
 from milos.wsp import data as rollouts
 from milos.wsp.common import decode_sort_key, parse_profile_key
 from milos.wsp.config import (
+    ANIMAL_NAMES,
     ANIMAL_PROFILES,
     CROP_PROFILES,
     FARMER,
@@ -25,6 +26,7 @@ from milos.wsp.config import (
     OBJ_EARLY_STOP,
     WHEAT_PRICE,
 )
+from milos.zoning import HAND_DAILY_COST, HAND_WORKERS
 
 
 def _rollout_spec(label: str, profile_name: str, crops_data: dict, animals_data: dict):
@@ -78,6 +80,14 @@ def _glut_unit_price(base: int, product: str, count: int) -> int:
     return max(1, int(round(base * _glut_price_factor(product, count))))
 
 
+def _on_tile_ops_count(acts: list) -> int:
+    return len([a for a in acts if a != "PICKUP"])
+
+
+def _empty_daily_place(horizon: int) -> dict[str, list[int]]:
+    return {name: [0] * horizon for name in ANIMAL_NAMES}
+
+
 def _pattern_weight(
     pat,
     locked_counts: dict[str, int],
@@ -113,6 +123,7 @@ def _stamp_placement(
     daily_fert = [0] * horizon
     daily_collect = [0] * horizon
     daily_wheat = [0] * horizon
+    daily_place = _empty_daily_place(horizon)
     occupied: list[int] = []
 
     if kind == "crop":
@@ -122,7 +133,7 @@ def _stamp_placement(
                 return None
             occupied.append(cal)
             acts = day["actions"]
-            daily_tile_ops[cal] += len(acts)
+            daily_tile_ops[cal] += _on_tile_ops_count(acts)
             age = day["age"]
             daily_feed[cal] += feed_by_age.get(age, 0)
             daily_fert[cal] += fert_use_by_age.get(age, 0)
@@ -136,7 +147,9 @@ def _stamp_placement(
             occupied.append(cal)
             acts = day["actions"]
             age = day["age"]
-            daily_tile_ops[cal] += len(acts)
+            daily_tile_ops[cal] += _on_tile_ops_count(acts)
+            if "PLACE" in acts:
+                daily_place[label][cal] = 1
             daily_animal_active[cal] = 1
             daily_feed[cal] += feed_by_age.get(age, 0)
             daily_fert[cal] += fert_use_by_age.get(age, 0)
@@ -183,6 +196,7 @@ def _stamp_placement(
         "daily_collect": daily_collect,
         "daily_wheat": daily_wheat,
         "daily_harvest": daily_harvest,
+        "daily_place": daily_place,
     }
 
 
@@ -281,6 +295,7 @@ def solve_zone(
     price_of: Callable[[str], int] | None = None,
     worker: str = FARMER,
     net_tile_ops: int = FARMER_NET_TILE_OPS,
+    charge_hire_daily: bool = False,
 ):
     zone_empty = list(empty_tiles)
     zsize = len(zone_empty)
@@ -304,7 +319,29 @@ def solve_zone(
                 model.Add(sum(covering) <= 1)
 
     cap = net_tile_ops
+    need_wheat = [model.NewBoolVar(f"need_w_{worker}_{d}") for d in range(horizon)]
+    need_fert = [model.NewBoolVar(f"need_f_{worker}_{d}") for d in range(horizon)]
+    need_place = {
+        (d, an): model.NewBoolVar(f"need_p_{worker}_{d}_{an}")
+        for d in range(horizon)
+        for an in ANIMAL_NAMES
+    }
+    locked_place = locked.get("daily_place") or _empty_daily_place(horizon)
+
     for day in range(horizon):
+        for pi, pat in enumerate(patterns):
+            if pat["daily_feed"][day]:
+                for tile in zone_empty:
+                    model.Add(need_wheat[day] >= x[pi, tile])
+            if pat["daily_fert"][day]:
+                for tile in zone_empty:
+                    model.Add(need_fert[day] >= x[pi, tile])
+            pat_place = pat.get("daily_place") or {}
+            for an in ANIMAL_NAMES:
+                if pat_place.get(an, [0] * horizon)[day]:
+                    for tile in zone_empty:
+                        model.Add(need_place[(day, an)] >= x[pi, tile])
+
         terms = []
         for pi, pat in enumerate(patterns):
             n = pat["daily_tile_ops"][day]
@@ -313,8 +350,22 @@ def solve_zone(
             for tile in zone_empty:
                 terms.append(x[pi, tile] * n)
         locked_ops = locked["daily_tile_ops"][day]
-        if terms or locked_ops:
-            model.Add(sum(terms) + locked_ops <= cap)
+        locked_shed = 0
+        if locked["daily_feed"][day] > 0:
+            locked_shed += 1
+        if locked["daily_fert"][day] > 0:
+            locked_shed += 1
+        for an in ANIMAL_NAMES:
+            if locked_place.get(an, [0] * horizon)[day]:
+                locked_shed += 1
+        shed_terms = [
+            need_wheat[day],
+            need_fert[day],
+            *[need_place[(day, an)] for an in ANIMAL_NAMES],
+        ]
+        model.Add(
+            sum(terms) + locked_ops + sum(shed_terms) + locked_shed <= cap
+        )
 
     buy_w: list = []
     buy_f: list = []
@@ -378,8 +429,18 @@ def solve_zone(
             day_terms.append(-FERT_PRICE * buy_f[d])
             spend_terms.append(-WHEAT_PRICE * buy_w[d])
             spend_terms.append(-FERT_PRICE * buy_f[d])
+        hire = HAND_DAILY_COST.get(worker, 0)
+        if charge_hire_daily and worker in HAND_WORKERS:
+            day_terms.append(-hire)
+            spend_terms.append(-hire)
 
-        if d == 0:
+        if worker in HAND_WORKERS:
+            prev = (
+                opening_balances[d]
+                if d < len(opening_balances)
+                else opening_balances[-1]
+            )
+        elif d == 0:
             prev = opening_balances[0]
         else:
             prev = opening_balances[d] + (balance_vars[d - 1] - opening_balances[0])
@@ -389,7 +450,9 @@ def solve_zone(
         model.Add(bal == prev + (sum(day_terms) if day_terms else 0))
         balance_vars.append(bal)
 
-        if d == 0:
+        if worker in HAND_WORKERS:
+            start_d = prev
+        elif d == 0:
             start_d = opening_balances[0]
         else:
             start_d = opening_balances[d] + (

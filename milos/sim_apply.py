@@ -69,6 +69,29 @@ def apply_market_orders(
             me["money"] = int(me["money"]) + unit * n
 
 
+def apply_hand_action(
+    me: dict,
+    private: dict,
+    day: int,
+    hand_idx: int,
+    action: list,
+    tile_state: dict[int, dict],
+    *,
+    inv_idx: int,
+) -> None:
+    if hand_idx >= len(me.get("hands", [])):
+        return
+    saved = me["farmer"]
+    me["farmer"] = list(me["hands"][hand_idx])
+    try:
+        apply_farmer_action(
+            me, private, day, action, tile_state, inv_idx=inv_idx
+        )
+        me["hands"][hand_idx] = list(me["farmer"])
+    finally:
+        me["farmer"] = saved
+
+
 def apply_farmer_action(
     me: dict,
     private: dict,
