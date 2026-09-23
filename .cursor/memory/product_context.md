@@ -17,7 +17,7 @@ Compete on Kaggriculture with an autonomous agent that beats typical heuristic/L
 ## How the current agent is supposed to work (milos farmer-only — live)
 
 1. **Import:** `milos` `MILOS_FARMER` (5 tiles, farmer only).
-2. **h=0:** farmer PASS; market buys wheat → animals → seeds; sell_dp replan; theo dry-run logs.
+2. **h=0:** `planner.replan` (d≥1) → sell_dp replan → farmer PASS; market buys wheat → animals → seeds; theo dry-run **after** replan.
 3. **Day:** farmer snake + `tile_ops` from crop/animal rollouts; owned-shed PICKUP/DROP.
 4. **d=29:** endgame harvest; do not re-HARVEST same plant after DROP.
 5. **Sells:** staples dump via pricing floor; premiums drip from sell_dp daily quota (≤1/hour).

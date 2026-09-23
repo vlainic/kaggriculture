@@ -76,7 +76,7 @@ Agents never submit without explicit user request (`kaggle-submission.mdc`).
 
 - Logs: `[planner]`, `[exec]`, `[snap]`, `[hands]`, `[wsp_plan]` (if `KAGGRI_VERBOSE=1`), `Player 0: reward=`
 - Gantt: zonewise notebooks; **`milos/wsp/gantt.py`** + `experiments/milos-simplification.ipynb` (farmer accumulate)
-- Smoke capacity: `scripts/smoke_analysis/plot.py` → `plot_zone_capacity` (est_ops vs tile/MOVE/PASS)
+- Smoke capacity: `plot_zone_capacity` — shed lines only on shed mismatch; farmer **all days match** after full-stack HARVEST sim
 - **Replay analysis:** `kaggle_logs/<id>/<id>.json` — `aggregate.episode_table`, `aggregate.kpi`, per-game `drift`, `kpi.*`
 - Replay obs timing: `obs[i]` is post-`action[i]`; sold units from stock delta `obs[i-1]→obs[i]`
 - `docs/two_land_approach.md` — pickups / ops double-count history
@@ -98,7 +98,7 @@ Agents never submit without explicit user request (`kaggle-submission.mdc`).
 | `docs/twoland/diagnosis_0911.md` | OneLand vs TwoLand diagnosis; reject static NW caps; post-NE ops crash |
 | `docs/twolands/twoland_readd.md` | TwoLand re-add spec (probe + NE glue + LOCKED carve-out) |
 | `scripts/smoke_analysis/` | Local smoke log KPIs/plots; **layout-aware** via `layout.py` |
-| `milos/` | Live farmer-only agent (executor/market/tile_ops/sell_dp) |
+| `milos/` | Live farmer-only agent (executor/market/tile_ops/sell_dp/**planner.replan**, replan_lock) |
 | `experiments/milos-simplification.ipynb` | Milos solve + smoke farmer Gantts |
 | `data/two_lands.md` | TWO layout geometry / hire batches |
 | `scripts/download_submission_logs.sh` | Bulk episode replays from Kaggle CLI |

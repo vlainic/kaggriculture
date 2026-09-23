@@ -33,8 +33,17 @@
 | **`agent/` TwoLand** | In-repo legacy; not dispatched by current `main.py` |
 | **Five-zone + 4 hires** | Spec [`data/milos_zoning.md`](../../data/milos_zoning.md) — not implemented |
 | **Dawn market** | h=0 only: wheat → animals → seeds; sells any hour (floor rules) |
-| **Theo / smoke** | `forecast_day_counts` → `[theo]`/`[theo_extra]`/`est_ops=`; `plot_zone_capacity` |
+| **Theo / smoke** | `forecast_day_counts` after replan; `[theo]`/`[theo_extra]`/`est_ops=`; **`plot_zone_capacity` — all days match** post full-stack HARVEST sim |
+| **Dawn replan (milos)** | Live h0 d=1..28; `replan_lock` + WSP farmer; INFEASIBLE preserves queues |
 | **Competition submission** | Local smoke only unless user asks |
+
+## Sep 23 — milos dawn replan + theo sim (KEEP)
+
+| Change | Result |
+| --- | --- |
+| `milos/replan_lock.py` + `planner.replan` | Mid-season empty/WEED → CP-SAT; lock committed tiles; `track_shed=False`; smoke shows `[planner] replan` + mid `[wsp_plan]` |
+| `plant_harvest_transfer` + `sim_apply` | One HARVEST = full `yield_units` stack (fixes theo `HARVEST HARVEST` on strawberry etc.) |
+| `plot_zone_capacity` shed print | Only when shed theo ≠ act (no spurious PICKUP lines on tile-only mismatches) |
 
 ## Sep 22–23 — milos live hardening (KEEP)
 
@@ -45,7 +54,7 @@
 | Wheat buy h=0 only | Stopped mid-day buy → extra shed PICKUP |
 | Buy order | h=0: **wheat → animals → seeds** (animals need PICKUP) |
 | Theo est_ops | Dry-run tile_ops; drop unused animal×4+crop×1.5 return |
-| sim_apply | BUILD before empty return; partial HARVEST for ongoing crops |
+| sim_apply | BUILD before empty return; **full-stack plant HARVEST** via `plant_harvest_transfer` |
 | Smoke capacity print | Totals + shed extras + per-tile mismatches |
 
 ## What works (live milos)
@@ -56,7 +65,8 @@
 | Dawn wheat/animal/seed buys | Only h=0; order wheat → animal → seed |
 | sell_dp + pricing | Premium daily quota + 1/h drip; staples dump via pricing |
 | Owned-shed PICKUP/DROP | `_owned_shed_tiles` |
-| Capacity diagnostics | `[theo]` matches act on tiles after harvest/wheat fixes |
+| Capacity diagnostics | `[theo]` matches act on tiles + totals (after harvest sim + replan order) |
+| Dawn replan | Rewrites eligible tile queues; occupied tiles locked in MIP |
 
 ## Strategic status (Sep 21 — historical: TwoLand; milos was sandbox)
 
@@ -214,6 +224,7 @@
 ## Do not do unless asked
 
 - Mid-day BUY wheat / animal / seed (breaks theo shed extras)
+- **`min(y,1)` in sim_apply HARVEST** — breaks theo vs live (one action, N units)
 - Clear `_endgame_harvested` on DROP
 - Re-enable `ZONE_OPS_BUDGET` / `ZONE_IDLE_FILLER` / `ZONE_TILE_RESIZE` or dawn live ownership moves
 - Hard `break` cascade on WSP INFEASIBLE (use skip-continue)
