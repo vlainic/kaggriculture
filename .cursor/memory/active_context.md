@@ -2,7 +2,7 @@
 
 ## Current focus (Sep 23, 2026)
 
-**Live submission = `milos/` farmer-only** — `main.py` → `milos.executor.step`. Layout: `MILOS_FARMER` (5 tiles, zone I, **0 hires**). Target five-zone + 4 hires documented in [`data/milos_zoning.md`](../../data/milos_zoning.md) (not coded yet).
+**Live submission = `milos/` OneLand** — `main.py` → `milos.executor.step`. Layout: **`MILOS_ONELAND`** (25 tiles, farmer + **4 hires** via `milos/zoning.py` `CURRENT = MILOS_ONELAND`). Five-zone spec also in [`data/milos_zoning.md`](../../data/milos_zoning.md).
 
 `agent/` TwoLand WSP remains in-repo as legacy / optional reference; **smoke builds `milos/` into the tarball**.
 
@@ -14,15 +14,27 @@ The four center tiles are shed-adjacent in the rules, but **PICKUP / DROP no-op 
 
 | Item | State |
 | --- | --- |
-| Live agent | **`milos/`** farmer-only (`NUM_ACTIVE_HIRES=0`) |
+| Live agent | **`milos/`** OneLand (`MILOS_ONELAND`, 4 hires) |
 | **Dawn replan** | **`planner.replan`** — eligible empties/WEED; lock board+queue suffix; `milos/wsp/farmer.solve` **`track_shed=False`**, `min_balance=0`, live `make_price_of`; INFEASIBLE → keep queues |
 | Day-0 queues | Prestart via `get_tile_queues` / `farmer.solve` (full 5-tile horizon) |
 | Market dawn buys | **h=0 only:** wheat → animals → seeds (then sells) |
 | Farmer h=0 | PASS (`defer_farmer_hour0`) so market fills shed first |
-| Theo / capacity | After replan: `forecast_day_counts` → `[theo]` / `[theo_extra]` / `est_ops=`; **farmer theo vs act all days match** after full-stack HARVEST sim fix |
+| Theo / capacity | After replan: `forecast_day_counts` → `[theo]` / `[theo_extra]` / `est_ops=`; **`compare_theo_act` mismatches=0** (±3 slack) after HARVEST sim + **hire4 CARE gate**; exec attribution via `parse_exec_actor` (`hand0=hireN`) |
 | Endgame d=29 | `_endgame_harvested` blocks re-HARVEST after DROP clears `_endgame_done` |
-| Five-zone / hires | Spec only in `data/milos_zoning.md` |
+| OneLand WSP | `milos/wsp/oneland.py` cascade; hire4 zone IV (e.g. t22 animal tile) |
 | Agents submit | Never without explicit ask |
+
+### Sep 23 — hire4 t22 CARE spam + theo/act alignment (KEEP)
+
+**Symptom:** `[theo]` for **hire4** showed **many `CARE` on one tile in one day** (e.g. 14× on t22, d=24–25) while rules allow one CARE per animal per day. **Not** bad JSON in `animal_with_pickups.json` (one CARE per age in rollouts).
+
+**Root cause:** Hourly replay loop — `_animal_action` could return **CARE** after **FEED** was skipped (no wheat in hand). `sim_apply` no-ops CARE when `not fed_today` → worker stayed on tile → forecast appended CARE every hour → theo inflation and hire4 **NET_TILE_OPS** eaten (missing **WATER** on t23–25). Live act often showed ≤1 CARE; bug was forecast + live offer path.
+
+**Fix (no JSON edit):**
+- `milos/tile_ops.py` — `CARE` only if `tile.get("fed_today")` (after existing `cared_today` skip).
+- `milos/executor.py` — mirror FEED filter: drop live `CARE` when tile not `fed_today`.
+
+**Diagnostics:** `scripts/smoke_analysis/parse_actor.py` (`parse_exec_actor`, `hand0=hireN`); `python3 -m smoke_analysis.compare_theo_act` from `scripts/`. Post-fix smoke: no multi-CARE t22 in theo; hire4 reaches crop ops on formerly bad days. MIP `_stamp_placement` unchanged (one op per calendar day per pattern).
 
 ### Sep 23 — milos dawn replan + theo HARVEST (KEEP)
 
@@ -49,11 +61,12 @@ The four center tiles are shed-adjacent in the rules, but **PICKUP / DROP no-op 
 - Clearing harvest-once sets on DROP (double HARVEST live)
 - Heuristic `est_ops = animal*4+crop*1.5` as capacity truth
 - Treating center tiles as shed doors without `LOCKED` check
+- Offering **CARE** without same-day **FEED** success (`fed_today`) — causes stuck-tile CARE spam in theo
 - Agents submitting without explicit ask
 - Importing `milos.script` from `milos.planner` at module load (circular with `get_tile_queues`)
 
 ### Immediate next steps
 
-1. Five-zone + 4 hires per `data/milos_zoning.md` when user asks (HIRE before wheat in h=0 list)
+1. Keep theo/act aligned after executor or animal-path changes (`compare_theo_act`, smoke notebook)
 2. Ladder / TwoLand `agent/` only if user switches live dispatch back
 3. Watch replan INFEASIBLE logs; queues preserved by design

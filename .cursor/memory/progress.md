@@ -25,17 +25,26 @@
 
 ---
 
-## Strategic status (Sep 23 — live = milos farmer-only)
+## Strategic status (Sep 23 — live = milos OneLand)
 
 | Track | Status |
 | --- | --- |
-| **Live submission** | **`milos/`** — `main.py` → `milos.executor`; `MILOS_FARMER` 5 tiles, 0 hires |
+| **Live submission** | **`milos/`** — `main.py` → `milos.executor`; **`MILOS_ONELAND`** 25 tiles, farmer + 4 hires |
 | **`agent/` TwoLand** | In-repo legacy; not dispatched by current `main.py` |
-| **Five-zone + 4 hires** | Spec [`data/milos_zoning.md`](../../data/milos_zoning.md) — not implemented |
-| **Dawn market** | h=0 only: wheat → animals → seeds; sells any hour (floor rules) |
-| **Theo / smoke** | `forecast_day_counts` after replan; `[theo]`/`[theo_extra]`/`est_ops=`; **`plot_zone_capacity` — all days match** post full-stack HARVEST sim |
-| **Dawn replan (milos)** | Live h0 d=1..28; `replan_lock` + WSP farmer; INFEASIBLE preserves queues |
+| **Dawn market** | h=0 only: wheat → animals → seeds; sells any hour (floor rules); HIRE×4 on OneLand |
+| **Theo / smoke** | `forecast_day_counts`; **`compare_theo_act` 0 mismatches** post hire4 CARE gate + full-stack HARVEST sim; `parse_actor` `hand0=hireN` |
+| **Dawn replan (milos)** | Live h0 d=1..28; `replan_lock` + WSP oneland; INFEASIBLE preserves queues |
 | **Competition submission** | Local smoke only unless user asks |
+
+## Sep 23 — hire4 CARE loop + theo/act exec parser (KEEP)
+
+| Change | Result |
+| --- | --- |
+| Root cause | FEED skipped (no wheat) but CARE still offered → sim no-op → hourly CARE in forecast (14× t22 theo d=24–25); op budget → missing WATER t23–25 |
+| `tile_ops` + `executor` | CARE requires `fed_today` (align sim + game); no `animal_with_pickups.json` edit |
+| `scripts/smoke_analysis/parse_actor.py` | `[exec]` attribution via `hand0=hireN` (farmer + hire1–3 aligned; hire4 fixed by CARE gate) |
+| `compare_theo_act` | Post-fix: mismatches(>\|3\|)=0 on smoke |
+| MIP | No change — one CARE op per calendar day in patterns already |
 
 ## Sep 23 — milos dawn replan + theo sim (KEEP)
 
@@ -65,7 +74,7 @@
 | Dawn wheat/animal/seed buys | Only h=0; order wheat → animal → seed |
 | sell_dp + pricing | Premium daily quota + 1/h drip; staples dump via pricing |
 | Owned-shed PICKUP/DROP | `_owned_shed_tiles` |
-| Capacity diagnostics | `[theo]` matches act on tiles + totals (after harvest sim + replan order) |
+| Capacity diagnostics | `[theo]` vs act via smoke_analysis; **`compare_theo_act`**; animal **CARE gated on `fed_today`** |
 | Dawn replan | Rewrites eligible tile queues; occupied tiles locked in MIP |
 
 ## Strategic status (Sep 21 — historical: TwoLand; milos was sandbox)
@@ -215,11 +224,10 @@
 
 ## What's left
 
-1. Five-zone + 4 hires per `data/milos_zoning.md` (HIRE before wheat at h=0) when user asks
-2. Keep theo/act capacity aligned after behavior changes
-3. Keep shed pickup gated on **owned** center tiles only
-4. Do not Kaggle submit without ask
-5. `agent/` TwoLand ladder work only if user re-points `main.py`
+1. Keep theo/act aligned after behavior changes (`compare_theo_act`, smoke notebook)
+2. Keep shed pickup gated on **owned** center tiles only
+3. Do not Kaggle submit without ask
+4. `agent/` TwoLand ladder work only if user re-points `main.py`
 
 ## Do not do unless asked
 
@@ -233,7 +241,8 @@
 - Runtime `bind()` layout switch mid-game
 - Point `main.py` back to `agent/` without explicit ask
 - Kaggle submit
+- Treat `SHED_ADJACENT` alone as pickup-valid (must be **owned** / `!= LOCKED`)
 - Commit `kaggle_logs/`
 - Hardcode land2 workers in smoke/replay analysis
-- Treat `SHED_ADJACENT` alone as pickup-valid (must be **owned** / `!= LOCKED`)
+- Offering **CARE** when tile is not **`fed_today`** (same as sim) — inflates theo and burns hire op budget
 - Treat `[wsp_plan]` delta payload as a full board without `accumulate_absolute`

@@ -4,24 +4,31 @@
 
 **Sept02 overhaul patterns are REJECTED.** Do not copy Wave 2–8 “safety rails” (`cons≥0`, WSP `track_shed=True`, formula `net_tile_ops`, fert dawn pipeline) into live agent. Pre-overhaul WSP: **`track_shed=False`**, **`min_balance=0`**, **unbounded `conservative`**, hand-calibrated `NET_TILE_OPS`. See `progress.md` FAILURE banner.
 
-## Current: milos farmer-only (Sep 23)
+## Current: milos OneLand (Sep 23)
 
 ```
 import:
-  milos/zoning.py MILOS_FARMER → 5 tiles, farmer only, 0 hires
+  milos/zoning.py MILOS_ONELAND → 25 tiles, farmer + hire1–4
   data/crop_rollouts.json + data/animal_with_pickups.json
 
 obs → milos.executor.step
   ├─ hour0: tile_state dawn
   │         planner.replan (d=1..28) → sell_dp.replan
-  │         market.build_orders — buys (h=0 only): WHEAT → ANIMAL → SEED; then sells
-  │         farmer PASS (defer_farmer_hour0) so market fills shed
+  │         market.build_orders — HIRE×4 + buys (h=0 only): WHEAT → ANIMAL → SEED; then sells
   │         forecast_day_counts → [hands] est_ops= / [theo] / [theo_extra]
-  ├─ hours 1–23: farmer snake → shed pickup → tile_ops.next_tile_action
+  ├─ hours 1–23: multi-worker snakes → shed pickup → tile_ops.next_tile_action
   └─ day ≥ 29: endgame harvest; _endgame_harvested blocks re-HARVEST after DROP
 ```
 
+**Animal tile ops:** FEED skipped when no wheat in hand; **CARE skipped when not `fed_today`** (and when `cared_today`) — matches `sim_apply` and prevents hourly CARE retry inflating theo.
+
+**Smoke analysis:** `scripts/smoke_analysis/parse_actor.py` maps `[exec]` lines to workers via `hand0=hireN`; `compare_theo_act` checks per-worker/day tile op totals (±3 slack).
+
 `main.py` → `milos.executor.step`. Bundle: `main.py` + `milos/` + `data/` + ortools.
+
+## Prior: milos farmer-only (historical)
+
+Five-tile farmer sandbox (`MILOS_FARMER`, 0 hires) — superseded by `CURRENT = MILOS_ONELAND` in `milos/zoning.py`.
 
 ### Dawn market buy order
 
