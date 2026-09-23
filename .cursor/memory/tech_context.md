@@ -9,8 +9,8 @@
 | Optimizer | OR-Tools CP-SAT — import + dawn replan |
 | Catalog | `agent/dp_catalog.py` WIS (not handmade JSON at runtime) |
 | Animals | `data/animal_with_pickups.json` |
-| Agent style | Heuristic executor + bounded CP-SAT — no RL |
-| Bundle | `main.py` + `agent/` + `data/` (crop + animal_with_pickups + handmade for fallback) + vendored ortools |
+| Agent style | Milos heuristic executor + dawn market + sell_dp — no RL (legacy CP-SAT in `agent/`) |
+| Bundle | `main.py` + `milos/` + `data/` (crop + animal_with_pickups + handmade for fallback) + vendored ortools |
 
 ## Local evaluation
 
@@ -93,11 +93,12 @@ Agents never submit without explicit user request (`kaggle-submission.mdc`).
 | Doc | Purpose |
 | --- | --- |
 | `docs/project_overview.md` | Game rules |
+| `data/milos_zoning.md` | Target five-zone + h=0 buy order |
 | `docs/two_land_approach.md` | Pickups ops lesson |
 | `docs/twoland/diagnosis_0911.md` | OneLand vs TwoLand diagnosis; reject static NW caps; post-NE ops crash |
 | `docs/twolands/twoland_readd.md` | TwoLand re-add spec (probe + NE glue + LOCKED carve-out) |
 | `scripts/smoke_analysis/` | Local smoke log KPIs/plots; **layout-aware** via `layout.py` |
-| `milos/wsp/` | Farmer-only WSP sandbox (not in submission) |
+| `milos/` | Live farmer-only agent (executor/market/tile_ops/sell_dp) |
 | `experiments/milos-simplification.ipynb` | Milos solve + smoke farmer Gantts |
 | `data/two_lands.md` | TWO layout geometry / hire batches |
 | `scripts/download_submission_logs.sh` | Bulk episode replays from Kaggle CLI |

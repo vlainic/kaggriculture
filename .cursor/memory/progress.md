@@ -25,14 +25,47 @@
 
 ---
 
-## Strategic status (Sep 21 — live = TwoLand; milos sandbox)
+## Strategic status (Sep 23 — live = milos farmer-only)
 
 | Track | Status |
 | --- | --- |
-| **Two-land WSP** | **LIVE** — `CURRENT_SOLVER = twoland_wsp`, `CURRENT = TWO` |
+| **Live submission** | **`milos/`** — `main.py` → `milos.executor`; `MILOS_FARMER` 5 tiles, 0 hires |
+| **`agent/` TwoLand** | In-repo legacy; not dispatched by current `main.py` |
+| **Five-zone + 4 hires** | Spec [`data/milos_zoning.md`](../../data/milos_zoning.md) — not implemented |
+| **Dawn market** | h=0 only: wheat → animals → seeds; sells any hour (floor rules) |
+| **Theo / smoke** | `forecast_day_counts` → `[theo]`/`[theo_extra]`/`est_ops=`; `plot_zone_capacity` |
+| **Competition submission** | Local smoke only unless user asks |
+
+## Sep 22–23 — milos live hardening (KEEP)
+
+| Change | Result |
+| --- | --- |
+| Live = milos | Bundle: `main.py` + `milos/` + `data/` + ortools |
+| Endgame double HARVEST | `_endgame_harvested`; don’t revisit PLANT after DROP |
+| Wheat buy h=0 only | Stopped mid-day buy → extra shed PICKUP |
+| Buy order | h=0: **wheat → animals → seeds** (animals need PICKUP) |
+| Theo est_ops | Dry-run tile_ops; drop unused animal×4+crop×1.5 return |
+| sim_apply | BUILD before empty return; partial HARVEST for ongoing crops |
+| Smoke capacity print | Totals + shed extras + per-tile mismatches |
+
+## What works (live milos)
+
+| Item | Notes |
+| --- | --- |
+| Farmer snake + tile_ops | Rollout-driven WATER/FERT/FEED/HARVEST; h=0 PASS for market |
+| Dawn wheat/animal/seed buys | Only h=0; order wheat → animal → seed |
+| sell_dp + pricing | Premium daily quota + 1/h drip; staples dump via pricing |
+| Owned-shed PICKUP/DROP | `_owned_shed_tiles` |
+| Capacity diagnostics | `[theo]` matches act on tiles after harvest/wheat fixes |
+
+## Strategic status (Sep 21 — historical: TwoLand; milos was sandbox)
+
+| Track | Status |
+| --- | --- |
+| **Two-land WSP** | Was LIVE — `CURRENT_SOLVER = twoland_wsp`, `CURRENT = TWO` |
 | **Three-land WSP** | Opt-in `KAGGRI_LANDS=3` → `threeland_wsp` + THREE |
 | **One-land WSP** | Available as `zonewise_wsp` + FIVE catalog; not CURRENT |
-| **`milos/`** | Farmer-only WSP + Gantt notebook sandbox — **not** in tarball / not live dispatch |
+| **`milos/`** | Was farmer-only WSP + Gantt sandbox — **now live submission** |
 | **Land buy** | Probe → `BUY_LAND_DAY`; NE $1k; clear next dawn after buy day |
 | **Hiring** | `NUM_ACTIVE_HIRES` from healthy solved hands (excl. `DEAD_HANDS`); market hire batches + `dead=` log |
 | **Dawn replan** | Lock commitments; WSP **`track_shed=False`**, `min_balance=0`; unbounded `cons`; **full** conservative handoff; INFEASIBLE/`picks0` → **skip zone, continue cascade** (not break) |
@@ -172,20 +205,22 @@
 
 ## What's left
 
-1. Diagnose capacity/routing from zone-capacity + milos farmer Gantts (behavior only when asked)
-2. Ladder / post-NE ops gap as user asks (`docs/twoland/diagnosis_0911.md`)
+1. Five-zone + 4 hires per `data/milos_zoning.md` (HIRE before wheat at h=0) when user asks
+2. Keep theo/act capacity aligned after behavior changes
 3. Keep shed pickup gated on **owned** center tiles only
 4. Do not Kaggle submit without ask
+5. `agent/` TwoLand ladder work only if user re-points `main.py`
 
 ## Do not do unless asked
 
+- Mid-day BUY wheat / animal / seed (breaks theo shed extras)
+- Clear `_endgame_harvested` on DROP
 - Re-enable `ZONE_OPS_BUDGET` / `ZONE_IDLE_FILLER` / `ZONE_TILE_RESIZE` or dawn live ownership moves
 - Hard `break` cascade on WSP INFEASIBLE (use skip-continue)
 - Mid-zone walk-to-shed / Sept02 overhaul / queue-lock chase
 - Re-try static per-zone money caps (`money/N`, half-cash clamp, etc.)
 - Runtime `bind()` layout switch mid-game
-- Register `milos` into `_BACKENDS` / ship `milos/` in submission tarball
-- More wheat feed→shed surgery on vs-random smoke (paths don't fire; opp≈0)
+- Point `main.py` back to `agent/` without explicit ask
 - Kaggle submit
 - Commit `kaggle_logs/`
 - Hardcode land2 workers in smoke/replay analysis

@@ -4,35 +4,63 @@
 
 **Sept02 overhaul patterns are REJECTED.** Do not copy Wave 2–8 “safety rails” (`cons≥0`, WSP `track_shed=True`, formula `net_tile_ops`, fert dawn pipeline) into live agent. Pre-overhaul WSP: **`track_shed=False`**, **`min_balance=0`**, **unbounded `conservative`**, hand-calibrated `NET_TILE_OPS`. See `progress.md` FAILURE banner.
 
-## Current: TwoLand WSP + snake executor (Sep 18)
+## Current: milos farmer-only (Sep 23)
 
 ```
 import:
-  agent/zoning.py CURRENT=TWO → bind() → WORKERS / TILES / PREAMBLE / NET_TILE_OPS / LAND1_* / LAND2_*
+  milos/zoning.py MILOS_FARMER → 5 tiles, farmer only, 0 hires
   data/crop_rollouts.json + data/animal_with_pickups.json
-  twoland_wsp day-0 land1 prestart + hire5 probe + NE cascade
 
-obs → executor.step
-  ├─ hour0: reset routes; dawn replan if 0 < day < SEASON_LAST; HIRE / BUY_LAND
-  │         replan: lock commitments → CP-SAT empties only; NE LOCKED carve-out on buy-morning
-  │         WSP: track_shed=False, min_balance=0; full conservative handoff
-  │         BUY_LAND_DAY cleared next dawn (day > BUY_LAND_DAY)
-  ├─ market: dump SELL; buy animals; NUM_ACTIVE_HIRES batches; BUY_LAND reserved
-  └─ snake: owned-shed first → PICKUP → compass → tile ops
+obs → milos.executor.step
+  ├─ hour0: tile_state dawn; sell_dp.replan; market.build_orders
+  │         buys (h=0 only): WHEAT → ANIMAL → SEED; then sells
+  │         farmer PASS (defer_farmer_hour0) so market fills shed
+  │         forecast_day_counts → [hands] est_ops= / [theo] / [theo_extra]
+  ├─ hours 1–23: farmer snake → shed pickup → tile_ops.next_tile_action
+  └─ day ≥ 29: endgame harvest; _endgame_harvested blocks re-HARVEST after DROP
 ```
 
-`main.py` → `executor.step`.  
-`CURRENT_SOLVER = "twoland_wsp"` (default). `KAGGRI_LANDS=3` → `threeland_wsp`.
+`main.py` → `milos.executor.step`. Bundle: `main.py` + `milos/` + `data/` + ortools.
+
+### Dawn market buy order
+
+1. Feed wheat deficit (live animals / place-today)
+2. Animals (must PICKUP from shed before PLACE)
+3. Seeds (plant from `private["seeds"]` — no shed trip)
+4. Sells (premium drip / staple dump)
+
+When 4 hires land: prepend `HIRE`×N on same h=0 list, then wheat → animal → seed.
 
 ### Shed-adjacent **ONLY IF OWNED** (engine + executor)
 
 - Rules list four center tiles as shed-adjacent: `(4,4)`, `(5,4)`, `(4,5)`, `(5,5)`.
-- **PICKUP / DROP no-op when the standing tile is `LOCKED`** (confirmed: shed count never drops).
-- TwoLand owns NW+NE only → SW/SE centers **never** valid pickup spots.
-- Live gate: `_owned_shed_tiles(me)` = `SHED_ADJACENT` ∩ `{tile != "LOCKED"}`.
-- Dawn path: if not on owned shed → `_step_to_owned_shed` (0–2 hops); then PICKUP; then zoning compass.
-- FIVE hire1–4 preambles are **pickup-first** (no leading WEST/NORTH). hire5–9 already were.
-- **Not** Sept02 mid-zone walk-to-shed — only spawn/locked-center correction + preamble.
+- **PICKUP / DROP no-op when the standing tile is `LOCKED`**.
+- Milos farmer owns NW `(4,4)` only.
+- Live gate: `_owned_shed_tiles(me)`.
+
+### Legacy: TwoLand WSP (`agent/` — not current main.py)
+
+```
+agent/zoning.py CURRENT=TWO → twoland_wsp + snake executor
+```
+
+Kept for history / optional restore. See progress.md Sep 21 sections.
+
+### Milos modules (live)
+
+```
+milos/
+  executor.py   # turn loop, snake, endgame, theo dry-run
+  market.py     # h=0 buys + sells
+  tile_ops.py   # next verb from rollouts
+  sell_dp.py    # premium daily quota
+  pricing.py    # price curve / staple dump caps
+  sim_apply.py  # forecast dry-run mutations
+  script.py / zoning.py / planner.py / wsp/
+```
+
+experiments: `smoke_analysis.ipynb`, `milos-simplification.ipynb`.
+Target layout note: `data/milos_zoning.md`.
 
 ### Zone layouts (`agent/zoning.py`)
 
@@ -85,19 +113,9 @@ See `docs/twolands/twoland_readd.md`.
 - Mid-zone walk-to-shed / Sept02 preamble rewrites are **failed** — do not reintroduce.
 - Dawn `[hands] h0` logs animal/crop/`est_ops` for **all** `WORKERS` (incl. farmer); eod uses `tiles_dawn=` (tiles needing work at dawn) / `executed=` (non-PASS) / `laps=` — **no** `gap=` (misleading KPI).
 
-### Milos sandbox (`milos/` — not live, not in tarball)
+### Milos (was sandbox; now live)
 
-```
-milos/wsp/
-  config.py, data.py (repo data/*.json), types.py, common.py
-  mip.py (farmer CP-SAT), farmer.py, prestart.json (tiles 0–4)
-  gantt.py, log.py
-experiments/milos-simplification.ipynb
-```
-
-- **No `agent/` imports** inside milos. Smoke still runs live `agent/` + `twoland_wsp`.
-- Verbose: `KAGGRI_VERBOSE=1` → `[wsp_plan]` (delta tiles). Notebook `accumulate_absolute` → full farmer board; plot only if delta nonempty.
-- Alphas: past 0.3 / unchanged future 0.6 / delta future **1.0**.
+Self-contained under `milos/`. Smoke ships `milos/` in tarball. No `agent/` imports inside milos.
 
 ### Engine facts
 
@@ -139,7 +157,7 @@ experiments/milos-simplification.ipynb
 ## Repo layout
 
 ```
-main.py → agent/executor.py → script.TILE_QUEUES
+main.py → milos/executor.py → market + tile_ops + script.TILE_QUEUES
 agent/zoning.py           # FOUR / FIVE / TWO / CURRENT + bind()
 agent/planner.py          # BUY_LAND_DAY, NUM_ACTIVE_HIRES, zone-count CP-SAT + replan
 agent/solvers/            # monolithic + zonewise + zonewise_wsp + twoland_wsp

@@ -9,28 +9,30 @@ Compete on Kaggriculture with an autonomous agent that beats typical heuristic/L
 - Endogenous market pricing (own sells crash premium goods)
 - Time-coupled crops/animals (water, feed, care bonus, decay)
 - Tight action budget: 1 op/worker/hour + ≤10 market orders
-- **Farmer acts before market in the same hour** — h=0 seed/hire timing
-- Daily re-hire of farm hands
+- **Farmer acts before market in the same hour** — h=0 PASS so market can fill shed
+- Daily re-hire of farm hands (when multi-hand layout is on)
 - Shed cap 100 (excluding seeds)
-- Animal care needs honest shed trips (PICKUP wheat/animal) — undercounting ops lied about score; overcounting (pickups JSON + side counters) crushed animals
+- Animals need shed PICKUP before PLACE; seeds do not — buy animals before seeds at dawn
 
-## How the current agent is supposed to work (TwoLand — live)
+## How the current agent is supposed to work (milos farmer-only — live)
 
-1. **Import:** bind `zoning.CURRENT` (**TWO**); WSP day-0 land1 from `wsp_prestart.json`; hire5 probe.
-2. **Dawn replan (WSP, day ≥ 3):** remaining horizon; lock commitments; land cascade with **full** conservative handoff. INFEASIBLE/`picks0` → **skip zone, continue cascade**, keep queues.
-3. **Hiring / land:** `NUM_ACTIVE_HIRES` from healthy hands (excl. `DEAD_HANDS`); `BUY_LAND_DAY` after probe; market hire batches + BUY_LAND; `ZONE_OPS_MIX` on at construction.
-4. **Runtime:** owned-shed first → PICKUP → snake; market sell floor + premium DP; wheat dawn buy.
+1. **Import:** `milos` `MILOS_FARMER` (5 tiles, farmer only).
+2. **h=0:** farmer PASS; market buys wheat → animals → seeds; sell_dp replan; theo dry-run logs.
+3. **Day:** farmer snake + `tile_ops` from crop/animal rollouts; owned-shed PICKUP/DROP.
+4. **d=29:** endgame harvest; do not re-HARVEST same plant after DROP.
+5. **Sells:** staples dump via pricing floor; premiums drip from sell_dp daily quota (≤1/hour).
 
-## Milos sandbox
+Target five-zone + 4 hires: [`data/milos_zoning.md`](../../data/milos_zoning.md).
 
-`milos/` is an **experiments-only** farmer WSP (self-contained). Smoke still runs live `agent/`. Use `experiments/milos-simplification.ipynb` for replan Gantts from `[wsp_plan]` logs — not a second submission agent.
+## Legacy TwoLand (`agent/`)
+
+Still in repo. Was live through mid-Sep. Restore only if user points `main.py` back.
 
 ## User workflow preferences
 
 - Plain `.py` in submission; notebooks OK in `experiments/` only
 - Plan/Act via `core-plan-act` skill
 - Agents: `smoke_test.sh` only; never submit without explicit ask
-- Analysis tooling must follow live `zoning.CURRENT` / workers (no hardcoded land2)
+- Analysis tooling must follow live layout (milos farmer or `agent.zoning.CURRENT`)
 - Do not commit `.cursor/` (gitignore); do not stage `logs.txt`
-- Hard resets / force-pushes: user-driven; do not assume tip matches origin without checking
-- `milos/` stays out of `submission.tar.gz` unless user asks to wire it live
+- Hard resets / force-pushes: user-driven

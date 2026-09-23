@@ -12,33 +12,32 @@ Kaggle Simulations competition **Kaggriculture** — 720-turn, two-player farmin
 
 Heuristic/rule-based Python agent (no ML/RL pipeline) that wins on the ladder.
 
-## Current implementation (Sep 21, 2026)
+## Current implementation (Sep 23, 2026)
 
-**Active stack:** **TwoLand WSP** (`CURRENT_SOLVER = twoland_wsp`, `zoning.CURRENT = TWO`) + snake executor + dawn replan + pickups-honest animal ops. Opt-in ThreeLand: `KAGGRI_LANDS=3`.
+**Active stack:** **`milos/` farmer-only** — `main.py` → `milos.executor.step`.
 
-- Zoning catalog: `FOUR` / `FIVE` / `TWO` / `THREE`; **live = TWO**.
-- Solver: land1 day-0 + hire5 probe + NE cascade; **full** conservative cash cascade (`track_shed=False`, `min_balance=0`).
-- Planner: import solve + dawn replan; lock commitments; empties only; `BUY_LAND_DAY` (re-arm next dawn); `NUM_ACTIVE_HIRES` from solved prefix; optional `[wsp_plan]` when `KAGGRI_VERBOSE=1`.
-- Market: hire batches; `BUY_LAND` + reserve; uncap dawn wheat.
-- Animals: `animal_with_pickups.json`; ops = **`daily_tile_ops` only** (+ hire preamble).
-- **Shed:** PICKUP/DROP only on **owned** center tiles (`!= LOCKED`); SW/SE never valid on TwoLand. Owned-shed first → PICKUP → zone.
-- **Sandbox:** `milos/` farmer-only WSP + Gantt notebook — **not** in submission bundle.
-
-**Ruled out:** Sept02 mid-zone walk-to-shed; stuck-zone queue-lock chase; static NW spend caps; melon/wool glut as the TwoLand gap cause.
+- Layout: `MILOS_FARMER` (5 tiles / zone I, 0 hires). Five-zone + 4 hires = target spec in `data/milos_zoning.md`.
+- Market: h=0 buys **wheat → animals → seeds**; sells drip/dump; farmer PASSes at h=0.
+- Tile ops: `milos/tile_ops.py` + rollouts JSON; endgame harvest guard `_endgame_harvested`.
+- Sell policy: `sell_dp` (premium) + `pricing` (staples).
+- Shed: PICKUP/DROP only on **owned** center tiles.
+- Diagnostics: dawn theo dry-run (`[theo]` / `est_ops=`) + `scripts/smoke_analysis` / `experiments/smoke_analysis.ipynb`.
+- **Legacy:** `agent/` TwoLand WSP still in repo, not live dispatch.
 
 ## Deliverable
 
-- `main.py` + bundle (`agent/`, `data/` including `animal_with_pickups.json` + crop rollouts, vendored ortools)
-- Local smoke: `scripts/smoke_test.sh` (sets `KAGGRI_VERBOSE=1` for plan logs)
+- `main.py` + bundle (`milos/`, `data/` including crop + animal rollouts, vendored ortools)
+- Local smoke: `scripts/smoke_test.sh`
 - Submit: user-only via `scripts/smoke_and_submit.sh --submit "msg"`
 
 ## Scope boundaries
 
-- **In scope:** TwoLand WSP, sell policy, local eval, user-requested submit, smoke/milos diagnostics
-- **Out of scope unless asked:** agent-initiated Kaggle submit, RL, notebooks/`milos/` in the submission bundle
+- **In scope:** milos farmer / five-zone expansion when asked, sell policy, local eval, user-requested submit, smoke diagnostics
+- **Out of scope unless asked:** agent-initiated Kaggle submit, RL, switching live back to `agent/` TwoLand
 
 ## Key references
 
 - Rules: `docs/project_overview.md`
-- TwoLand history / re-add: `docs/twolands/twoland_readd.md`, `docs/twoland/diagnosis_0911.md`
+- Milos layout target: `data/milos_zoning.md`
+- TwoLand history: `docs/twolands/twoland_readd.md`, `docs/twoland/diagnosis_0911.md`
 - Memory: `.cursor/memory/`
