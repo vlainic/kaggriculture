@@ -9,6 +9,13 @@ STRAWBERRY_LAST_AGE = 16
 ONE_TIME_CROPS = frozenset({"WHEAT", "CARROT", "MELON"})
 
 
+def plant_harvest_transfer(crop: str, yield_units: int) -> tuple[int, int]:
+    """Units moved on one HARVEST; rollouts count is per action, not per unit."""
+    del crop
+    y = max(0, int(yield_units))
+    return y, 0
+
+
 def _tile_at(me: dict, idx: int):
     x, y = workers.TILE_COORDS[idx]
     return me["tiles"][y][x]

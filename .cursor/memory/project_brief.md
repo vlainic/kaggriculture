@@ -18,7 +18,8 @@ Heuristic/rule-based Python agent (no ML/RL pipeline) that wins on the ladder.
 
 - Layout: `MILOS_FARMER` (5 tiles / zone I, 0 hires). Five-zone + 4 hires = target spec in `data/milos_zoning.md`.
 - Market: h=0 buys **wheat → animals → seeds**; sells drip/dump; farmer PASSes at h=0.
-- Tile ops: `milos/tile_ops.py` + rollouts JSON; endgame harvest guard `_endgame_harvested`.
+- Tile ops: `milos/tile_ops.py` + rollouts JSON; **`plant_harvest_transfer`** for sim; endgame `_endgame_harvested`.
+- **Dawn replan:** `milos/planner.replan` + `replan_lock` (farmer WSP, live prices).
 - Sell policy: `sell_dp` (premium) + `pricing` (staples).
 - Shed: PICKUP/DROP only on **owned** center tiles.
 - Diagnostics: dawn theo dry-run (`[theo]` / `est_ops=`) + `scripts/smoke_analysis` / `experiments/smoke_analysis.ipynb`.

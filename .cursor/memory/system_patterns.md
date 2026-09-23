@@ -12,8 +12,9 @@ import:
   data/crop_rollouts.json + data/animal_with_pickups.json
 
 obs → milos.executor.step
-  ├─ hour0: tile_state dawn; sell_dp.replan; market.build_orders
-  │         buys (h=0 only): WHEAT → ANIMAL → SEED; then sells
+  ├─ hour0: tile_state dawn
+  │         planner.replan (d=1..28) → sell_dp.replan
+  │         market.build_orders — buys (h=0 only): WHEAT → ANIMAL → SEED; then sells
   │         farmer PASS (defer_farmer_hour0) so market fills shed
   │         forecast_day_counts → [hands] est_ops= / [theo] / [theo_extra]
   ├─ hours 1–23: farmer snake → shed pickup → tile_ops.next_tile_action
@@ -55,8 +56,9 @@ milos/
   tile_ops.py   # next verb from rollouts
   sell_dp.py    # premium daily quota
   pricing.py    # price curve / staple dump caps
-  sim_apply.py  # forecast dry-run mutations
-  script.py / zoning.py / planner.py / wsp/
+  sim_apply.py  # forecast dry-run; plant HARVEST full stack via plant_harvest_transfer
+  replan_lock.py  # dawn replan eligibility + commitment stamp
+  script.py / zoning.py / planner.py / wsp/  # planner.replan + day-0 prestart
 ```
 
 experiments: `smoke_analysis.ipynb`, `milos-simplification.ipynb`.

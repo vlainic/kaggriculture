@@ -639,7 +639,7 @@ def plot_zone_capacity(report: dict[str, Any], *, title: str | None = None) -> N
                     f"    totals: theo={int(theo_total)} act={act_total} "
                     f"(on tiles: theo={theo_attr} act={act_attr})"
                 )
-            if theo_x != act_x or (theo_x or act_x):
+            if theo_x != act_x:
                 print(f"    shed theo: {_fmt_ops(theo_x)}")
                 print(f"    shed act:  {_fmt_ops(act_x)}")
             for tnum, theo_v, act_v in day_rows:
