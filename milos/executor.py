@@ -182,7 +182,7 @@ class Executor:
         )
         harvest_only = day >= script.SEASON_LAST_DAY
 
-        if hour == 0 and day < script.SEASON_LAST_DAY:
+        if hour == 0 and day <= script.SEASON_LAST_DAY:
             self._bind_hands(me, day, hour)
 
         if market.defer_farmer_hour0(hour, day):
@@ -304,10 +304,42 @@ class Executor:
             return "move"
         return "tile_ops"
 
+    def _accumulate_forecast(
+        self,
+        fc: dict,
+        action: list,
+        note: str,
+        *,
+        tile_note_re: re.Pattern[str],
+    ) -> None:
+        bucket = self._classify_forecast_bucket(action)
+        fc[bucket] = fc.get(bucket, 0) + 1
+        if bucket != "tile_ops":
+            return
+        m = tile_note_re.search(note or "")
+        if m:
+            tnum = int(m.group(1))
+            fc.setdefault("by_tile", {}).setdefault(tnum, []).append(
+                action[0] if action else "PASS"
+            )
+        else:
+            fc.setdefault("extra_verbs", []).append(
+                action[0] if action else "PASS"
+            )
+
+    def _empty_forecast_counts(self) -> dict:
+        return {
+            "tile_ops": 0,
+            "move": 0,
+            "pass": 0,
+            "by_tile": {},
+            "extra_verbs": [],
+        }
+
     def forecast_day_counts(
         self, obs: dict, me: dict, private: dict, day: int
-    ) -> dict:
-        """Dry-run farmer hours 0..23 after h0 market on copied state."""
+    ) -> dict[str, dict]:
+        """Dry-run all workers' hours 0..23 after h0 market on copied state."""
         saved_route = dict(self._route_idx)
         saved_pre = dict(self._preamble_idx)
         saved_slot = dict(self._slot_to_worker)
@@ -340,67 +372,67 @@ class Executor:
             self._empty_at_dawn,
         )
         sim_apply.apply_market_orders(me_c, priv_c, orders, prices)
+        if day <= script.SEASON_LAST_DAY:
+            self._bind_hands(me_c, day, 0)
 
-        counts = {"tile_ops": 0, "move": 0, "pass": 0}
-        by_tile: dict[int, list[str]] = {}
-        extra_verbs: list[str] = []
+        by_worker = {w: self._empty_forecast_counts() for w in workers.WORKERS}
         harvest_only = day >= script.SEASON_LAST_DAY
         tile_note_re = re.compile(r"(?<!>)t(\d+)$")
 
         for hour in range(24):
-            note = ""
             if market.defer_farmer_hour0(hour, day):
-                action = ["PASS"]
-            else:
-                action, note = self._worker_action(
-                    "farmer",
+                by_worker["farmer"]["pass"] += 1
+                for i in range(len(me_c.get("hands", []))):
+                    w = self._worker_for_slot(i, me_c, day, hour)
+                    if w and w in by_worker:
+                        by_worker[w]["pass"] += 1
+                continue
+
+            action, note = self._worker_action(
+                "farmer",
+                me_c,
+                priv_c,
+                day,
+                hour,
+                harvest_only,
+                hand_slot=None,
+            )
+            self._accumulate_forecast(
+                by_worker["farmer"], action, note, tile_note_re=tile_note_re
+            )
+            sim_apply.apply_farmer_action(
+                me_c,
+                priv_c,
+                day,
+                action,
+                self._tile_state,
+                inv_idx=self._inv_idx("farmer"),
+            )
+            for i in range(len(me_c.get("hands", []))):
+                w = self._worker_for_slot(i, me_c, day, hour)
+                if w is None or w not in by_worker:
+                    continue
+                hact, hnote = self._worker_action(
+                    w,
                     me_c,
                     priv_c,
                     day,
                     hour,
                     harvest_only,
-                    hand_slot=None,
+                    hand_slot=i,
                 )
-                sim_apply.apply_farmer_action(
+                self._accumulate_forecast(
+                    by_worker[w], hact, hnote, tile_note_re=tile_note_re
+                )
+                sim_apply.apply_hand_action(
                     me_c,
                     priv_c,
                     day,
-                    action,
+                    i,
+                    hact,
                     self._tile_state,
-                    inv_idx=self._inv_idx("farmer"),
+                    inv_idx=self._inv_idx(w, hand_slot=i),
                 )
-                for i in range(len(me_c.get("hands", []))):
-                    w = self._worker_for_slot(i, me_c, day, hour)
-                    if w is None:
-                        continue
-                    hact, _ = self._worker_action(
-                        w,
-                        me_c,
-                        priv_c,
-                        day,
-                        hour,
-                        harvest_only,
-                        hand_slot=i,
-                    )
-                    sim_apply.apply_hand_action(
-                        me_c,
-                        priv_c,
-                        day,
-                        i,
-                        hact,
-                        self._tile_state,
-                        inv_idx=self._inv_idx(w, hand_slot=i),
-                    )
-            verb = action[0] if action else "PASS"
-            bucket = self._classify_forecast_bucket(action)
-            counts[bucket] += 1
-            if bucket == "tile_ops":
-                m = tile_note_re.search(note or "")
-                if m:
-                    tnum = int(m.group(1))
-                    by_tile.setdefault(tnum, []).append(verb)
-                else:
-                    extra_verbs.append(verb)
 
         self._route_idx = saved_route
         self._preamble_idx = saved_pre
@@ -410,12 +442,10 @@ class Executor:
         self._endgame_done = saved_endgame_done
         self._endgame_exhausted = saved_endgame_exhausted
         self._endgame_harvested = saved_endgame_harvested
-        counts["by_tile"] = by_tile
-        counts["extra_verbs"] = extra_verbs
-        return counts
+        return by_worker
 
     def _log_hand_queues(self, obs: dict, me: dict, private: dict, day: int) -> None:
-        forecast = self.forecast_day_counts(obs, me, private, day)
+        forecast_by_worker = self.forecast_day_counts(obs, me, private, day)
         for w in workers.WORKERS:
             tiles = workers.WORKER_TILES.get(w, ())
             if not tiles:
@@ -436,26 +466,22 @@ class Executor:
                 and _tile_at(me, idx).get("kind") in ("PLANT", "COOP", "PASTURE")
             )
             animal, crop = _zone_animal_crop_ops(me, w)
-            if w == "farmer":
-                fc = forecast
-            else:
-                fc = {"tile_ops": 0, "move": 0, "pass": 0, "by_tile": {}}
+            fc = forecast_by_worker.get(w) or self._empty_forecast_counts()
             _log(
                 f"[hands] d={day} h0 {w} NUM_ACTIVE_HIRES={planner.NUM_ACTIVE_HIRES} "
                 f"qtiles={q} empty={empty} locked={locked} live={live} "
                 f"animal={animal} crop={crop} est_ops={fc['tile_ops']:g}"
             )
-            if w == "farmer":
-                parts = []
-                for tnum in sorted(fc.get("by_tile") or {}):
-                    verbs = ",".join(fc["by_tile"][tnum])
-                    parts.append(f"t{tnum}={verbs}")
-                _log(f"[theo] d={day} {w} " + (" ".join(parts) if parts else "-"))
-                extra = fc.get("extra_verbs") or []
-                _log(
-                    f"[theo_extra] d={day} {w} "
-                    + (",".join(extra) if extra else "-")
-                )
+            parts = []
+            for tnum in sorted(fc.get("by_tile") or {}):
+                verbs = ",".join(fc["by_tile"][tnum])
+                parts.append(f"t{tnum}={verbs}")
+            _log(f"[theo] d={day} {w} " + (" ".join(parts) if parts else "-"))
+            extra = fc.get("extra_verbs") or []
+            _log(
+                f"[theo_extra] d={day} {w} "
+                + (",".join(extra) if extra else "-")
+            )
 
     def _mark_endgame_tile_exhausted(
         self, worker: str, idx: int, me: dict, action: list

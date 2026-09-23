@@ -20,7 +20,7 @@ def _set_tile(me: dict, idx: int, value) -> None:
 
 def _inv_at(private: dict, inv_idx: int) -> dict:
     invs = private["inventories"]
-    if inv_idx >= len(invs):
+    while len(invs) <= inv_idx:
         invs.append({})
     return invs[inv_idx]
 
@@ -59,6 +59,11 @@ def apply_market_orders(
             cost = animal_rollouts.animal_cost(animal) * n
             me["money"] = int(me["money"]) - cost
             shed[animal] = shed.get(animal, 0) + n
+        elif op == "HIRE":
+            hands = me.setdefault("hands", [])
+            corners = [(4, 4), (5, 4), (4, 5), (5, 5)]
+            if len(hands) < len(corners):
+                hands.append(list(corners[len(hands)]))
         elif op == "SELL" and len(order) >= 3:
             item, n = order[1], int(order[2])
             n = min(n, shed.get(item, 0))

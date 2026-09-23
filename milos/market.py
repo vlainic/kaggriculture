@@ -146,10 +146,11 @@ def build_orders(
     wheat_price = int(prices.get("WHEAT", 0) or 25)
     spendable = max(0, money - wheat_reserve * wheat_price)
 
-    if day < script.SEASON_LAST_DAY and hour == 0:
+    if hour == 0 and day <= script.SEASON_LAST_DAY:
         for _ in range(planner.NUM_ACTIVE_HIRES):
             orders.append(["HIRE"])
 
+    if day < script.SEASON_LAST_DAY and hour == 0:
         deficit = wheat_feed_need - int(shed.get("WHEAT", 0))
         if deficit > 0:
             buy = min(deficit, money // wheat_price) if wheat_price else 0
