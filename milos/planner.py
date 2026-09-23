@@ -100,8 +100,10 @@ def build_day0(
 
 import json
 
-from milos import rollouts
+from milos import animal_rollouts, rollouts
 from milos.flags import VERBOSE
+
+SEASON_LAST_DAY = 29
 
 CURRENT_SOLVER = "milos_farmer"
 STARTING_MONEY = 3000
@@ -111,9 +113,169 @@ DEAD_HANDS: set[str] = set()
 _cached_queues: dict | None = None
 
 
+def _opponent_product_tile_counts(opp_farm: dict) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in opp_farm.get("tiles", []):
+        for tile in row:
+            if not isinstance(tile, dict):
+                continue
+            kind = tile.get("kind")
+            if kind == "PLANT":
+                crop = tile.get("crop")
+                if crop:
+                    counts[crop] = counts.get(crop, 0) + 1
+            elif kind in ("COOP", "PASTURE"):
+                animal = tile.get("animal")
+                if animal:
+                    product = animal_rollouts.product_for(animal)
+                    counts[product] = counts.get(product, 0) + 1
+    return counts
+
+
+def effective_price(
+    product: str,
+    market_prices: dict,
+    shops: list[str],
+    i0_prices: dict[str, int],
+    opp_tile_counts: dict[str, int] | None = None,
+) -> int:
+    demand = rollouts.shop_demand_by_product(shops)
+    quoted = int(market_prices.get(product, i0_prices.get(product, 0)) or 0)
+    opp = (opp_tile_counts or {}).get(product, 0)
+    opp_bonus = -opp / 10.0
+    price_factor = 1 + demand.get(product, 0) + opp_bonus
+    return int(quoted * max(0.1, price_factor))
+
+
+def make_price_of(
+    market_prices: dict,
+    shops: list[str],
+    i0_prices: dict[str, int],
+    opp_tile_counts: dict[str, int] | None = None,
+) -> Callable[[str], int]:
+    def price_of(product: str) -> int:
+        return effective_price(
+            product, market_prices, shops, i0_prices, opp_tile_counts
+        )
+
+    return price_of
+
+
+def apply_replan(
+    result: SolveResult,
+    replan_tiles: list[int],
+    tile_queues: dict,
+    tile_state: dict | None,
+    horizon: int,
+) -> int:
+    if not result.solved_workers or result.solved_workers[0] != WORKERS[0]:
+        return 0
+
+    written = 0
+    replan_set = set(replan_tiles)
+    for worker in result.solved_workers:
+        for idx in WORKER_TILES[worker]:
+            if idx not in replan_set:
+                continue
+            chain = result.assigned.get(idx, [])
+            if not chain and tile_queues.get(idx):
+                continue
+            tile_queues[idx] = chain_to_queue_items(chain, horizon)
+            written += 1
+            if tile_state is not None and chain:
+                queue = tile_queues[idx]
+                first_lag = queue[0].start_lag if queue else 0
+                tile_state[idx] = {
+                    "queue_idx": 0,
+                    "lag": first_lag,
+                    "gap": 0,
+                    "pending_dig": False,
+                    "dig_plant_ok": False,
+                    "active": False,
+                    "fert_today": False,
+                }
+    return written
+
+
 def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None:
-    del obs, tile_queues, tile_state
-    return
+    from milos.replan_lock import any_replan_eligible, build_replan_lock
+
+    day = obs["day"]
+    if day < 1 or day >= SEASON_LAST_DAY:
+        return
+    horizon = NUM_DAYS - day
+    if horizon <= 0:
+        return
+
+    player = obs["player"]
+    me = obs["farms"][player]
+    st_map = tile_state or {}
+
+    if not any_replan_eligible(me, st_map, tile_queues):
+        return
+
+    shops = obs.get("town", {}).get("unlocked_shops", [])
+    market_prices = obs.get("market", {}).get("prices", {})
+    i0 = wsp_data.i0_base_prices()
+    opp_farm = obs["farms"][1 - player]
+    opp_counts = _opponent_product_tile_counts(opp_farm)
+    price_of = make_price_of(market_prices, shops, i0, opp_counts)
+
+    replan_tiles, locked_by_worker, locked_tiles = build_replan_lock(
+        me, day, horizon, tile_queues, st_map, price_of
+    )
+
+    if not replan_tiles:
+        print(
+            f"[planner] replan d={day} skip assign locked={locked_tiles}",
+            flush=True,
+        )
+        return
+
+    print(
+        f"[planner] replan d={day} horizon={horizon} empty={len(replan_tiles)} "
+        f"locked={locked_tiles}",
+        flush=True,
+    )
+
+    result = solve(
+        [],
+        horizon=horizon,
+        empty_tiles=replan_tiles,
+        empty_counts={FARMER: len(replan_tiles)},
+        locked_by_worker=locked_by_worker,
+        starting_money=int(me["money"]),
+        max_time=15.0,
+        track_shed=False,
+        min_balance=0,
+        price_of=price_of,
+    )
+
+    if not result.complete or (
+        not result.solved_workers or result.solved_workers[0] != WORKERS[0]
+    ):
+        print(
+            f"[planner] replan d={day} INFEASIBLE keep={len(replan_tiles)} "
+            f"active={','.join(result.solved_workers) or 'none'}",
+            flush=True,
+        )
+        return
+
+    apply_replan(result, replan_tiles, tile_queues, tile_state, horizon)
+
+    samples = []
+    for idx in replan_tiles[:5]:
+        chain = result.assigned.get(idx)
+        if chain is None:
+            samples.append(f"t{idx + 1}:keep")
+            continue
+        if not chain:
+            samples.append(f"t{idx + 1}:IDLE")
+            continue
+        pl = ",".join(f"{_parse_profile_key(k)[0]}@{s}" for k, s in chain)
+        samples.append(f"t{idx + 1}:{pl}")
+    print(f"[planner] replan assign {', '.join(samples)}", flush=True)
+    _log_wsp_plan(day, horizon, result, dict(result.assigned))
 
 
 def is_buy_morning_locked(tile, idx: int, day: int, me: dict) -> bool:

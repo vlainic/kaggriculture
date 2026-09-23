@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from milos import animal_rollouts, rollouts, tile_ops, workers
-from milos.tile_ops import ONE_TIME_CROPS, on_lifecycle_end
+from milos.tile_ops import ONE_TIME_CROPS, on_lifecycle_end, plant_harvest_transfer
 
 _MOVE = frozenset({"NORTH", "SOUTH", "EAST", "WEST"})
 
@@ -186,7 +186,7 @@ def apply_farmer_action(
             crop = tile["crop"]
             y = int(tile.get("yield_units", 0))
             if y > 0:
-                take = y if crop in ONE_TIME_CROPS else min(y, 1)
+                take, remaining = plant_harvest_transfer(crop, y)
                 inv[crop] = inv.get(crop, 0) + take
                 if crop in ONE_TIME_CROPS:
                     item = tile_ops.current_queue_item(idx, st["queue_idx"])
@@ -200,7 +200,7 @@ def apply_farmer_action(
                     st["active"] = False
                     _set_tile(me, idx, None)
                 else:
-                    tile["yield_units"] = y - take
+                    tile["yield_units"] = remaining
         elif tile.get("kind") in ("COOP", "PASTURE"):
             animal = tile.get("animal")
             y = int(tile.get("yield_units", 0))
