@@ -68,7 +68,7 @@ def solve(
     w_open0: int = 0,
     f_open0: int = 0,
     min_balance: int = 0,
-    price_of: Callable[[str], int] | None = None,
+    price_of: Callable[..., int] | None = None,
     charge_hire_daily: bool = True,
     **kwargs,
 ) -> SolveResult:
@@ -85,7 +85,7 @@ def solve(
 
     if price_of is None:
         base = rollouts.i0_base_prices()
-        price_of = lambda product, _base=base: _base[product]
+        price_of = lambda product, rel_day=0, _base=base: _base[product]
 
     empty_set = set(empty_tiles)
     per_zone_time = max_time / max(1, len(WORKERS))

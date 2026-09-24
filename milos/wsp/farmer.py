@@ -76,7 +76,7 @@ def solve(
     w_open0: int = 0,
     f_open0: int = 0,
     min_balance: int = 0,
-    price_of: Callable[[str], int] | None = None,
+    price_of: Callable[..., int] | None = None,
     **kwargs,
 ) -> SolveResult:
     del chains, kwargs
@@ -93,7 +93,7 @@ def solve(
 
     if price_of is None:
         base = rollouts.i0_base_prices()
-        price_of = lambda product, _base=base: _base[product]
+        price_of = lambda product, rel_day=0, _base=base: _base[product]
 
     empty_set = set(empty_tiles)
     farmer_tiles = [idx for idx in FARMER_TILES if idx in empty_set]

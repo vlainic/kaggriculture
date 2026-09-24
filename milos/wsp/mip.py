@@ -91,13 +91,12 @@ def _empty_daily_place(horizon: int) -> dict[str, list[int]]:
 def _pattern_weight(
     pat,
     locked_counts: dict[str, int],
-    price_of: Callable[[str], int],
+    price_of: Callable[..., int],
 ) -> int:
+    del locked_counts
     rev = 0
-    for product, _hday, yld in pat["harvest_lines"]:
-        count = locked_counts.get(product, 0)
-        unit = _glut_unit_price(price_of(product), product, count)
-        rev += yld * unit
+    for product, hday, yld in pat["harvest_lines"]:
+        rev += yld * price_of(product, hday)
     return rev - pat["setup_cost"]
 
 
@@ -105,14 +104,13 @@ def _stamp_placement(
     profile_key: str,
     start_day: int,
     horizon: int,
-    price_of: Callable[[str], int],
+    price_of: Callable[..., int],
     crops_data: dict,
     animals_data: dict,
 ):
     label, profile_name = parse_profile_key(profile_key)
     kind, spec, profile = _rollout_spec(label, profile_name, crops_data, animals_data)
     setup_cost = spec["seed_cost"] if kind == "crop" else spec["animal_cost"]
-    unit_price = price_of(_harvest_product(label, kind, animals_data))
     feed_by_age, fert_use_by_age, collect_by_age, wheat_gain_by_age = _parse_age_maps(
         profile, label, kind
     )
@@ -176,9 +174,9 @@ def _stamp_placement(
     if start_day < horizon:
         cash_by_day[start_day] -= setup_cost
         spend_by_day[start_day] -= setup_cost
-    for _product, hday, yld in harvest_lines:
+    for product, hday, yld in harvest_lines:
         if hday < horizon:
-            cash_by_day[hday] += yld * unit_price
+            cash_by_day[hday] += yld * price_of(product, hday)
 
     return {
         "profile_key": profile_key,
@@ -200,7 +198,7 @@ def _stamp_placement(
     }
 
 
-def build_patterns(horizon: int, price_of: Callable[[str], int]) -> list:
+def build_patterns(horizon: int, price_of: Callable[..., int]) -> list:
     crops_data = rollouts.crops()
     animals_data = rollouts.animals()
     patterns = []
@@ -292,7 +290,7 @@ def solve_zone(
     max_time: float,
     track_shed: bool,
     min_balance: int = 0,
-    price_of: Callable[[str], int] | None = None,
+    price_of: Callable[..., int] | None = None,
     worker: str = FARMER,
     net_tile_ops: int = FARMER_NET_TILE_OPS,
     charge_hire_daily: bool = False,

@@ -78,7 +78,7 @@ def build_day0(
     empty = list(range(NUM_TILES))
     if price_of is None:
         base = wsp_data.i0_base_prices()
-        price_of = lambda product, _base=base: _base[product]
+        price_of = lambda product, rel_day=0, _base=base: _base[product]
 
     result = solve(
         [],
@@ -214,12 +214,9 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
     if not any_replan_eligible(me, st_map, tile_queues):
         return
 
-    shops = obs.get("town", {}).get("unlocked_shops", [])
-    market_prices = obs.get("market", {}).get("prices", {})
-    i0 = wsp_data.i0_base_prices()
-    opp_farm = obs["farms"][1 - player]
-    opp_counts = _opponent_product_tile_counts(opp_farm)
-    price_of = make_price_of(market_prices, shops, i0, opp_counts)
+    from milos.price_forecast import make_price_forecast
+
+    price_of = make_price_forecast(obs, tile_queues, st_map)
 
     replan_tiles, locked_by_worker, locked_tiles = build_replan_lock(
         me, day, horizon, tile_queues, st_map, price_of

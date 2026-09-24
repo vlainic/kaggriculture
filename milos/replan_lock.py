@@ -108,9 +108,10 @@ def _product_for_label(label: str, kind: str) -> str:
 def _build_cash_and_spend(
     start_day: int,
     setup_cost: int,
-    unit_price: int,
+    product: str,
     profile,
     horizon: int,
+    price_of: Callable[..., int],
     *,
     min_age: int = 0,
     charge_setup: bool = True,
@@ -125,7 +126,7 @@ def _build_cash_and_spend(
             continue
         hday = start_day + (age - min_age)
         if hday < horizon:
-            cash[hday] += yld * unit_price
+            cash[hday] += yld * price_of(product, hday)
     return cash, spend
 
 
@@ -135,7 +136,7 @@ def _stamp_profile_segment(
     rel_start: int,
     min_age: int,
     horizon: int,
-    price_of: Callable[[str], int],
+    price_of: Callable[..., int],
     crops_data: dict,
     animals_data: dict,
     *,
@@ -143,7 +144,7 @@ def _stamp_profile_segment(
 ):
     kind, spec, profile = _rollout_spec(label, profile_name, crops_data, animals_data)
     setup_cost = spec["seed_cost"] if kind == "crop" else spec["animal_cost"]
-    unit_price = price_of(_product_for_label(label, kind))
+    product = _product_for_label(label, kind)
     feed_by_age, fert_use_by_age, collect_by_age, wheat_gain_by_age = _parse_age_maps(
         profile, label, kind
     )
@@ -192,9 +193,10 @@ def _stamp_profile_segment(
     cash_by_day, spend_by_day = _build_cash_and_spend(
         rel_start,
         setup_cost,
-        unit_price,
+        product,
         profile,
         horizon,
+        price_of,
         min_age=min_age,
         charge_setup=charge_setup,
     )
@@ -211,7 +213,7 @@ def _stamp_placement(
     profile_key: str,
     start_day: int,
     horizon: int,
-    price_of: Callable[[str], int],
+    price_of: Callable[..., int],
     crops_data: dict,
     animals_data: dict,
 ):
@@ -232,7 +234,7 @@ def _stamp_placement(
 def _stamp_chain(
     chain,
     horizon: int,
-    price_of: Callable[[str], int],
+    price_of: Callable[..., int],
     crops_data: dict,
     animals_data: dict,
 ):
@@ -323,7 +325,7 @@ def _stamp_locked_tile(
     tile: dict,
     day: int,
     horizon: int,
-    price_of: Callable[[str], int],
+    price_of: Callable[..., int],
     crops_data: dict,
     animals_data: dict,
 ):
@@ -389,7 +391,7 @@ def _stamp_tile_commitment(
     queue: list,
     day: int,
     horizon: int,
-    price_of: Callable[[str], int],
+    price_of: Callable[..., int],
     crops_data: dict,
     animals_data: dict,
 ):
@@ -476,7 +478,7 @@ def build_replan_lock(
     horizon: int,
     tile_queues: dict,
     st_map: dict,
-    price_of: Callable[[str], int],
+    price_of: Callable[..., int],
 ) -> tuple[list[int], dict[str, dict], int]:
     """Return (replan_tile_indices, locked_by_worker, locked_tile_count)."""
     crops_data = wsp_data.crops()
