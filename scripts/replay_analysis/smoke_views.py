@@ -17,6 +17,7 @@ from agent.pricing import base_price  # noqa: E402
 from smoke_analysis.parse_actions import (  # noqa: E402
     ACTION_ORDER,
     HOURS_PER_DAY,
+    _aggregate_capacity,
     classify_action,
 )
 
@@ -24,14 +25,27 @@ from replay_analysis.load import SEASON_DAYS, Replay, load_replay
 from replay_analysis.metrics import _iter_unit_actions, _total_private_stock
 
 
-def _layout() -> tuple[list[str], tuple[str, ...], dict[str, list[int]], dict[tuple[int, int], int]]:
-    from agent import zoning
+def _layout() -> tuple[
+    list[str],
+    tuple[str, ...],
+    dict[str, list[int]],
+    dict[tuple[int, int], int],
+    dict[str, int],
+]:
+    from smoke_analysis.layout import active_layout
 
-    workers = list(zoning.WORKERS)
-    hand_workers = tuple(zoning.HAND_WORKERS)
-    worker_tiles = {w: list(tiles) for w, tiles in zoning.WORKER_TILES.items()}
+    lay = active_layout()
+    workers = list(lay["workers"])
+    hand_workers = tuple(lay["hand_workers"])
+    worker_tiles = {w: list(tiles) for w, tiles in lay["worker_tiles"].items()}
+    net_tile_ops = dict(lay["net_tile_ops"])
+    if lay["package"] == "milos":
+        from milos import zoning
+    else:
+        from agent import zoning
+
     coord_to_idx = {xy: i for i, xy in enumerate(zoning.TILE_COORDS)}
-    return workers, hand_workers, worker_tiles, coord_to_idx
+    return workers, hand_workers, worker_tiles, coord_to_idx, net_tile_ops
 
 
 def _who_to_worker(who: str, hand_workers: tuple[str, ...]) -> str:
@@ -84,8 +98,8 @@ def build_smoke_style_report(
     *,
     stem: str | None = None,
 ) -> dict[str, Any]:
-    """Smoke-compatible dict for plot_earnings_* / plot_worker_actions."""
-    workers, hand_workers, worker_tiles, coord_to_idx = _layout()
+    """Smoke-compatible dict for plot_earnings_* / plot_worker_actions / plot_zone_capacity."""
+    workers, hand_workers, worker_tiles, coord_to_idx, net_tile_ops = _layout()
     worker_idx = {w: i for i, w in enumerate(workers)}
     n_actions = len(ACTION_ORDER)
     action_idx = {a: i for i, a in enumerate(ACTION_ORDER)}
@@ -107,6 +121,7 @@ def build_smoke_style_report(
     records = list(replay.iter_player(player))
     money_start: dict[int, float] = {}
     money_end: dict[int, float] = {}
+    cap_events: list[dict[str, Any]] = []
 
     for i, rec in enumerate(records):
         obs = rec.observation
@@ -145,6 +160,16 @@ def build_smoke_style_report(
             row = wi * n_actions + ai
             col = day * HOURS_PER_DAY + hour
             grid[row, col] = ai + 1
+            cap_events.append(
+                {
+                    "worker": worker,
+                    "day": day,
+                    "hour": hour,
+                    "verb": verb,
+                    "bucket": bucket,
+                    "note": "",
+                }
+            )
 
             if verb in ("HARVEST", "COLLECT_FERTILIZER") and i > 0 and 0 <= hour < HOURS_PER_DAY:
                 if who == "farmer":
@@ -197,11 +222,13 @@ def build_smoke_style_report(
         if s is not None and e is not None:
             net_by_day[d] = e - s
 
-    # Prefer market KPI revenue if we can avoid double-counting — stock×base is fine for charts
+    by_worker_by_day = _aggregate_capacity(cap_events, workers, SEASON_DAYS)
+
     return {
         "replay_stem": stem or replay.path.stem,
         "log_stem": stem or replay.path.stem,
         "workers": workers,
+        "net_tile_ops": net_tile_ops,
         "buy_land_day": buy_land_day,
         "earnings": {
             "sell_revenue_by_day": sell_by_day,
@@ -216,6 +243,8 @@ def build_smoke_style_report(
             "grid": grid,
             "action_order": list(ACTION_ORDER),
             "hours_per_day": HOURS_PER_DAY,
+            "events": cap_events,
+            "by_worker_by_day": by_worker_by_day,
         },
     }
 

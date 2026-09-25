@@ -29,6 +29,7 @@ __all__ = [
     "plot_earnings_by_day",
     "plot_earnings_by_zone",
     "plot_worker_actions",
+    "plot_zone_capacity",
     "load_replay",
 ]
 
@@ -54,6 +55,12 @@ def plot_earnings_by_zone(report, *, title: str | None = None):
 
 def plot_worker_actions(report, *, title: str | None = None):
     from replay_analysis.plot import plot_worker_actions as _plot
+
+    return _plot(report, title=title)
+
+
+def plot_zone_capacity(report, *, title: str | None = None):
+    from replay_analysis.plot import plot_zone_capacity as _plot
 
     return _plot(report, title=title)
 

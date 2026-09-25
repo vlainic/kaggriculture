@@ -475,7 +475,12 @@ def plot_stuck_skip_freq(
     plt.show()
 
 
-def plot_zone_capacity(report: dict[str, Any], *, title: str | None = None) -> None:
+def plot_zone_capacity(
+    report: dict[str, Any],
+    *,
+    title: str | None = None,
+    compare_theo: bool = True,
+) -> None:
     """Per-zone daily tile ops vs dawn executor dry-run forecast and net_tile_ops cap."""
     workers = list(report.get("workers") or [])
     if not workers:
@@ -540,11 +545,14 @@ def plot_zone_capacity(report: dict[str, Any], *, title: str | None = None) -> N
                 label="reactive feed",
             )
 
-        est_series = est_by_w.get(worker) or [None] * SEASON_DAYS
-        est_y = np.array(
-            [float(v) if v is not None else np.nan for v in est_series[:SEASON_DAYS]]
-        )
-        ax.plot(days, est_y, "o", color="#c62828", ms=3, lw=0, label="theo tile_ops")
+        if compare_theo and est_by_w:
+            est_series = est_by_w.get(worker) or [None] * SEASON_DAYS
+            est_y = np.array(
+                [float(v) if v is not None else np.nan for v in est_series[:SEASON_DAYS]]
+            )
+            ax.plot(
+                days, est_y, "o", color="#c62828", ms=3, lw=0, label="theo tile_ops"
+            )
 
         cap = caps.get(worker)
         if cap is not None:
@@ -576,6 +584,9 @@ def plot_zone_capacity(report: dict[str, Any], *, title: str | None = None) -> N
     )
     plt.tight_layout()
     plt.show()
+
+    if not compare_theo:
+        return
 
     events = actions.get("events") or []
     by_wd = actions.get("by_worker_by_day") or {}

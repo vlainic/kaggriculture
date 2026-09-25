@@ -690,3 +690,15 @@ def plot_worker_actions(report: dict[str, Any], *, title: str | None = None) -> 
     from replay_analysis.smoke_views import smoke_style_from_report
 
     _plot(smoke_style_from_report(report), title=title)
+
+
+def plot_zone_capacity(report: dict[str, Any], *, title: str | None = None) -> None:
+    """Per-zone daily ops vs net_tile_ops cap (replay; no dawn theo)."""
+    from smoke_analysis.plot import plot_zone_capacity as _plot
+    from replay_analysis.smoke_views import smoke_style_from_report
+
+    _plot(
+        smoke_style_from_report(report),
+        title=title,
+        compare_theo=False,
+    )
