@@ -105,13 +105,26 @@ def zone_needs_feed_wheat(me: dict, worker: str, tile_state: dict) -> bool:
     return zone_animal_feed_count(me, worker, tile_state) > 0
 
 
+def _count_zones_with_animals(
+    me: dict, tile_state: dict, *, day: int | None = None
+) -> int:
+    """Count how many worker zones have at least one animal (live or queued for today)."""
+    count = 0
+    for worker in WORKERS:
+        if zone_animal_feed_count(me, worker, tile_state, day=day) > 0:
+            count += 1
+    return count
+
+
 def wheat_pickup_needed(
     me: dict, worker: str, tile_state: dict, inv: dict, *, day: int | None = None
 ) -> int:
     need = zone_animal_feed_count(me, worker, tile_state, day=day)
     if need <= 0:
         return 0
-    return max(0, need - inv.get("WHEAT", 0))
+    zones_with_animals = _count_zones_with_animals(me, tile_state, day=day)
+    buffer = (zones_with_animals + 1) // 2
+    return max(0, (need + buffer) - inv.get("WHEAT", 0))
 
 
 def _animals_needed_for_zone(
