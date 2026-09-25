@@ -1,12 +1,13 @@
 # MILOS FINAL
 
+## NW-land
 All 4 hires bought at h=0 (when implemented: HIRE orders first in the h=0 market list).
 - market h=0 only (no mid-day BUY wheat / animal / seed):
     - wheat (feed reserve)
     - then animal (shed pickup before PLACE)
     - finally plant seed
 
-## Tile numbering:
+### Tile numbering:
 
 zone:    V IV III II  I
         25 20  15 10  5
@@ -15,7 +16,7 @@ zone:    V IV III II  I
         22 17  12  7  2
         21 16  11  6  1
 
-## Zone assignement
+### Zone assignement
 
 - Farmer @ zone I
 - Hire 1 = spawned at NW @ zone V
@@ -24,7 +25,7 @@ zone:    V IV III II  I
 - Hire 4 = spawned at SE @ zone II
 
 
-## Pre-defined movement snakes:
+### Pre-defined movement snakes:
 - Farmer: buying & pickup (if needed), just 4xN [buying in parallel, ofc]
 - Hire 1: pickup (if needed), 4xW to zone -> then 4xN
 - Hire 2: 1xW, pickup (if needed), 3xW to zone -> then 4xN
@@ -32,7 +33,7 @@ zone:    V IV III II  I
 - Hire 4: 1xW, 1xN, pickup (if needed), 1xW to zone -> then 4xN
 
 
-## Ops-limits:
+### Ops-limits:
  
 - Farmer = 18
 - Hire 1 = 14
