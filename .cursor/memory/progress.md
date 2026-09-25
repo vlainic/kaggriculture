@@ -25,16 +25,27 @@
 
 ---
 
-## Strategic status (Sep 23 — live = milos OneLand)
+## Strategic status (Sep 25 — live = milos OneLand)
 
 | Track | Status |
 | --- | --- |
 | **Live submission** | **`milos/`** — `main.py` → `milos.executor`; **`MILOS_ONELAND`** 25 tiles, farmer + 4 hires |
 | **`agent/` TwoLand** | In-repo legacy; not dispatched by current `main.py` |
 | **Dawn market** | h=0 only: wheat → animals → seeds; sells any hour (floor rules); HIRE×4 on OneLand |
+| **Wheat padding** | `script.wheat_pickup_needed`: zone-count buffer `(zones_with_animals+1)//2` → shed PICKUP + dawn BUY + sell reserve |
 | **Theo / smoke** | `forecast_day_counts`; **`compare_theo_act` 0 mismatches** post hire4 CARE gate + full-stack HARVEST sim; `parse_actor` `hand0=hireN` |
 | **Dawn replan (milos)** | Live h0 d=1..28; `replan_lock` + WSP oneland; INFEASIBLE preserves queues |
 | **Competition submission** | Local smoke only unless user asks |
+
+## Sep 25 — wheat padding buffer (KEEP)
+
+| Change | Result |
+| --- | --- |
+| Root need | Exact feed wheat left no margin for FEED→PLACE loss / multi-hand shed contention |
+| `_count_zones_with_animals` | Count workers with live or place-today animals |
+| `wheat_pickup_needed` | Target `need + (zones_with_animals+1)//2` minus inv WHEAT (not `need//2`) |
+| Propagation | Shed PICKUP (`executor`), dawn BUY + `wheat_reserve` (`market`), sell_dp reserve via same total |
+| Rejected | Flat +1 only; route-freeze on empty PLACE/FEED |
 
 ## Sep 23 — hire4 CARE loop + theo/act exec parser (KEEP)
 
@@ -72,6 +83,7 @@
 | --- | --- |
 | Farmer snake + tile_ops | Rollout-driven WATER/FERT/FEED/HARVEST; h=0 PASS for market |
 | Dawn wheat/animal/seed buys | Only h=0; order wheat → animal → seed |
+| Zone wheat padding | Buffer scales with animal-zone count; one function drives PICKUP + BUY + reserve |
 | sell_dp + pricing | Premium daily quota + 1/h drip; staples dump via pricing |
 | Owned-shed PICKUP/DROP | `_owned_shed_tiles` |
 | Capacity diagnostics | `[theo]` vs act via smoke_analysis; **`compare_theo_act`**; animal **CARE gated on `fed_today`** |
@@ -224,14 +236,17 @@
 
 ## What's left
 
-1. Keep theo/act aligned after behavior changes (`compare_theo_act`, smoke notebook)
-2. Keep shed pickup gated on **owned** center tiles only
-3. Do not Kaggle submit without ask
-4. `agent/` TwoLand ladder work only if user re-points `main.py`
+1. Smoke-check wheat padding side effects (escapes, dawn shed WHEAT, FEED/PLACE inventory)
+2. Keep theo/act aligned after behavior changes (`compare_theo_act`, smoke notebook)
+3. Keep shed pickup gated on **owned** center tiles only
+4. Do not Kaggle submit without ask
+5. `agent/` TwoLand ladder work only if user re-points `main.py`
 
 ## Do not do unless asked
 
 - Mid-day BUY wheat / animal / seed (breaks theo shed extras)
+- Exact-match wheat need with **no zone buffer** (reopens FEED dry-outs)
+- Freeze worker route / multi-hour PASS waiting for wheat or PLACE
 - **`min(y,1)` in sim_apply HARVEST** — breaks theo vs live (one action, N units)
 - Clear `_endgame_harvested` on DROP
 - Re-enable `ZONE_OPS_BUDGET` / `ZONE_IDLE_FILLER` / `ZONE_TILE_RESIZE` or dawn live ownership moves

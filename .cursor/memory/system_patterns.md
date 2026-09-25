@@ -4,7 +4,7 @@
 
 **Sept02 overhaul patterns are REJECTED.** Do not copy Wave 2–8 “safety rails” (`cons≥0`, WSP `track_shed=True`, formula `net_tile_ops`, fert dawn pipeline) into live agent. Pre-overhaul WSP: **`track_shed=False`**, **`min_balance=0`**, **unbounded `conservative`**, hand-calibrated `NET_TILE_OPS`. See `progress.md` FAILURE banner.
 
-## Current: milos OneLand (Sep 23)
+## Current: milos OneLand (Sep 25)
 
 ```
 import:
@@ -22,6 +22,8 @@ obs → milos.executor.step
 
 **Animal tile ops:** FEED skipped when no wheat in hand; **CARE skipped when not `fed_today`** (and when `cared_today`) — matches `sim_apply` and prevents hourly CARE retry inflating theo.
 
+**Wheat supply (zone padding):** `script.wheat_pickup_needed` = zone feed `need` + `(zones_with_animals+1)//2` buffer. Same function sizes shed PICKUP, dawn `BUY_PRODUCT WHEAT` (`total_wheat_feed_need`), and `wheat_reserve` sell/spendable protection. Prefer zone-count buffer over per-animal half or flat +1. Do **not** hold route on missing wheat.
+
 **Smoke analysis:** `scripts/smoke_analysis/parse_actor.py` maps `[exec]` lines to workers via `hand0=hireN`; `compare_theo_act` checks per-worker/day tile op totals (±3 slack).
 
 `main.py` → `milos.executor.step`. Bundle: `main.py` + `milos/` + `data/` + ortools.
@@ -32,10 +34,10 @@ Five-tile farmer sandbox (`MILOS_FARMER`, 0 hires) — superseded by `CURRENT = 
 
 ### Dawn market buy order
 
-1. Feed wheat deficit (live animals / place-today)
+1. Feed wheat deficit via `total_wheat_feed_need` (**includes zone padding buffer**)
 2. Animals (must PICKUP from shed before PLACE)
 3. Seeds (plant from `private["seeds"]` — no shed trip)
-4. Sells (premium drip / staple dump)
+4. Sells (premium drip / staple dump; WHEAT keeps `wheat_reserve`)
 
 When 4 hires land: prepend `HIRE`×N on same h=0 list, then wheat → animal → seed.
 
@@ -160,6 +162,8 @@ Self-contained under `milos/`. Smoke ships `milos/` in tarball. No `agent/` impo
 22. **Static per-zone replan bank caps** (`starting_money/N`, `min(day_start/2, handoff)`) — ladder: no-cap beat both; prefer trigger-based NE reserve / ops fixes instead.
 23. **Blame TwoLand gap on premium glut** without fill/rv/q — diagnosis_0911 ruled melon/wool glut out; post-NE ops/weed collapse is the primary.
 24. **`pos in SHED_ADJACENT` alone as shed-door** — must also be **owned** (`tile != "LOCKED"`).
+25. **Exact wheat need with no zone buffer** — FEED→PLACE dry-outs / multi-hand shed race; pad via `(zones_with_animals+1)//2` in `wheat_pickup_needed`.
+26. **Freeze `_route_idx` / PASS-hold waiting for wheat or PLACE** — stalls the zone for most of the day.
 
 ---
 

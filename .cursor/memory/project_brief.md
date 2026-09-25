@@ -12,12 +12,13 @@ Kaggle Simulations competition **Kaggriculture** — 720-turn, two-player farmin
 
 Heuristic/rule-based Python agent (no ML/RL pipeline) that wins on the ladder.
 
-## Current implementation (Sep 23, 2026)
+## Current implementation (Sep 25, 2026)
 
-**Active stack:** **`milos/` farmer-only** — `main.py` → `milos.executor.step`.
+**Active stack:** **`milos/` OneLand** — `main.py` → `milos.executor.step`.
 
-- Layout: `MILOS_FARMER` (5 tiles / zone I, 0 hires). Five-zone + 4 hires = target spec in `data/milos_zoning.md`.
+- Layout: **`MILOS_ONELAND`** (25 tiles, farmer + 4 hires). Spec also in `data/milos_zoning.md`.
 - Market: h=0 buys **wheat → animals → seeds**; sells drip/dump; farmer PASSes at h=0.
+- **Wheat padding:** zone-count buffer in `script.wheat_pickup_needed` drives shed PICKUP, dawn BUY, and sell reserve.
 - Tile ops: `milos/tile_ops.py` + rollouts JSON; **`plant_harvest_transfer`** for sim; endgame `_endgame_harvested`.
 - **Dawn replan:** `milos/planner.replan` + `replan_lock` (farmer WSP, live prices).
 - Sell policy: `sell_dp` (premium) + `pricing` (staples).

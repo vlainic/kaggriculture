@@ -14,15 +14,15 @@ Compete on Kaggriculture with an autonomous agent that beats typical heuristic/L
 - Shed cap 100 (excluding seeds)
 - Animals need shed PICKUP before PLACE; seeds do not — buy animals before seeds at dawn
 
-## How the current agent is supposed to work (milos farmer-only — live)
+## How the current agent is supposed to work (milos OneLand — live)
 
-1. **Import:** `milos` `MILOS_FARMER` (5 tiles, farmer only).
-2. **h=0:** `planner.replan` (d≥1) → sell_dp replan → farmer PASS; market buys wheat → animals → seeds; theo dry-run **after** replan.
-3. **Day:** farmer snake + `tile_ops` from crop/animal rollouts; owned-shed PICKUP/DROP.
+1. **Import:** `milos` **`MILOS_ONELAND`** (25 tiles, farmer + hire1–4).
+2. **h=0:** `planner.replan` (d≥1) → sell_dp replan → farmer PASS; market buys wheat (padded feed need) → animals → seeds; theo dry-run **after** replan.
+3. **Day:** multi-worker snakes + `tile_ops` from crop/animal rollouts; owned-shed PICKUP/DROP sized by `wheat_pickup_needed` (zone buffer).
 4. **d=29:** endgame harvest; do not re-HARVEST same plant after DROP.
-5. **Sells:** staples dump via pricing floor; premiums drip from sell_dp daily quota (≤1/hour).
+5. **Sells:** staples dump via pricing floor (WHEAT keeps feed reserve); premiums drip from sell_dp daily quota (≤1/hour).
 
-Target five-zone + 4 hires: [`data/milos_zoning.md`](../../data/milos_zoning.md).
+Layout note: [`data/milos_zoning.md`](../../data/milos_zoning.md).
 
 ## Legacy TwoLand (`agent/`)
 

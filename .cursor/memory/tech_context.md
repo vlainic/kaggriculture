@@ -98,7 +98,7 @@ Agents never submit without explicit user request (`kaggle-submission.mdc`).
 | `docs/twoland/diagnosis_0911.md` | OneLand vs TwoLand diagnosis; reject static NW caps; post-NE ops crash |
 | `docs/twolands/twoland_readd.md` | TwoLand re-add spec (probe + NE glue + LOCKED carve-out) |
 | `scripts/smoke_analysis/` | Local smoke log KPIs/plots; **layout-aware** via `layout.py` |
-| `milos/` | Live farmer-only agent (executor/market/tile_ops/sell_dp/**planner.replan**, replan_lock) |
+| `milos/` | Live OneLand agent (executor/market/tile_ops/sell_dp/**planner.replan**, replan_lock; **zone wheat padding** in `script.wheat_pickup_needed`) |
 | `experiments/milos-simplification.ipynb` | Milos solve + smoke farmer Gantts |
 | `data/two_lands.md` | TWO layout geometry / hire batches |
 | `scripts/download_submission_logs.sh` | Bulk episode replays from Kaggle CLI |
