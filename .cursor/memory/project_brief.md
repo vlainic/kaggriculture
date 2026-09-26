@@ -12,18 +12,14 @@ Kaggle Simulations competition **Kaggriculture** — 720-turn, two-player farmin
 
 Heuristic/rule-based Python agent (no ML/RL pipeline) that wins on the ladder.
 
-## Current implementation (Sep 25, 2026)
+## Current implementation (Sep 26, 2026)
 
-**Active stack:** **`milos/` OneLand** — `main.py` → `milos.executor.step`.
+**Active stack:** **`milos/` OneLand 6-man** — `main.py` → `milos.executor.step`.
 
-- Layout: **`MILOS_ONELAND`** (25 tiles, farmer + 4 hires). Spec also in `data/milos_zoning.md`.
-- Market: h=0 buys **wheat → animals → seeds**; sells drip/dump; farmer PASSes at h=0.
-- **Wheat padding:** zone-count buffer in `script.wheat_pickup_needed` drives shed PICKUP, dawn BUY, and sell reserve.
-- Tile ops: `milos/tile_ops.py` + rollouts JSON; **`plant_harvest_transfer`** for sim; endgame `_endgame_harvested`.
-- **Dawn replan:** `milos/planner.replan` + `replan_lock` (farmer WSP, live prices).
-- Sell policy: `sell_dp` (premium) + `pricing` (staples).
-- Shed: PICKUP/DROP only on **owned** center tiles.
-- Diagnostics: dawn theo dry-run (`[theo]` / `est_ops=`) + `scripts/smoke_analysis` / `experiments/smoke_analysis.ipynb`.
+- Layout: **`MILOS_ONELAND6`** (25 tiles, farmer + 5 hires; zone VI north row). Spec in `data/milos_zoning.md`.
+- Market: HIRE×5; room sells if needed; **wheat → animals → seeds**; hourly FERT dump to ≤~10; farmer PASSes at h=0.
+- **Wheat:** dawn buy uses raw feed + one global zone buffer; shed PICKUP uses raw zone need only.
+- Tile ops + dawn replan + sell_dp as before; owned-shed PICKUP/DROP.
 - **Legacy:** `agent/` TwoLand WSP still in repo, not live dispatch.
 
 ## Deliverable

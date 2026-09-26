@@ -4,74 +4,61 @@
 
 **Sept02 overhaul patterns are REJECTED.** Do not copy Wave 2–8 “safety rails” (`cons≥0`, WSP `track_shed=True`, formula `net_tile_ops`, fert dawn pipeline) into live agent. Pre-overhaul WSP: **`track_shed=False`**, **`min_balance=0`**, **unbounded `conservative`**, hand-calibrated `NET_TILE_OPS`. See `progress.md` FAILURE banner.
 
-## Current: milos OneLand (Sep 25)
+## Current: milos OneLand 6-man (Sep 26)
 
 ```
 import:
-  milos/zoning.py MILOS_ONELAND → 25 tiles, farmer + hire1–4
+  milos/zoning.py MILOS_ONELAND6 → 25 tiles, farmer + hire1–5
+  TWOFOLD_HIRE=hire5 (5th spawn reuses corner)
   data/crop_rollouts.json + data/animal_with_pickups.json
 
 obs → milos.executor.step
   ├─ hour0: tile_state dawn
   │         planner.replan (d=1..28) → sell_dp.replan
-  │         market.build_orders — HIRE×4 + buys (h=0 only): WHEAT → ANIMAL → SEED; then sells
-  │         forecast_day_counts → [hands] est_ops= / [theo] / [theo_extra]
-  ├─ hours 1–23: multi-worker snakes → shed pickup → tile_ops.next_tile_action
-  └─ day ≥ 29: endgame harvest; _endgame_harvested blocks re-HARVEST after DROP
+  │         market: HIRE×5 + room sells + WHEAT → ANIMAL → SEED; fert dump in sells
+  │         forecast_day_counts → [hands]/[theo]
+  ├─ hours 1–23: snakes; owned-shed PICKUP (raw wheat need); tile_ops
+  └─ day ≥ 29: endgame harvest
 ```
 
-**Animal tile ops:** FEED skipped when no wheat in hand; **CARE skipped when not `fed_today`** (and when `cared_today`) — matches `sim_apply` and prevents hourly CARE retry inflating theo.
+**Day-0 / replan queues:** write from `result.assigned` / `replan_set` — never gate on `WORKER_TILES[solved_worker]` when layout ≠ prestart worker map.
 
-**Wheat supply (zone padding):** `script.wheat_pickup_needed` = zone feed `need` + `(zones_with_animals+1)//2` buffer. Same function sizes shed PICKUP, dawn `BUY_PRODUCT WHEAT` (`total_wheat_feed_need`), and `wheat_reserve` sell/spendable protection. Prefer zone-count buffer over per-animal half or flat +1. Do **not** hold route on missing wheat.
+**Wheat:** `total_wheat_feed_need` = Σ zone feed + **one** `(zones_with_animals+1)//2`. `wheat_pickup_needed` = raw need − inv **only**.
 
-**Smoke analysis:** `scripts/smoke_analysis/parse_actor.py` maps `[exec]` lines to workers via `hand0=hireN`; `compare_theo_act` checks per-worker/day tile op totals (±3 slack).
+**Shed cap:** `FERT_SHED_CAP=10` dump first each market hour; dawn `_make_room_sells` if planned deposits > free slots. Env rejects buys when `sum(shed)>=100`.
+
+**Animal tile ops:** CARE requires `fed_today`.
 
 `main.py` → `milos.executor.step`. Bundle: `main.py` + `milos/` + `data/` + ortools.
 
-## Prior: milos farmer-only (historical)
+## Prior: milos 5-man / farmer-only (historical)
 
-Five-tile farmer sandbox (`MILOS_FARMER`, 0 hires) — superseded by `CURRENT = MILOS_ONELAND` in `milos/zoning.py`.
+`MILOS_ONELAND` (4 hires) superseded by `MILOS_ONELAND6`. `MILOS_FARMER` sandbox remains.
 
 ### Dawn market buy order
 
-1. Feed wheat deficit via `total_wheat_feed_need` (**includes zone padding buffer**)
-2. Animals (must PICKUP from shed before PLACE)
-3. Seeds (plant from `private["seeds"]` — no shed trip)
-4. Sells (premium drip / staple dump; WHEAT keeps `wheat_reserve`)
-
-When 4 hires land: prepend `HIRE`×N on same h=0 list, then wheat → animal → seed.
+1. HIREs
+2. Room sells (if deposit units > free shed)
+3. Feed wheat via `total_wheat_feed_need` (global buffer)
+4. Animals → seeds
+5. Sells (fert dump first, then staples/premiums)
 
 ### Shed-adjacent **ONLY IF OWNED** (engine + executor)
 
-- Rules list four center tiles as shed-adjacent: `(4,4)`, `(5,4)`, `(4,5)`, `(5,5)`.
-- **PICKUP / DROP no-op when the standing tile is `LOCKED`**.
-- Milos farmer owns NW `(4,4)` only.
+- Four centers; **PICKUP/DROP no-op on LOCKED**.
 - Live gate: `_owned_shed_tiles(me)`.
-
-### Legacy: TwoLand WSP (`agent/` — not current main.py)
-
-```
-agent/zoning.py CURRENT=TWO → twoland_wsp + snake executor
-```
-
-Kept for history / optional restore. See progress.md Sep 21 sections.
 
 ### Milos modules (live)
 
 ```
 milos/
-  executor.py   # turn loop, snake, endgame, theo dry-run
-  market.py     # h=0 buys + sells
-  tile_ops.py   # next verb from rollouts
-  sell_dp.py    # premium daily quota
-  pricing.py    # price curve / staple dump caps
-  sim_apply.py  # forecast dry-run; plant HARVEST full stack via plant_harvest_transfer
-  replan_lock.py  # dawn replan eligibility + commitment stamp
-  script.py / zoning.py / planner.py / wsp/  # planner.replan + day-0 prestart
+  executor.py   # turn loop, _claim_worker / TWOFOLD_HIRE, shed_total snap
+  market.py     # fert dump, make_room_sells, h=0 buys
+  script.py     # wheat_pickup_needed (raw); total_wheat_feed_need (global buffer)
+  planner.py    # assigned-tile queue write; NUM_ACTIVE_HIRES=NUM_HIRES
+  zoning.py     # MILOS_ONELAND6 CURRENT
+  …
 ```
-
-experiments: `smoke_analysis.ipynb`, `milos-simplification.ipynb`.
-Target layout note: `data/milos_zoning.md`.
 
 ### Zone layouts (`agent/zoning.py`)
 
@@ -162,8 +149,11 @@ Self-contained under `milos/`. Smoke ships `milos/` in tarball. No `agent/` impo
 22. **Static per-zone replan bank caps** (`starting_money/N`, `min(day_start/2, handoff)`) — ladder: no-cap beat both; prefer trigger-based NE reserve / ops fixes instead.
 23. **Blame TwoLand gap on premium glut** without fill/rv/q — diagnosis_0911 ruled melon/wool glut out; post-NE ops/weed collapse is the primary.
 24. **`pos in SHED_ADJACENT` alone as shed-door** — must also be **owned** (`tile != "LOCKED"`).
-25. **Exact wheat need with no zone buffer** — FEED→PLACE dry-outs / multi-hand shed race; pad via `(zones_with_animals+1)//2` in `wheat_pickup_needed`.
-26. **Freeze `_route_idx` / PASS-hold waiting for wheat or PLACE** — stalls the zone for most of the day.
+25. **Per-zone wheat buffer in `wheat_pickup_needed`** — 6-man FCFS shed race; buffer belongs only in `total_wheat_feed_need`.
+26. **Ignoring shed_total / silent buy reject** — `sum(shed)>=100` kills BUY_PRODUCT with no log error.
+27. **Price-floor-only FERT sells under high COLLECT_FERTILIZER** — fills shed; dump to `FERT_SHED_CAP`.
+28. **Day-0 queues via `WORKER_TILES[solved_worker]`** when layout workers ≠ prestart `solved_workers`.
+29. **Freeze `_route_idx` / PASS-hold waiting for wheat or PLACE** — stalls the zone for most of the day.
 
 ---
 

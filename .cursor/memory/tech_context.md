@@ -93,14 +93,13 @@ Agents never submit without explicit user request (`kaggle-submission.mdc`).
 | Doc | Purpose |
 | --- | --- |
 | `docs/project_overview.md` | Game rules |
-| `data/milos_zoning.md` | Target five-zone + h=0 buy order |
+| `data/milos_zoning.md` | Target five-zone + **six-man** + h=0 buy order |
 | `docs/two_land_approach.md` | Pickups ops lesson |
 | `docs/twoland/diagnosis_0911.md` | OneLand vs TwoLand diagnosis; reject static NW caps; post-NE ops crash |
 | `docs/twolands/twoland_readd.md` | TwoLand re-add spec (probe + NE glue + LOCKED carve-out) |
 | `scripts/smoke_analysis/` | Local smoke log KPIs/plots; **layout-aware** via `layout.py` |
-| `milos/` | Live OneLand agent (executor/market/tile_ops/sell_dp/**planner.replan**, replan_lock; **zone wheat padding** in `script.wheat_pickup_needed`) |
-| `experiments/milos-simplification.ipynb` | Milos solve + smoke farmer Gantts |
-| `data/two_lands.md` | TWO layout geometry / hire batches |
+| `milos/` | Live OneLand **6-man** (`MILOS_ONELAND6`); wheat buy global buffer; fert shed dump; assigned-tile queue write |
+| `data/milos_zoning.md` | 5-man + **6-man** NW-land specs / ops limits |
 | `scripts/download_submission_logs.sh` | Bulk episode replays from Kaggle CLI |
 | `scripts/summarize_replays.sh` | Batch replay analysis → `<id>.json` |
 | `scripts/replay_analysis/` | Replay metrics/KPI module |
