@@ -7,6 +7,21 @@ from milos.tile_ops import ONE_TIME_CROPS, on_lifecycle_end, plant_harvest_trans
 
 _MOVE = frozenset({"NORTH", "SOUTH", "EAST", "WEST"})
 
+_SHED_ACCESS = ((4, 4), (5, 4), (4, 5), (5, 5))
+
+
+def _spawn_hand_pos(me: dict) -> list[int]:
+    """Match env _spawn_hand: min occupancy on shed-access tiles, NWSE tiebreak."""
+    occupants = {tile: 0 for tile in _SHED_ACCESS}
+    for pos in [tuple(me["farmer"])] + [tuple(p) for p in me.get("hands", [])]:
+        if pos in occupants:
+            occupants[pos] += 1
+    best = sorted(
+        occupants.items(),
+        key=lambda kv: (kv[1], _SHED_ACCESS.index(kv[0])),
+    )
+    return list(best[0][0])
+
 
 def _tile_at(me: dict, idx: int):
     x, y = workers.TILE_COORDS[idx]
@@ -61,9 +76,8 @@ def apply_market_orders(
             shed[animal] = shed.get(animal, 0) + n
         elif op == "HIRE":
             hands = me.setdefault("hands", [])
-            corners = [(4, 4), (5, 4), (4, 5), (5, 5)]
-            if len(hands) < len(corners):
-                hands.append(list(corners[len(hands)]))
+            hands.append(_spawn_hand_pos(me))
+            private.setdefault("inventories", [{}]).append({})
         elif op == "SELL" and len(order) >= 3:
             item, n = order[1], int(order[2])
             n = min(n, shed.get(item, 0))

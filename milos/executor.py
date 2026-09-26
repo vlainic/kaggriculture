@@ -552,33 +552,38 @@ class Executor:
         )
         demand_s = " ".join(f"demand_{p}={demand.get(p, 0)}" for p in sorted(demand))
         price_s = " ".join(f"{k}={int(prices.get(k, 0) or 0)}" for k in sorted(prices))
+        shed = obs.get("private", {}).get("shed", {})
+        shed_total = sum(int(v) for v in shed.values())
         _log(
-            f"[snap] d={day} h={hour} money={int(me['money'])} {parts} "
-            f"shops={len(shops)} {demand_s} {price_s}"
+            f"[snap] d={day} h={hour} money={int(me['money'])} shed_total={shed_total} "
+            f"{parts} shops={len(shops)} {demand_s} {price_s}"
         )
 
-    def _bind_hands(self, me: dict, day: int, hour: int) -> None:
-        for i, pos in enumerate(me.get("hands", [])):
-            if i in self._slot_to_worker:
-                continue
-            w = workers.hire_worker_for_hand_pos(tuple(pos))
-            if w:
-                self._slot_to_worker[i] = w
-                _log(f"[bind] d={day} h={hour} slot{i}={w} pos={tuple(pos)}")
-
-    def _worker_for_slot(
-        self, slot: int, me: dict, day: int, hour: int
+    def _claim_worker(
+        self, slot: int, pos: tuple[int, int], day: int, hour: int
     ) -> str | None:
         if slot in self._slot_to_worker:
             return self._slot_to_worker[slot]
-        if slot >= len(me.get("hands", [])):
-            return None
-        pos = tuple(me["hands"][slot])
         w = workers.hire_worker_for_hand_pos(pos)
+        taken = set(self._slot_to_worker.values())
+        if w in taken:
+            dup = workers.TWOFOLD_HIRE
+            w = dup if dup in workers.HAND_WORKERS and dup not in taken else None
         if w:
             self._slot_to_worker[slot] = w
             _log(f"[bind] d={day} h={hour} slot{slot}={w} pos={pos}")
         return w
+
+    def _bind_hands(self, me: dict, day: int, hour: int) -> None:
+        for i, pos in enumerate(me.get("hands", [])):
+            self._claim_worker(i, tuple(pos), day, hour)
+
+    def _worker_for_slot(
+        self, slot: int, me: dict, day: int, hour: int
+    ) -> str | None:
+        if slot >= len(me.get("hands", [])):
+            return None
+        return self._claim_worker(slot, tuple(me["hands"][slot]), day, hour)
 
     def _worker_pos(
         self, worker: str, me: dict, *, hand_slot: int | None = None
@@ -596,7 +601,7 @@ class Executor:
 
     def _private_inv(self, private: dict, inv_idx: int) -> dict:
         invs = private["inventories"]
-        if inv_idx >= len(invs):
+        while inv_idx >= len(invs):
             invs.append({})
         return invs[inv_idx]
 
@@ -614,7 +619,9 @@ class Executor:
         if (fx, fy) not in _owned_shed_tiles(me):
             return None
         inv = self._private_inv(private, inv_idx)
-        need_w = script.wheat_pickup_needed(me, worker, self._tile_state, inv)
+        need_w = script.wheat_pickup_needed(
+            me, worker, self._tile_state, inv, day=self._day
+        )
         if need_w > 0:
             n = min(need_w, int(private["shed"].get("WHEAT", 0)))
             if n > 0:

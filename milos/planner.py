@@ -9,7 +9,7 @@ from milos.wsp.oneland import solve
 from milos.wsp.log import WspPlan
 from milos.wsp.types import SolveResult
 from milos.wsp.config import ANIMAL_NAMES, NUM_DAYS, PROFILE_SUFFIXES
-from milos.zoning import FARMER, NUM_TILES, WORKER_TILES, WORKERS
+from milos.zoning import FARMER, NUM_HIRES, NUM_TILES, WORKER_TILES, WORKERS
 
 PlanBoard = dict[int, list]
 
@@ -107,7 +107,7 @@ SEASON_LAST_DAY = 29
 
 CURRENT_SOLVER = "milos_oneland"
 STARTING_MONEY = 3000
-NUM_ACTIVE_HIRES = 4
+NUM_ACTIVE_HIRES = NUM_HIRES
 BUY_LAND_DAY: int | None = None
 DEAD_HANDS: set[str] = set()
 _cached_queues: dict | None = None
@@ -173,27 +173,24 @@ def apply_replan(
 
     written = 0
     replan_set = set(replan_tiles)
-    for worker in result.solved_workers:
-        for idx in WORKER_TILES[worker]:
-            if idx not in replan_set:
-                continue
-            chain = result.assigned.get(idx, [])
-            if not chain and tile_queues.get(idx):
-                continue
-            tile_queues[idx] = chain_to_queue_items(chain, horizon)
-            written += 1
-            if tile_state is not None and chain:
-                queue = tile_queues[idx]
-                first_lag = queue[0].start_lag if queue else 0
-                tile_state[idx] = {
-                    "queue_idx": 0,
-                    "lag": first_lag,
-                    "gap": 0,
-                    "pending_dig": False,
-                    "dig_plant_ok": False,
-                    "active": False,
-                    "fert_today": False,
-                }
+    for idx in replan_set:
+        chain = result.assigned.get(idx, [])
+        if not chain and tile_queues.get(idx):
+            continue
+        tile_queues[idx] = chain_to_queue_items(chain, horizon)
+        written += 1
+        if tile_state is not None and chain:
+            queue = tile_queues[idx]
+            first_lag = queue[0].start_lag if queue else 0
+            tile_state[idx] = {
+                "queue_idx": 0,
+                "lag": first_lag,
+                "gap": 0,
+                "pending_dig": False,
+                "dig_plant_ok": False,
+                "active": False,
+                "fert_today": False,
+            }
     return written
 
 
@@ -355,10 +352,8 @@ def _build_from_solver() -> dict[int, list]:
         raise RuntimeError(f"day-0 {CURRENT_SOLVER} failed: active={active}")
 
     queues = {idx: [] for idx in range(NUM_TILES)}
-    for worker in result.solved_workers:
-        for idx in WORKER_TILES[worker]:
-            chain = result.assigned.get(idx, [])
-            queues[idx] = chain_to_queue_items(chain, NUM_DAYS)
+    for idx, chain in result.assigned.items():
+        queues[idx] = chain_to_queue_items(chain, NUM_DAYS)
 
     if not result.complete:
         active = ",".join(result.solved_workers)

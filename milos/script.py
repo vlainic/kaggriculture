@@ -122,9 +122,7 @@ def wheat_pickup_needed(
     need = zone_animal_feed_count(me, worker, tile_state, day=day)
     if need <= 0:
         return 0
-    zones_with_animals = _count_zones_with_animals(me, tile_state, day=day)
-    buffer = (zones_with_animals + 1) // 2
-    return max(0, (need + buffer) - inv.get("WHEAT", 0))
+    return max(0, need - inv.get("WHEAT", 0))
 
 
 def _animals_needed_for_zone(
@@ -216,13 +214,12 @@ def _inventory_index(worker: str, *, hand_slot: int | None = None) -> int:
 def total_wheat_feed_need(
     me: dict, tile_state: dict, private: dict, *, day: int | None = None
 ) -> int:
-    total = 0
-    for worker in WORKERS:
-        inv_idx = _inventory_index(worker)
-        inv = (
-            private["inventories"][inv_idx]
-            if inv_idx < len(private["inventories"])
-            else {}
-        )
-        total += wheat_pickup_needed(me, worker, tile_state, inv, day=day)
-    return total
+    del private
+    total_need = sum(
+        zone_animal_feed_count(me, worker, tile_state, day=day) for worker in WORKERS
+    )
+    if total_need <= 0:
+        return 0
+    zones_with_animals = _count_zones_with_animals(me, tile_state, day=day)
+    buffer = (zones_with_animals + 1) // 2
+    return total_need + buffer

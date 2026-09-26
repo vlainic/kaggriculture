@@ -84,3 +84,5 @@ zone:    V  IV  III II   I
 - Hire 3 = 16
 - Hire 4 = 16
 - Hire 5 = 13
+
+**Live code** keeps the 5-man column tile index order (`milos/zoning.py`); zone VI is tiles **10, 15, 20, 25** (indices 9, 14, 19, 24), not the diagram row 22–25 above.

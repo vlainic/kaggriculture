@@ -18,6 +18,9 @@ SPAWN_TO_HIRE: dict[tuple[int, int], str] = {
     (5, 5): "hire4",
 }
 
+# Fifth hand re-uses an occupied corner (env _spawn_hand least-occupancy rule).
+TWOFOLD_HIRE: str | None = "hire5"
+
 
 @dataclass(frozen=True)
 class Zone:
@@ -117,7 +120,65 @@ MILOS_ONELAND = Layout(
     shed_adjacent=_SHED_ADJACENT,
 )
 
-CURRENT = MILOS_ONELAND
+_ONELAND_COORDS = MILOS_ONELAND.coords
+
+MILOS_ONELAND6 = Layout(
+    coords=_ONELAND_COORDS,
+    zones=(
+        Zone(
+            name="farmer",
+            tiles=(0, 1, 2, 3, 4),
+            preamble=(),
+            start_hour=0,
+            net_tile_ops=19,
+            is_hand=False,
+        ),
+        Zone(
+            name="hire1",
+            tiles=(5, 6, 7, 8),
+            preamble=("PICKUP", "WEST", "WEST", "WEST", "WEST"),
+            start_hour=0,
+            net_tile_ops=16,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire2",
+            tiles=(10, 11, 12, 13),
+            preamble=("WEST", "PICKUP", "WEST", "WEST", "WEST"),
+            start_hour=0,
+            net_tile_ops=16,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire3",
+            tiles=(15, 16, 17, 18),
+            preamble=("NORTH", "PICKUP", "WEST", "WEST"),
+            start_hour=0,
+            net_tile_ops=17,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire4",
+            tiles=(20, 21, 22, 23),
+            preamble=("WEST", "NORTH", "PICKUP", "WEST"),
+            start_hour=0,
+            net_tile_ops=17,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire5",
+            tiles=(24, 19, 14, 9),
+            preamble=("PICKUP",),
+            start_hour=0,
+            net_tile_ops=14,
+            is_hand=True,
+        ),
+    ),
+    shed_door=_SHED_DOOR,
+    shed_adjacent=_SHED_ADJACENT,
+)
+
+CURRENT = MILOS_ONELAND6
 
 TILE_COORDS: tuple[tuple[int, int], ...] = ()
 NUM_TILES = 0
@@ -188,7 +249,12 @@ def tile_est_ops_weight(tile) -> float:
 
 
 bind(CURRENT)
-_layout_tag = "milos_oneland" if CURRENT is MILOS_ONELAND else "milos_farmer"
+if CURRENT is MILOS_ONELAND6:
+    _layout_tag = "milos_oneland6"
+elif CURRENT is MILOS_ONELAND:
+    _layout_tag = "milos_oneland"
+else:
+    _layout_tag = "milos_farmer"
 print(
     f"[zoning] CURRENT={_layout_tag} tiles={NUM_TILES} hands={NUM_HIRES}",
     flush=True,
