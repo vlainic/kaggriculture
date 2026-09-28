@@ -9,6 +9,7 @@ from milos import (
     envconfig,
     market,
     planner,
+    price_forecast,
     rollouts,
     script,
     sell_dp,
@@ -180,6 +181,10 @@ class Executor:
         if hour == 0:
             shops = obs.get("town", {}).get("unlocked_shops", [])
             _log(envconfig.shops_dawn_log(day, shops))
+            try:
+                price_forecast.observe_drain(obs)
+            except Exception as exc:
+                _log(f"[fc] drain observe failed d={day}: {exc}")
             self._on_new_day(me, day)
             if day == 1 and not self._day0_productive:
                 _log("[exec] WARN day-0 had zero BUY_SEED and zero PLANT")

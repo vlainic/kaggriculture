@@ -4,7 +4,15 @@ from __future__ import annotations
 
 import time
 
-from milos import animal_rollouts, envconfig, pricing, rollouts, tile_ops, workers
+from milos import (
+    animal_rollouts,
+    drain_calib,
+    envconfig,
+    pricing,
+    rollouts,
+    tile_ops,
+    workers,
+)
 
 SHED_CAP = 100  # default; live cap from envconfig.shed_capacity() after ingest
 
@@ -115,7 +123,11 @@ def town_drain_by_day(obs: dict, horizon: int) -> list[dict[str, float]]:
                 if p in PREMIUM_PRODUCTS:
                     continue
                 drain[p] = drain.get(p, 0.0) + locked_demand.get(p, 0) * scale
-        out.append({p: drain.get(p, 0.0) for p in SELL_PRODUCTS})
+        out.append(
+            {
+                p: drain.get(p, 0.0) * drain_calib.factor(p) for p in SELL_PRODUCTS
+            }
+        )
     return out
 
 

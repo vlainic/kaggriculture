@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from milos import animal_rollouts, envconfig, pricing, rollouts
+from milos import animal_rollouts, drain_calib, envconfig, pricing, rollouts
 from milos.replan_lock import (
     ANIMAL_PROFILE,
     CROP_PROFILE,
@@ -271,19 +271,63 @@ def walk_prices(
     return prices
 
 
+def raw_drain_for_day(unlocked_shops: list[str], abs_day: int) -> dict[str, float]:
+    row = dict(shop_drain_per_day(unlocked_shops))
+    tc = town_drain_per_day(abs_day)
+    for p in _TOWN_CENTER_PRODUCTS:
+        row[p] = row.get(p, 0.0) + tc.get(p, 0.0)
+    return {p: row.get(p, 0.0) for p in SELL_PRODUCTS}
+
+
 def build_drain_by_day(obs: dict, horizon: int) -> list[dict[str, float]]:
     day = obs["day"]
     unlocked = list(obs.get("town", {}).get("unlocked_shops", []))
-    shop = shop_drain_per_day(unlocked)
     rows: list[dict[str, float]] = []
     for rel in range(horizon):
         abs_day = day + rel
-        row = dict(shop)
-        tc = town_drain_per_day(abs_day)
-        for p in _TOWN_CENTER_PRODUCTS:
-            row[p] = row.get(p, 0.0) + tc.get(p, 0.0)
-        rows.append({p: row.get(p, 0.0) for p in SELL_PRODUCTS})
+        row = raw_drain_for_day(unlocked, abs_day)
+        rows.append(
+            {
+                p: row.get(p, 0.0) * drain_calib.factor(p) for p in SELL_PRODUCTS
+            }
+        )
     return rows
+
+
+_prev_market_inv: dict[str, int] | None = None
+
+
+def observe_drain(obs: dict) -> None:
+    global _prev_market_inv
+
+    day = obs["day"]
+    inv = obs.get("market", {}).get("inventory", {})
+    cur = {
+        p: int(inv.get(p, pricing.I0_DEFAULT))
+        for p in SELL_PRODUCTS
+    }
+    unlocked = list(obs.get("town", {}).get("unlocked_shops", []))
+
+    if _prev_market_inv is not None and day > 0:
+        modelled = raw_drain_for_day(unlocked, day - 1)
+        for p in SELL_PRODUCTS:
+            if drain_calib.sells_for_product(p) > 0:
+                continue
+            prev = _prev_market_inv.get(p, pricing.I0_DEFAULT)
+            now = cur.get(p, pricing.I0_DEFAULT)
+            observed = max(0.0, float(prev - now))
+            drain_calib.update(p, observed, modelled.get(p, 0.0))
+
+    _prev_market_inv = cur
+    drain_calib.clear_sells_today()
+
+    wool = cur.get("WOOL", pricing.I0_DEFAULT)
+    melon = cur.get("MELON", pricing.I0_DEFAULT)
+    print(
+        f"[fc] d={day} drain={drain_calib.snapshot()} "
+        f"wool_now={wool} melon_now={melon}",
+        flush=True,
+    )
 
 
 def build_supply(

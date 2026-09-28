@@ -286,7 +286,9 @@ def build_orders(
         sells = sells[: max(0, MAX_ORDERS - len(orders))]
     orders.extend(sells)
 
-    return orders[:MAX_ORDERS]
+    final = orders[:MAX_ORDERS]
+    drain_calib.note_sells(final)
+    return final
 
 
 def _staple_sell_orders(
