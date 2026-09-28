@@ -47,7 +47,7 @@ def update(product: str, observed: float, modelled: float) -> None:
     ratio = observed / modelled
     ratio = max(FACTOR_MIN, min(FACTOR_MAX, ratio))
     prev = _factors.get(product, 1.0)
-    _factors[product] = max(prev, ratio)
+    _factors[product] = min(prev, ratio)
 
 
 def factor(product: str) -> float:
