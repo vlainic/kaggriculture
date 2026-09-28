@@ -55,6 +55,25 @@ def _product_for_label(label: str, kind: str) -> str:
     return label
 
 
+def _resolve_profile(
+    label: str,
+    profile_name: str,
+    crops_data: dict,
+    animals_data: dict,
+) -> str | None:
+    spec = crops_data.get("crops", {}).get(label) or animals_data.get(
+        "animals", {}
+    ).get(label)
+    if spec is None:
+        return None
+    if profile_name in spec:
+        return profile_name
+    for alt in ("with_fert", "no_fert", "with_care", "no_care"):
+        if alt in spec:
+            return alt
+    return None
+
+
 def _add_profile_harvests(
     label: str,
     profile_name: str,
@@ -65,7 +84,10 @@ def _add_profile_harvests(
     crops_data: dict,
     animals_data: dict,
 ) -> None:
-    kind, _spec, profile = _rollout_spec(label, profile_name, crops_data, animals_data)
+    resolved = _resolve_profile(label, profile_name, crops_data, animals_data)
+    if resolved is None:
+        return
+    kind, _spec, profile = _rollout_spec(label, resolved, crops_data, animals_data)
     product = _product_for_label(label, kind)
     if product not in supply:
         return

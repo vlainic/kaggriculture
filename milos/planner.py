@@ -408,12 +408,22 @@ def _safe_price_of(
 ) -> Callable[..., int]:
     from milos.price_forecast import make_price_forecast
 
+    from milos import pricing
+
     try:
         return make_price_forecast(obs, tile_queues, st_map)
     except Exception as exc:
-        print(f"[planner] forecast failed d={day}: {exc}", flush=True)
-        base = wsp_data.i0_base_prices()
-        return lambda product, rel_day=0, _base=base: _base[product]
+        print(
+            f"[fc] FORECAST FAILED d={day}: {type(exc).__name__}: {exc}",
+            flush=True,
+        )
+        inv = (obs.get("market") or {}).get("inventory") or {}
+        snap = {
+            p: int(inv.get(p, pricing.I0_DEFAULT)) for p in pricing.MARKET_PARAMS
+        }
+        return lambda product, rel_day=0, extra_units=0, _i=snap: pricing.quoted(
+            product, _i.get(product, pricing.I0_DEFAULT) + int(extra_units)
+        )
 
 
 def make_price_of(
