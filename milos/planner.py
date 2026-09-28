@@ -12,7 +12,6 @@ from milos.wsp.config import ANIMAL_NAMES, NUM_DAYS, PROFILE_SUFFIXES
 from milos.zoning import (
     FARMER,
     HAND_DAILY_COST,
-    NE_TILES,
     NE_WORKERS,
     NUM_TILES,
     NW_WORKERS,
@@ -129,6 +128,7 @@ NE_BUY_MIN_CASH = 3000
 NE_BUY_FIRST_DAY = 2
 NE_BUY_LAST_DAY = 22
 _cached_queues: dict | None = None
+_BUY_REPLAN_DONE_DAY: int | None = None
 
 
 def active_workers() -> tuple[str, ...]:
@@ -319,7 +319,6 @@ def _activate_next_ne(
         return
 
     money = int(me["money"])
-    reserve = NE_LAND_COST if BUY_LAND_DAY == day and not ne_owned else 0
     zone_tiles: list[int] = []
     for idx in WORKER_TILES[worker]:
         tile = _tile_at(me, idx)
@@ -327,14 +326,6 @@ def _activate_next_ne(
             zone_tiles.append(idx)
             continue
         if isinstance(tile, dict) and tile.get("kind") == "WEED":
-            zone_tiles.append(idx)
-            continue
-        if (
-            worker == NE_WORKERS[0]
-            and BUY_LAND_DAY == day
-            and not ne_owned
-            and is_buy_morning_locked(tile, idx, day, me)
-        ):
             zone_tiles.append(idx)
     if not zone_tiles:
         return
@@ -344,7 +335,7 @@ def _activate_next_ne(
         horizon=horizon,
         empty_tiles=zone_tiles,
         empty_counts={worker: len(zone_tiles)},
-        starting_money=max(0, money - reserve),
+        starting_money=money,
         max_time=15.0,
         track_shed=False,
         min_balance=0,
@@ -358,10 +349,10 @@ def _activate_next_ne(
     cost = _zone_plan_cost(assigned, horizon, worker, price_of)
 
     ok = int(worker in result.solved_workers)
-    if busy_day0 < 1 or money - cost - reserve < 0 or worker not in result.solved_workers:
+    if busy_day0 < 1 or money - cost < 0 or worker not in result.solved_workers:
         print(
             f"[ne] reject d={day} zone={worker} ok={ok} busy_day0={busy_day0} "
-            f"busy_any={busy_any} cost={cost} reserve={reserve} money={money}",
+            f"busy_any={busy_any} cost={cost} money={money}",
             flush=True,
         )
         return
@@ -370,7 +361,7 @@ def _activate_next_ne(
     NE_DUE_DAY[worker] = day
     print(
         f"[ne] accept d={day} zone={worker} busy_day0={busy_day0} "
-        f"busy_any={busy_any} cost={cost} reserve={reserve} BUY_LAND_DAY={BUY_LAND_DAY}",
+        f"busy_any={busy_any} cost={cost} BUY_LAND_DAY={BUY_LAND_DAY}",
         flush=True,
     )
 
@@ -570,17 +561,114 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
         _replan_active(obs, tile_queues, st_map, price_of)
     except Exception as exc:
         print(f"[planner] walk1 failed d={day}: {exc}", flush=True)
+    if BUY_LAND_DAY == day and not _ne_owned(me):
+        return
     try:
         _activate_next_ne(obs, tile_queues, st_map, price_of)
     except Exception as exc:
         print(f"[planner] walk2 failed d={day}: {exc}", flush=True)
 
 
+def replan_after_buy(
+    obs: dict,
+    tile_queues: dict,
+    tile_state: dict | None,
+) -> None:
+    global _BUY_REPLAN_DONE_DAY
+
+    day = obs["day"]
+    player = obs["player"]
+    me = obs["farms"][player]
+    if (
+        BUY_LAND_DAY != day
+        or not _ne_owned(me)
+        or _BUY_REPLAN_DONE_DAY == day
+        or not (2 <= day < SEASON_LAST_DAY)
+    ):
+        return
+
+    _BUY_REPLAN_DONE_DAY = day
+    st_map = tile_state or {}
+    horizon = NUM_DAYS - day
+    if horizon <= 0:
+        return
+
+    from milos.replan_lock import build_replan_lock, empty_locked
+
+    price_of = _safe_price_of(obs, tile_queues, st_map, day)
+    nw_tile_set = {idx for w in NW_WORKERS for idx in WORKER_TILES[w]}
+    ne_tile_set = {idx for w in NE_WORKERS for idx in WORKER_TILES[w]}
+
+    replan_tiles, locked_by_worker, locked_tiles = build_replan_lock(
+        me, day, horizon, tile_queues, st_map, price_of
+    )
+    nw_empty = sum(1 for t in replan_tiles if t in nw_tile_set)
+    ne_replan = [t for t in replan_tiles if t in ne_tile_set]
+    ne_empty = len(ne_replan)
+
+    money = int(me["money"])
+    overage_before = obs.get("remainingOverageTime")
+    all_w = NW_WORKERS + NE_WORKERS
+    empty_counts = {
+        w: sum(1 for t in ne_replan if t in WORKER_TILES[w]) for w in all_w
+    }
+
+    print(
+        f"[ne] buy_replan start d={day} money={money} nw_empty={nw_empty} "
+        f"ne_empty={ne_empty} overage={overage_before}",
+        flush=True,
+    )
+
+    result = solve(
+        [],
+        horizon=horizon,
+        empty_tiles=ne_replan,
+        empty_counts=empty_counts,
+        locked_by_worker={
+            w: locked_by_worker.get(w) or empty_locked(horizon) for w in all_w
+        },
+        starting_money=money,
+        max_time=24.0,
+        track_shed=False,
+        min_balance=0,
+        price_of=price_of,
+        workers=all_w,
+        charge_hire_daily=True,
+    )
+
+    overage_after = obs.get("remainingOverageTime")
+    active: list[str] = []
+    deferred: list[str] = []
+    for worker in NE_WORKERS:
+        zone_assigned = {
+            idx: result.assigned.get(idx, [])
+            for idx in WORKER_TILES[worker]
+            if result.assigned.get(idx)
+        }
+        if not zone_assigned:
+            deferred.append(worker)
+            continue
+        busy_day0, _ = _busy_counts(zone_assigned)
+        if busy_day0 < 1 or worker not in result.solved_workers:
+            deferred.append(worker)
+            continue
+        _write_ne_activation(
+            worker, zone_assigned, horizon, tile_queues, st_map, 0
+        )
+        NE_DUE_DAY[worker] = day
+        active.append(worker)
+
+    print(
+        f"[ne] buy_replan d={day} money={money} nw_empty={nw_empty} "
+        f"ne_empty={ne_empty} active_ne={','.join(active) or 'none'} "
+        f"deferred={','.join(deferred) or 'none'} overage={overage_after}",
+        flush=True,
+    )
+
+
 def is_buy_morning_locked(tile, idx: int, day: int, me: dict) -> bool:
-    if tile != "LOCKED" or BUY_LAND_DAY is None or day != BUY_LAND_DAY:
-        return False
-    del me
-    return idx in NE_TILES
+    del tile, idx, day, me
+    return False
 
 
 def _parse_profile_key(profile_key: str) -> tuple[str, str]:

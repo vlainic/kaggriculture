@@ -215,7 +215,8 @@ def build_orders(
             orders.append(["HIRE"])
 
     shed_for_sells: dict | None = None
-    if day < script.SEASON_LAST_DAY and hour in (0, 1):
+    buy_hours = (0, 1, 2) if day == planner.BUY_LAND_DAY else (0, 1)
+    if day < script.SEASON_LAST_DAY and hour in buy_hours:
         shed_plan = dict(shed)
         buy_orders: list[list] = []
 

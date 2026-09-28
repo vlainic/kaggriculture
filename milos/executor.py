@@ -161,6 +161,21 @@ class Executor:
             except Exception as exc:
                 _log(f"[ne] dusk_trigger failed d={day}: {exc}")
 
+        if (
+            hour == 1
+            and planner.BUY_LAND_DAY == day
+            and "NE" in me.get("unlocked_quadrants", [])
+        ):
+            try:
+                planner.replan_after_buy(obs, script.TILE_QUEUES, self._tile_state)
+            except Exception as exc:
+                _log(f"[ne] buy_replan failed d={day}: {exc}")
+            self._empty_at_dawn = {
+                idx
+                for idx in range(workers.NUM_TILES)
+                if _dawn_empty(me, idx, day)
+            }
+
         if hour == 0:
             self._on_new_day(me, day)
             if day == 1 and not self._day0_productive:
@@ -171,12 +186,6 @@ class Executor:
                         planner.replan(obs, script.TILE_QUEUES, self._tile_state)
                     except Exception as exc:
                         _log(f"[planner] replan failed d={day}: {exc}")
-                    if planner.BUY_LAND_DAY == day:
-                        self._empty_at_dawn = {
-                            idx
-                            for idx in range(workers.NUM_TILES)
-                            if _dawn_empty(me, idx, day)
-                        }
                 try:
                     wheat_feed = script.total_wheat_feed_need(
                         me, self._tile_state, private
