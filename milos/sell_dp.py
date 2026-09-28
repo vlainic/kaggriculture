@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import time
 
-from milos import animal_rollouts, pricing, rollouts, tile_ops, workers
+from milos import animal_rollouts, envconfig, pricing, rollouts, tile_ops, workers
+
+SHED_CAP = 100  # default; live cap from envconfig.shed_capacity() after ingest
 
 PREMIUM_PRODUCTS: tuple[str, ...] = ("MELON", "STRAWBERRY", "MILK", "WOOL")
 STAPLE_PRODUCTS: tuple[str, ...] = (
@@ -18,10 +20,8 @@ SELL_PRODUCTS: tuple[str, ...] = PREMIUM_PRODUCTS + STAPLE_PRODUCTS
 
 INV_PAD_LO = 40
 INV_PAD_HI = 80
-SHED_CAP = 100
-SHOP_INTERVAL = 4
-TOWN_CENTER_INTERVAL = 12
-SHOP_UNLOCK_INTERVAL = 3
+# Speculative future shop unlock credit (re-draws mean not every unlock is new).
+P_NEW_SHOP = 0.35
 OPP_EMA_ALPHA = 0.35
 SEASON_LAST_DAY = 29
 CROP_PROFILE = "no_fert"
@@ -40,6 +40,10 @@ _schedule: dict | None = None
 _prev_market_inv: dict[str, int] | None = None
 _our_sells_yesterday: dict[str, int] = {p: 0 for p in SELL_PRODUCTS}
 _opp_ema: dict[str, float] = {p: 0.0 for p in SELL_PRODUCTS}
+
+
+def shed_cap() -> int:
+    return envconfig.shed_capacity()
 
 
 def _log(msg: str) -> None:
@@ -69,24 +73,34 @@ def _town_center_units(abs_day: int) -> int:
     return 1
 
 
+def _shop_ticks_per_day() -> float:
+    return envconfig.turns_per_day() / envconfig.shop_interval()
+
+
+def _town_ticks_per_day() -> float:
+    return envconfig.turns_per_day() / envconfig.town_center_interval()
+
+
 def _known_shop_drain(unlocked_shops: list[str]) -> dict[str, float]:
     per_tick = rollouts.shop_demand_by_product(unlocked_shops)
-    scale = 24 / SHOP_INTERVAL
+    scale = _shop_ticks_per_day()
     return {p: per_tick.get(p, 0) * scale for p in SELL_PRODUCTS}
 
 
 def _town_center_drain(abs_day: int) -> dict[str, float]:
     units = _town_center_units(abs_day)
-    scale = 24 / TOWN_CENTER_INTERVAL
+    scale = _town_ticks_per_day()
     return {p: units * scale for p in _TOWN_CENTER_PRODUCTS}
 
 
 def town_drain_by_day(obs: dict, horizon: int) -> list[dict[str, float]]:
     day = obs["day"]
     unlocked = list(obs.get("town", {}).get("unlocked_shops", []))
-    locked = [s for s in _ALL_SHOPS if s not in unlocked]
+    seen = set(unlocked)
+    locked = [s for s in _ALL_SHOPS if s not in seen]
     locked_demand = rollouts.shop_demand_by_product(locked)
     n_locked = len(locked)
+    unlock_iv = envconfig.shop_unlock_interval()
 
     out: list[dict[str, float]] = []
     for rel in range(horizon):
@@ -95,9 +109,11 @@ def town_drain_by_day(obs: dict, horizon: int) -> list[dict[str, float]]:
         tc = _town_center_drain(abs_day)
         for p in _TOWN_CENTER_PRODUCTS:
             drain[p] = drain.get(p, 0.0) + tc.get(p, 0.0)
-        if n_locked > 0 and abs_day > 0 and abs_day % SHOP_UNLOCK_INTERVAL == 0:
-            scale = (24 / SHOP_INTERVAL) / n_locked
+        if n_locked > 0 and abs_day > 0 and abs_day % unlock_iv == 0:
+            scale = _shop_ticks_per_day() / n_locked * P_NEW_SHOP
             for p in SELL_PRODUCTS:
+                if p in PREMIUM_PRODUCTS:
+                    continue
                 drain[p] = drain.get(p, 0.0) + locked_demand.get(p, 0) * scale
         out.append({p: drain.get(p, 0.0) for p in SELL_PRODUCTS})
     return out

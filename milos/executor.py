@@ -6,6 +6,7 @@ import copy
 import re
 
 from milos import (
+    envconfig,
     market,
     planner,
     rollouts,
@@ -177,6 +178,8 @@ class Executor:
             }
 
         if hour == 0:
+            shops = obs.get("town", {}).get("unlocked_shops", [])
+            _log(envconfig.shops_dawn_log(day, shops))
             self._on_new_day(me, day)
             if day == 1 and not self._day0_productive:
                 _log("[exec] WARN day-0 had zero BUY_SEED and zero PLANT")

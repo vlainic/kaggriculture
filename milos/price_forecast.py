@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from milos import animal_rollouts, pricing, rollouts
+from milos import animal_rollouts, envconfig, pricing, rollouts
 from milos.replan_lock import (
     ANIMAL_PROFILE,
     CROP_PROFILE,
@@ -17,8 +17,12 @@ from milos.replan_lock import (
 from milos.workers import TILE_COORDS
 from milos.zoning import NUM_TILES
 
-SHOP_INTERVAL = 4
-TOWN_CENTER_INTERVAL = 12
+def _shop_ticks_per_day() -> float:
+    return envconfig.turns_per_day() / envconfig.shop_interval()
+
+
+def _town_ticks_per_day() -> float:
+    return envconfig.turns_per_day() / envconfig.town_center_interval()
 SELL_PRODUCTS: tuple[str, ...] = (
     "MELON",
     "STRAWBERRY",
@@ -113,13 +117,13 @@ def _inv_after_sells(product: str, inv: int, units: int) -> int:
 
 def shop_drain_per_day(unlocked_shops: list[str]) -> dict[str, float]:
     per_tick = rollouts.shop_demand_by_product(unlocked_shops)
-    scale = 24 / SHOP_INTERVAL
+    scale = _shop_ticks_per_day()
     return {p: per_tick.get(p, 0) * scale for p in SELL_PRODUCTS}
 
 
 def town_drain_per_day(abs_day: int) -> dict[str, float]:
     units = _town_center_units(abs_day)
-    scale = 24 / TOWN_CENTER_INTERVAL
+    scale = _town_ticks_per_day()
     return {p: units * scale for p in _TOWN_CENTER_PRODUCTS}
 
 
@@ -330,12 +334,15 @@ def make_price_forecast(
 
 
 def assert_shop_sink_sanity() -> None:
+    ticks = _shop_ticks_per_day()
     wool = shop_drain_per_day(["YARN_STORE"])["WOOL"]
     carrot = shop_drain_per_day(["PET_CAFE"])["CARROT"]
     wheat = shop_drain_per_day(["BAKERY"])["WHEAT"]
-    assert wool == 12.0, f"Yarn Store wool drain expected 12/day, got {wool}"
-    assert carrot == 12.0, f"Pet Cafe carrot drain expected 12/day, got {carrot}"
-    assert wheat == 6.0, f"Bakery wheat drain expected 6/day, got {wheat}"
+    assert wool == 2 * ticks, f"Yarn Store wool drain expected {2 * ticks}/day, got {wool}"
+    assert carrot == 2 * ticks, (
+        f"Pet Cafe carrot drain expected {2 * ticks}/day, got {carrot}"
+    )
+    assert wheat == 1 * ticks, f"Bakery wheat drain expected {ticks}/day, got {wheat}"
 
 
 def compare_to_observed_quotes(

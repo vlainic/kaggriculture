@@ -43,7 +43,52 @@ def _f(name: str, x: float) -> float:
         return math.sqrt(x)
     if name == "log":
         return math.log(1.0 + x)
+    if name == "log10":
+        return math.log10(1.0 + x)
     raise ValueError(f"unknown curve func {name!r}")
+
+
+_PARAM_KEYS = (
+    "base",
+    "i0",
+    "t",
+    "below_func",
+    "below_target",
+    "above_func",
+    "above_target",
+)
+
+
+def apply_market_params_overrides(overrides: dict) -> None:
+    """Sparse overlay matching kaggriculture env _resolve_market_params."""
+    if not overrides:
+        return
+    for product, patch in overrides.items():
+        if product not in MARKET_PARAMS or not isinstance(patch, dict):
+            continue
+        cur = MARKET_PARAMS[product]
+        data = {
+            "base": cur.base,
+            "i0": cur.i0,
+            "t": cur.t,
+            "below_func": cur.below_func,
+            "below_target": cur.below_target,
+            "above_func": cur.above_func,
+            "above_target": cur.above_target,
+        }
+        for key in _PARAM_KEYS:
+            if key in patch:
+                data[key] = patch[key]
+        MARKET_PARAMS[product] = MarketParam(
+            int(data["base"]),
+            int(data["i0"]),
+            int(data["t"]),
+            str(data["below_func"]),
+            float(data["below_target"]),
+            str(data["above_func"]),
+            float(data["above_target"]),
+        )
+    _sell_prefix_table.cache_clear()
 
 
 def quoted(product: str, inv: int) -> int:

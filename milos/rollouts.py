@@ -66,7 +66,11 @@ def _profile_data(crop: str, profile: str) -> dict:
 
 
 def shop_demand_by_product(unlocked_shops: list[str]) -> dict[str, int]:
-    """Sum product demand units from currently unlocked town shops."""
+    """Sum product demand units from currently unlocked town shops.
+
+    Iterates the raw list (not deduped): duplicate shop entries double demand,
+    matching competition behavior when the same shop unlocks more than once.
+    """
     demand = dict.fromkeys(PRODUCT_NAMES, 0)
     for shop in unlocked_shops:
         for product, units in SHOP_PRODUCT_DEMAND.get(shop, {}).items():
