@@ -85,7 +85,9 @@ def solve(
 
     if price_of is None:
         base = rollouts.i0_base_prices()
-        price_of = lambda product, rel_day=0, _base=base: _base[product]
+        price_of = lambda product, rel_day=0, extra_units=0, _base=base: _base[
+            product
+        ]
 
     empty_set = set(empty_tiles)
     per_zone_time = max_time / max(1, len(WORKERS))

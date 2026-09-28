@@ -238,27 +238,37 @@ def _add_shed_day0(obs: dict, supply: dict[str, list[int]]) -> None:
             supply[product][0] += n
 
 
+def walk_prices_and_inv(
+    start_inv: dict[str, int],
+    supply: dict[str, list[int]],
+    drain_by_day: list[dict[str, float]],
+    horizon: int,
+) -> tuple[list[dict[str, int]], list[dict[str, int]]]:
+    inv = {p: int(start_inv.get(p, pricing.I0_DEFAULT)) for p in pricing.MARKET_PARAMS}
+    prices_out: list[dict[str, int]] = []
+    inv_out: list[dict[str, int]] = []
+    for rel in range(horizon):
+        for product in pricing.MARKET_PARAMS:
+            units = supply.get(product, [0] * horizon)[rel]
+            if units > 0:
+                inv[product] = _inv_after_sells(product, inv[product], units)
+        day_prices = {p: pricing.quoted(p, inv[p]) for p in pricing.MARKET_PARAMS}
+        prices_out.append(day_prices)
+        inv_out.append(dict(inv))
+        drain = drain_by_day[rel] if rel < len(drain_by_day) else {}
+        for product in pricing.MARKET_PARAMS:
+            inv[product] = max(0, int(round(inv[product] - drain.get(product, 0.0))))
+    return prices_out, inv_out
+
+
 def walk_prices(
     start_inv: dict[str, int],
     supply: dict[str, list[int]],
     drain_by_day: list[dict[str, float]],
     horizon: int,
 ) -> list[dict[str, int]]:
-    inv = {p: int(start_inv.get(p, pricing.I0_DEFAULT)) for p in pricing.MARKET_PARAMS}
-    out: list[dict[str, int]] = []
-    for rel in range(horizon):
-        for product in pricing.MARKET_PARAMS:
-            units = supply.get(product, [0] * horizon)[rel]
-            if units > 0:
-                inv[product] = _inv_after_sells(product, inv[product], units)
-        day_prices = {
-            p: pricing.quoted(p, inv[p]) for p in pricing.MARKET_PARAMS
-        }
-        out.append(day_prices)
-        drain = drain_by_day[rel] if rel < len(drain_by_day) else {}
-        for product in pricing.MARKET_PARAMS:
-            inv[product] = max(0, int(round(inv[product] - drain.get(product, 0.0))))
-    return out
+    prices, _invs = walk_prices_and_inv(start_inv, supply, drain_by_day, horizon)
+    return prices
 
 
 def build_drain_by_day(obs: dict, horizon: int) -> list[dict[str, float]]:
@@ -306,29 +316,37 @@ def make_price_forecast(
 ) -> Callable[[str, int], int]:
     day = obs["day"]
     horizon = rollouts.SEASON_DAYS - day
+    market_inv = obs.get("market", {}).get("inventory", {})
+
+    def _fallback_quote(product: str) -> int:
+        return pricing.quoted(
+            product, int(market_inv.get(product, pricing.I0_DEFAULT))
+        )
+
     if horizon <= 0:
 
-        def flat(product: str, rel_day: int = 0) -> int:
-            i0 = pricing.I0_DEFAULT
-            return pricing.quoted(product, i0)
+        def flat(product: str, rel_day: int = 0, extra_units: int = 0) -> int:
+            inv = int(market_inv.get(product, pricing.I0_DEFAULT)) + int(extra_units)
+            return pricing.quoted(product, inv)
 
         return flat
 
     st_map = tile_state or {}
-    market_inv = obs.get("market", {}).get("inventory", {})
     supply = build_supply(obs, tile_queues, st_map, horizon)
     drain = build_drain_by_day(obs, horizon)
-    table = walk_prices(market_inv, supply, drain, horizon)
+    table, inv_table = walk_prices_and_inv(market_inv, supply, drain, horizon)
 
-    def price_of(product: str, rel_day: int = 0) -> int:
+    def price_of(product: str, rel_day: int = 0, extra_units: int = 0) -> int:
         if rel_day < 0:
             rel_day = 0
         if rel_day >= len(table):
             rel_day = len(table) - 1
-        return table[rel_day].get(
-            product,
-            pricing.quoted(product, int(market_inv.get(product, pricing.I0_DEFAULT))),
-        )
+        if extra_units <= 0:
+            return table[rel_day].get(product, _fallback_quote(product))
+        base_inv = inv_table[rel_day].get(product)
+        if base_inv is None:
+            return table[rel_day].get(product, _fallback_quote(product))
+        return pricing.quoted(product, base_inv + int(extra_units))
 
     return price_of
 

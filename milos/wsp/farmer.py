@@ -93,7 +93,9 @@ def solve(
 
     if price_of is None:
         base = rollouts.i0_base_prices()
-        price_of = lambda product, rel_day=0, _base=base: _base[product]
+        price_of = lambda product, rel_day=0, extra_units=0, _base=base: _base[
+            product
+        ]
 
     empty_set = set(empty_tiles)
     farmer_tiles = [idx for idx in FARMER_TILES if idx in empty_set]

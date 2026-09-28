@@ -87,7 +87,9 @@ def build_day0(
     nw_tiles = sorted({idx for w in NW_WORKERS for idx in WORKER_TILES[w]})
     if price_of is None:
         base = wsp_data.i0_base_prices()
-        price_of = lambda product, rel_day=0, _base=base: _base[product]
+        price_of = lambda product, rel_day=0, extra_units=0, _base=base: _base[
+            product
+        ]
 
     result = solve(
         [],
