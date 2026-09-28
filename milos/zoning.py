@@ -178,7 +178,138 @@ MILOS_ONELAND6 = Layout(
     shed_adjacent=_SHED_ADJACENT,
 )
 
-CURRENT = MILOS_ONELAND6
+_NE_PICKUP = ("PICKUP",)
+
+MILOS_TWOLAND12 = Layout(
+    coords=(
+        *_ONELAND_COORDS,
+        *_column(5, 25),
+        *_column(6, 30),
+        *_column(7, 35),
+        *_column(8, 40),
+        *_column(9, 45),
+    ),
+    zones=(
+        Zone(
+            name="farmer",
+            tiles=(0, 1, 2, 3, 4),
+            preamble=(),
+            start_hour=0,
+            net_tile_ops=19,
+            is_hand=False,
+        ),
+        Zone(
+            name="hire1",
+            tiles=(5, 6, 7, 8),
+            preamble=("PICKUP", "WEST", "WEST", "WEST", "WEST"),
+            start_hour=0,
+            net_tile_ops=16,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire2",
+            tiles=(10, 11, 12, 13),
+            preamble=("WEST", "PICKUP", "WEST", "WEST", "WEST"),
+            start_hour=0,
+            net_tile_ops=16,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire3",
+            tiles=(15, 16, 17, 18),
+            preamble=("NORTH", "PICKUP", "WEST", "WEST"),
+            start_hour=0,
+            net_tile_ops=17,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire4",
+            tiles=(20, 21, 22, 23),
+            preamble=("WEST", "NORTH", "PICKUP", "WEST"),
+            start_hour=0,
+            net_tile_ops=17,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire5",
+            tiles=(24, 19, 14, 9),
+            preamble=("PICKUP",),
+            start_hour=0,
+            net_tile_ops=14,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire6",
+            tiles=(25, 26, 27, 28, 29),
+            preamble=_NE_PICKUP,
+            start_hour=1,
+            net_tile_ops=17,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire10",
+            tiles=(30, 31, 32, 33),
+            preamble=_NE_PICKUP,
+            start_hour=1,
+            net_tile_ops=15,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire9",
+            tiles=(35, 36, 37, 38),
+            preamble=_NE_PICKUP,
+            start_hour=1,
+            net_tile_ops=15,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire8",
+            tiles=(40, 41, 42, 43),
+            preamble=_NE_PICKUP,
+            start_hour=1,
+            net_tile_ops=14,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire7",
+            tiles=(45, 46, 47, 48),
+            preamble=_NE_PICKUP,
+            start_hour=1,
+            net_tile_ops=14,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire11",
+            tiles=(34, 39, 44, 49),
+            preamble=_NE_PICKUP,
+            start_hour=1,
+            net_tile_ops=12,
+            is_hand=True,
+        ),
+    ),
+    shed_door=_SHED_DOOR,
+    shed_adjacent=_SHED_ADJACENT,
+)
+
+NW_WORKERS: tuple[str, ...] = (
+    "farmer",
+    "hire1",
+    "hire2",
+    "hire3",
+    "hire4",
+    "hire5",
+)
+NE_WORKERS: tuple[str, ...] = (
+    "hire6",
+    "hire10",
+    "hire9",
+    "hire8",
+    "hire7",
+    "hire11",
+)
+NE_TILES: frozenset[int] = frozenset(range(25, 50))
+
+CURRENT = MILOS_TWOLAND12
 
 TILE_COORDS: tuple[tuple[int, int], ...] = ()
 NUM_TILES = 0
@@ -249,7 +380,9 @@ def tile_est_ops_weight(tile) -> float:
 
 
 bind(CURRENT)
-if CURRENT is MILOS_ONELAND6:
+if CURRENT is MILOS_TWOLAND12:
+    _layout_tag = "milos_twoland12"
+elif CURRENT is MILOS_ONELAND6:
     _layout_tag = "milos_oneland6"
 elif CURRENT is MILOS_ONELAND:
     _layout_tag = "milos_oneland"

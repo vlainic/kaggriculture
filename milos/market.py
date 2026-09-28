@@ -192,12 +192,29 @@ def build_orders(
     wheat_price = int(prices.get("WHEAT", 0) or 25)
     spendable = max(0, money - wheat_reserve * wheat_price)
 
+    buy_land_reserved = 0
     if hour == 0 and day <= script.SEASON_LAST_DAY:
+        if (
+            planner.BUY_LAND_DAY is not None
+            and day == planner.BUY_LAND_DAY
+        ):
+            orders.append(["BUY_LAND"])
+            buy_land_reserved = planner.NE_LAND_COST
+            money = max(0, money - buy_land_reserved)
+            spendable = max(0, money - wheat_reserve * wheat_price)
         for _ in range(planner.NUM_ACTIVE_HIRES):
             orders.append(["HIRE"])
 
+    if (
+        hour == 1
+        and day <= script.SEASON_LAST_DAY
+        and "NE" in me.get("unlocked_quadrants", [])
+    ):
+        for _ in range(len(planner.ACTIVE_NE)):
+            orders.append(["HIRE"])
+
     shed_for_sells: dict | None = None
-    if day < script.SEASON_LAST_DAY and hour == 0:
+    if day < script.SEASON_LAST_DAY and hour in (0, 1):
         shed_plan = dict(shed)
         buy_orders: list[list] = []
 
@@ -256,7 +273,14 @@ def build_orders(
         tile_state=tile_state,
         shed=shed_for_sells,
     )
-    if len(orders) + len(sells) > MAX_ORDERS:
+    combined_len = len(orders) + len(sells)
+    if combined_len > MAX_ORDERS:
+        dropped = combined_len - MAX_ORDERS
+        print(
+            f"[market] overflow d={day} h={hour} dropped={dropped} "
+            f"had={combined_len} cap={MAX_ORDERS}",
+            flush=True,
+        )
         sells = sells[: max(0, MAX_ORDERS - len(orders))]
     orders.extend(sells)
 

@@ -86,3 +86,52 @@ zone:    V  IV  III II   I
 - Hire 5 = 13
 
 **Live code** keeps the 5-man column tile index order (`milos/zoning.py`); zone VI is tiles **10, 15, 20, 25** (indices 9, 14, 19, 24), not the diagram row 22–25 above.
+
+## NE-land: 6-man
+
+Basically mirroring NW! Note that there will be 1 ops less, because they are hired at h=1!
+
+All 6 hires bought at h=1 (when implemented: HIRE orders first in the h=1 market list).
+- market h=0-1 only (no mid-day BUY wheat / animal / seed):
+    - wheat (feed reserve)
+    - then animal (shed pickup before PLACE)
+    - finally plant seed
+    - leftover can be bought in h=2+, but after buying is over -> NO MID-DAY!
+
+## Tile numbering:
+* is done as mirrong 5-man if we decide to revert ;)
+
+zone:  VII VIII IX   X XI
+        30 [35  40  45 50] -> XII
+        29  34  39  44 49
+        28  33  38  43 48
+        27  32  37  42 47
+        26  31  36  41 46
+
+### Zone assignement
+
+- Hire 6 = there is for sure duplicate spawn at NE @ zone VII
+- Hire 7 = spawned at NE @ zone XI
+- Hire 8 = spawned at NW @ zone X
+- Hire 9 = spawned at SE @ zone IX
+- Hire 10 = spawned at SW @ zone VIII
+- Hire 11 = twofold spawn, could be NW, SW or even SE @ zone XII
+
+
+### Pre-defined movement snakes:
+- Hire 6: pickup (if needed), just 4xN
+- Hire 7: pickup (if needed), 4xE to zone -> then 3xN
+- Hire 8: 1xE, pickup (if needed), 3xE to zone -> then 3xN
+- Hire 9: 1xN, pickup (if needed), 2xE to zone -> then 3xN
+- Hire 10: 1xE, 1xN, pickup (if needed), 1xE to zone -> then 3xN
+- Hire 11: move to NE-shed-adjacent = (5,4), pickup (if needed), 4xN+1xE to zone -> then 3xE
+
+
+### Ops-limits:
+ 
+- Hire 6 = 17
+- Hire 7 = 14
+- Hire 8 = 14
+- Hire 9 = 15
+- Hire 10 = 15
+- Hire 11 = 12

@@ -182,7 +182,7 @@ class Executor:
         )
         harvest_only = day >= script.SEASON_LAST_DAY
 
-        if hour == 0 and day <= script.SEASON_LAST_DAY:
+        if day <= script.SEASON_LAST_DAY:
             self._bind_hands(me, day, hour)
 
         if market.defer_farmer_hour0(hour, day):
@@ -279,7 +279,7 @@ class Executor:
                 st["gap"] = max(st["gap"], gap)
                 st["pending_dig"] = dig
                 st["active"] = False
-            elif not empty:
+            elif isinstance(tile, dict):
                 st["active"] = True
 
         self._empty_at_dawn = {
@@ -564,6 +564,15 @@ class Executor:
     ) -> str | None:
         if slot in self._slot_to_worker:
             return self._slot_to_worker[slot]
+        if slot >= planner.NUM_ACTIVE_HIRES:
+            ne_idx = slot - planner.NUM_ACTIVE_HIRES
+            if ne_idx < len(planner.ACTIVE_NE):
+                w = planner.ACTIVE_NE[ne_idx]
+                self._slot_to_worker[slot] = w
+                planner.NE_BOUND_TODAY.add(w)
+                _log(f"[bind] d={day} h={hour} slot{slot}={w} pos={pos} ne")
+                return w
+            return None
         w = workers.hire_worker_for_hand_pos(pos)
         taken = set(self._slot_to_worker.values())
         if w in taken:
