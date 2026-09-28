@@ -22,14 +22,7 @@ OBJ_EARLY_STOP = 5_000
 CROP_PROFILES = ("no_fert", "with_fert")
 ANIMAL_PROFILES = ("no_care", "with_care")
 
-GLUT_CAPS = {
-    "MELON": {"count_div": 52},
-    "STRAWBERRY": {"count_div": 20},
-    "MILK": {"count_div": 25},
-    "WOOL": {"count_div": 19},
-}
-GLUT_PRODUCTS = tuple(GLUT_CAPS)
-GLUT_FACTOR_MIN = 0.01
+GLUT_PRODUCTS: tuple[str, ...] = ("MELON", "STRAWBERRY", "MILK", "WOOL")
 
 # Crop tile_free_age defaults (fallback if data missing)
 CROP_FREE_AGE = {

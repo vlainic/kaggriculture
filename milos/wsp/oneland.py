@@ -6,7 +6,8 @@ from collections.abc import Callable
 
 from milos.wsp import data as rollouts
 from milos.wsp import mip
-from milos.wsp.config import NUM_DAYS
+from milos import pricing
+from milos.wsp.config import GLUT_PRODUCTS, NUM_DAYS
 from milos.replan_lock import empty_locked as _empty_locked
 from milos.wsp.farmer import _load_prestart_raw
 from milos.wsp.types import SolveResult
@@ -38,6 +39,35 @@ def _locked_conservative_handoff(
             spend_d -= hire
         conservative.append(start_d + spend_d)
     return conservative
+
+
+def _glut_headroom(
+    product: str,
+    price_of,
+    horizon: int,
+    already: int,
+    floor_ratio: float = 0.5,
+    limit: int = 400,
+) -> int:
+    floor = pricing.price_floor(product, floor_ratio)
+    rel = min(max(0, horizon // 2), max(0, horizon - 1))
+    lo, hi = 0, limit
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if price_of(product, rel, already + mid - 1) >= floor:
+            lo = mid
+        else:
+            hi = mid - 1
+    return lo
+
+
+def _product_caps(
+    price_of, horizon: int, locked_harvest: dict[str, int]
+) -> dict[str, int]:
+    return {
+        p: _glut_headroom(p, price_of, horizon, locked_harvest.get(p, 0))
+        for p in GLUT_PRODUCTS
+    }
 
 
 def _is_prestart_solve(
@@ -120,6 +150,13 @@ def solve(
             w_open = 0
             f_open = 0
 
+        caps = _product_caps(price_of, horizon, locked_harvest)
+        print(
+            f"[fc] caps zone={worker} "
+            f"WOOL={caps.get('WOOL', 0)} MILK={caps.get('MILK', 0)} "
+            f"MELON={caps.get('MELON', 0)} STRAWBERRY={caps.get('STRAWBERRY', 0)}",
+            flush=True,
+        )
         res = mip.solve_zone(
             patterns,
             horizon=horizon,
@@ -136,6 +173,7 @@ def solve(
             worker=worker,
             net_tile_ops=NET_TILE_OPS.get(worker, 18),
             charge_hire_daily=charge_hire_daily,
+            product_caps=caps,
         )
         if res is None:
             print(

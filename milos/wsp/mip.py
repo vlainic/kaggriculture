@@ -18,8 +18,6 @@ from milos.wsp.config import (
     FARMER_NET_TILE_OPS,
     FARMER_TILES,
     FERT_PRICE,
-    GLUT_CAPS,
-    GLUT_FACTOR_MIN,
     GLUT_PRODUCTS,
     MAX_BUY,
     NUM_DAYS,
@@ -69,17 +67,6 @@ def _empty_daily_harvest(horizon: int) -> dict[str, list[int]]:
     return {p: [0] * horizon for p in GLUT_PRODUCTS}
 
 
-def _glut_price_factor(product: str, count: int) -> float:
-    spec = GLUT_CAPS.get(product)
-    if spec is None:
-        return 1.0
-    return max(GLUT_FACTOR_MIN, 1.0 - count / spec["count_div"])
-
-
-def _glut_unit_price(base: int, product: str, count: int) -> int:
-    return max(1, int(round(base * _glut_price_factor(product, count))))
-
-
 def _on_tile_ops_count(acts: list) -> int:
     return len([a for a in acts if a != "PICKUP"])
 
@@ -93,10 +80,14 @@ def _pattern_weight(
     locked_counts: dict[str, int],
     price_of: Callable[..., int],
 ) -> int:
-    del locked_counts
+    counts = dict(locked_counts or {})
     rev = 0
     for product, hday, yld in pat["harvest_lines"]:
-        rev += yld * price_of(product, hday)
+        n = counts.get(product, 0)
+        for _ in range(int(yld)):
+            rev += price_of(product, hday, n)
+            n += 1
+        counts[product] = n
     return rev - pat["setup_cost"]
 
 
@@ -294,6 +285,7 @@ def solve_zone(
     worker: str = FARMER,
     net_tile_ops: int = FARMER_NET_TILE_OPS,
     charge_hire_daily: bool = False,
+    product_caps: dict[str, int] | None = None,
 ):
     zone_empty = list(empty_tiles)
     zsize = len(zone_empty)
@@ -305,6 +297,18 @@ def solve_zone(
     for pi, pat in enumerate(patterns):
         for tile in zone_empty:
             x[pi, tile] = model.NewBoolVar(f"x_{worker}_{pat['id']}_t{tile}")
+
+    for product, cap_units in (product_caps or {}).items():
+        if cap_units <= 0:
+            continue
+        terms = [
+            x[pi, tile] * pat["harvest_units"][product]
+            for pi, pat in enumerate(patterns)
+            if pat["harvest_units"].get(product, 0) > 0
+            for tile in zone_empty
+        ]
+        if terms:
+            model.Add(sum(terms) <= cap_units)
 
     for tile in zone_empty:
         for day in range(horizon):
