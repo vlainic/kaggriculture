@@ -125,6 +125,8 @@ ACTIVE_NE: list[str] = []
 NE_BOUND_TODAY: set[str] = set()
 NE_DUE_DAY: dict[str, int] = {}
 NE_LAND_COST = 1000
+NE_BUY_MIN_CASH = 2500
+NE_BUY_LAST_DAY = 22
 _cached_queues: dict | None = None
 
 
@@ -169,6 +171,18 @@ def dawn_ne_bound_handoff(
             _rollback_ne_zone(w, me, day, tile_queues, tile_state)
 
     NE_BOUND_TODAY.clear()
+
+
+def _maybe_trigger_ne_buy(me: dict, day: int) -> None:
+    """Queue NE land buy today when cash crosses a fixed threshold (not solver-gated)."""
+    global BUY_LAND_DAY
+    if _ne_owned(me) or BUY_LAND_DAY is not None or day > NE_BUY_LAST_DAY:
+        return
+    money = int(me["money"])
+    if money < NE_BUY_MIN_CASH:
+        return
+    BUY_LAND_DAY = day
+    print(f"[ne] buy_trigger d={day} money={money}", flush=True)
 
 
 def _fresh_tile_state(first_lag: int = 0) -> dict:
@@ -276,47 +290,52 @@ def _activate_next_ne(
     tile_state: dict | None,
     price_of: Callable[..., int],
 ) -> None:
-    global BUY_LAND_DAY
-
     if len(ACTIVE_NE) >= len(NE_WORKERS):
         return
 
     day = obs["day"]
     player = obs["player"]
     me = obs["farms"][player]
-    worker = NE_WORKERS[len(ACTIVE_NE)]
+    pending = [w for w in NE_WORKERS if w not in ACTIVE_NE]
+    if not pending:
+        return
+    worker = pending[0]
     ne_owned = _ne_owned(me)
 
-    if worker != NE_WORKERS[0] and not ne_owned:
+    if not ne_owned:
         return
 
-    offset = 1 if worker == NE_WORKERS[0] and not ne_owned else 0
-    land = NE_LAND_COST if worker == NE_WORKERS[0] and not ne_owned else 0
-    horizon = NUM_DAYS - (day + offset)
+    horizon = NUM_DAYS - day
     if horizon <= 0:
         return
 
     money = int(me["money"])
-    zone_tiles = list(WORKER_TILES[worker])
-    if offset == 0:
-        zone_tiles = [
-            idx
-            for idx in zone_tiles
-            if _tile_at(me, idx) is None
-            or (
-                isinstance(_tile_at(me, idx), dict)
-                and _tile_at(me, idx).get("kind") == "WEED"
-            )
-        ]
-        if not zone_tiles:
-            return
+    reserve = NE_LAND_COST if BUY_LAND_DAY == day and not ne_owned else 0
+    zone_tiles: list[int] = []
+    for idx in WORKER_TILES[worker]:
+        tile = _tile_at(me, idx)
+        if tile is None:
+            zone_tiles.append(idx)
+            continue
+        if isinstance(tile, dict) and tile.get("kind") == "WEED":
+            zone_tiles.append(idx)
+            continue
+        if (
+            worker == NE_WORKERS[0]
+            and BUY_LAND_DAY == day
+            and not ne_owned
+            and is_buy_morning_locked(tile, idx, day, me)
+        ):
+            zone_tiles.append(idx)
+    if not zone_tiles:
+        return
 
     result = solve(
         [],
         horizon=horizon,
         empty_tiles=zone_tiles,
         empty_counts={worker: len(zone_tiles)},
-        starting_money=max(0, money - land),
+        starting_money=max(0, money - reserve),
         max_time=15.0,
         track_shed=False,
         min_balance=0,
@@ -330,21 +349,19 @@ def _activate_next_ne(
     cost = _zone_plan_cost(assigned, horizon, worker, price_of)
 
     ok = int(worker in result.solved_workers)
-    if busy_day0 < 2 or money - cost - land < 0 or worker not in result.solved_workers:
+    if busy_day0 < 1 or money - cost - reserve < 0 or worker not in result.solved_workers:
         print(
             f"[ne] reject d={day} zone={worker} ok={ok} busy_day0={busy_day0} "
-            f"busy_any={busy_any} cost={cost} land={land} money={money}",
+            f"busy_any={busy_any} cost={cost} reserve={reserve} money={money}",
             flush=True,
         )
         return
 
-    _write_ne_activation(worker, result.assigned, horizon, tile_queues, tile_state, offset)
-    NE_DUE_DAY[worker] = day + offset
-    if worker == NE_WORKERS[0] and not ne_owned:
-        BUY_LAND_DAY = day + 1
+    _write_ne_activation(worker, result.assigned, horizon, tile_queues, tile_state, 0)
+    NE_DUE_DAY[worker] = day
     print(
         f"[ne] accept d={day} zone={worker} busy_day0={busy_day0} "
-        f"busy_any={busy_any} cost={cost} land={land} BUY_LAND_DAY={BUY_LAND_DAY}",
+        f"busy_any={busy_any} cost={cost} reserve={reserve} BUY_LAND_DAY={BUY_LAND_DAY}",
         flush=True,
     )
 
@@ -381,6 +398,22 @@ def effective_price(
     opp_bonus = -opp / 10.0
     price_factor = 1 + demand.get(product, 0) + opp_bonus
     return int(quoted * max(0.1, price_factor))
+
+
+def _safe_price_of(
+    obs: dict,
+    tile_queues: dict,
+    st_map: dict,
+    day: int,
+) -> Callable[..., int]:
+    from milos.price_forecast import make_price_forecast
+
+    try:
+        return make_price_forecast(obs, tile_queues, st_map)
+    except Exception as exc:
+        print(f"[planner] forecast failed d={day}: {exc}", flush=True)
+        base = wsp_data.i0_base_prices()
+        return lambda product, rel_day=0, _base=base: _base[product]
 
 
 def make_price_of(
@@ -522,10 +555,12 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
 
     dawn_ne_bound_handoff(me, day, tile_queues, st_map)
 
-    from milos.price_forecast import make_price_forecast
+    price_of = _safe_price_of(obs, tile_queues, st_map, day)
 
-    price_of = make_price_forecast(obs, tile_queues, st_map)
-
+    try:
+        _maybe_trigger_ne_buy(me, day)
+    except Exception as exc:
+        print(f"[planner] buy_trigger failed d={day}: {exc}", flush=True)
     try:
         _replan_active(obs, tile_queues, st_map, price_of)
     except Exception as exc:
