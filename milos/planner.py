@@ -125,7 +125,8 @@ ACTIVE_NE: list[str] = []
 NE_BOUND_TODAY: set[str] = set()
 NE_DUE_DAY: dict[str, int] = {}
 NE_LAND_COST = 1000
-NE_BUY_MIN_CASH = 2500
+NE_BUY_MIN_CASH = 3000
+NE_BUY_FIRST_DAY = 2
 NE_BUY_LAST_DAY = 22
 _cached_queues: dict | None = None
 
@@ -173,16 +174,24 @@ def dawn_ne_bound_handoff(
     NE_BOUND_TODAY.clear()
 
 
-def _maybe_trigger_ne_buy(me: dict, day: int) -> None:
-    """Queue NE land buy today when cash crosses a fixed threshold (not solver-gated)."""
+def schedule_ne_buy_at_dusk(me: dict, day: int) -> None:
+    """Schedule NE land buy for tomorrow when cash crosses threshold at dusk."""
     global BUY_LAND_DAY
-    if _ne_owned(me) or BUY_LAND_DAY is not None or day > NE_BUY_LAST_DAY:
+    if _ne_owned(me):
+        return
+    buy_day = day + 1
+    if buy_day < NE_BUY_FIRST_DAY or buy_day > NE_BUY_LAST_DAY:
+        return
+    if BUY_LAND_DAY is not None and BUY_LAND_DAY > day:
         return
     money = int(me["money"])
     if money < NE_BUY_MIN_CASH:
         return
-    BUY_LAND_DAY = day
-    print(f"[ne] buy_trigger d={day} money={money}", flush=True)
+    BUY_LAND_DAY = buy_day
+    print(
+        f"[ne] dusk_trigger d={day} buy_day={buy_day} money={money}",
+        flush=True,
+    )
 
 
 def _fresh_tile_state(first_lag: int = 0) -> dict:
@@ -557,10 +566,6 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
 
     price_of = _safe_price_of(obs, tile_queues, st_map, day)
 
-    try:
-        _maybe_trigger_ne_buy(me, day)
-    except Exception as exc:
-        print(f"[planner] buy_trigger failed d={day}: {exc}", flush=True)
     try:
         _replan_active(obs, tile_queues, st_map, price_of)
     except Exception as exc:

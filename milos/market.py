@@ -197,6 +197,7 @@ def build_orders(
         if (
             planner.BUY_LAND_DAY is not None
             and day == planner.BUY_LAND_DAY
+            and "NE" not in me.get("unlocked_quadrants", [])
         ):
             orders.append(["BUY_LAND"])
             buy_land_reserved = planner.NE_LAND_COST
