@@ -135,3 +135,52 @@ zone:  VII VIII IX   X XI
 - Hire 9 = 15
 - Hire 10 = 15
 - Hire 11 = 12
+
+## SW-land: 6-man
+
+Basically mirroring NW! Note that there will be 2 ops less, because they are hired at h=2!
+
+All 6 hires bought at h=2 (when implemented: HIRE orders first in the h=2 market list).
+- market h=0-2 only (no mid-day BUY wheat / animal / seed):
+    - wheat (feed reserve)
+    - then animal (shed pickup before PLACE)
+    - finally plant seed
+    - leftover can be bought in h=3+, but after buying is over -> NO MID-DAY!
+
+## Tile numbering:
+* is done as mirrong 5-man if we decide to revert ;)
+
+zone:    XVII XVI  XV XIV XIII
+          71   66  61  56  51 
+          72   67  62  57  52
+          73   68  63  58  53
+          74   69  64  59  54
+XVIII -> [75   70  65  60] 55
+
+### Zone assignement
+
+- Hire 12 = spawned at SW @ zone XIII
+- Hire 13 = spawned at SE @ zone XVII
+- Hire 14 = spawned at NW @ zone XVI
+- Hire 15 = spawned at NE @ zone XV
+- Hire 16 = duplicate spawn at NW or NE @ zone XIV
+- Hire 17 = second duplicate spawn, could be anywhere @ zone XVIII
+
+
+### Pre-defined movement snakes:
+- Hire 12: pickup (if needed), just 4xS
+- Hire 13: 1xW, pickup (if needed), 4xW to zone -> then 3xS
+- Hire 14: 1xS, pickup (if needed), 3xW to zone -> then 3xS
+- Hire 15: 1xS, 1xW, pickup (if needed), 2xW to zone -> then 3xS
+- Hire 16: 1xS + 1 more if needed to SW-shed = (4,5), pickup (if needed), 1xW to zone -> then 3xS
+- Hire 17: move to SW-shed-adjacent = (4,5), pickup (if needed), 4xS+1xW to zone -> then 3xW
+
+
+### Ops-limits:
+ 
+- Hire 12 = 16
+- Hire 13 = 12
+- Hire 14 = 13
+- Hire 15 = 13
+- Hire 16 = 14
+- Hire 17 = 11

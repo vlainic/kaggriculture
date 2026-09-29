@@ -15,6 +15,8 @@ from milos.zoning import (
     NE_WORKERS,
     NUM_TILES,
     NW_WORKERS,
+    SW_ENABLED,
+    SW_WORKERS,
     TILE_COORDS,
     WORKER_TILES,
     WORKERS,
@@ -132,13 +134,48 @@ NE_BUY_LAST_DAY = 22
 _cached_queues: dict | None = None
 _BUY_REPLAN_DONE_DAY: int | None = None
 
+SW_BUY_DAY: int | None = None
+ACTIVE_SW: list[str] = []
+SW_BOUND_TODAY: set[str] = set()
+SW_DUE_DAY: dict[str, int] = {}
+SW_LAND_COST = 2000
+SW_BUY_MIN_CASH = 4000
+SW_BUY_FIRST_DAY = 8
+SW_BUY_LAST_DAY = 14
+SW_MAX_ZONES = 3
+SW_MIN_OVERAGE = 40.0
+SW_OVERAGE_RESERVE = 12.0
+SW_BUY_ZONE_TIME = 1.5
+_SW_BUY_REPLAN_DONE_DAY: int | None = None
+_SW_DUSK_SKIP_LOG_DAY: int | None = None
+
+
+def _sw_workers_cap() -> tuple[str, ...]:
+    return SW_WORKERS[:SW_MAX_ZONES]
+
 
 def active_workers() -> tuple[str, ...]:
-    return NW_WORKERS + tuple(ACTIVE_NE)
+    return NW_WORKERS + tuple(ACTIVE_NE) + tuple(ACTIVE_SW)
 
 
 def _ne_owned(me: dict) -> bool:
     return "NE" in me.get("unlocked_quadrants", [])
+
+
+def _sw_owned(me: dict) -> bool:
+    quads = me.get("unlocked_quadrants", [])
+    return "SW" in quads
+
+
+def _sw_buy_allowed(me: dict) -> bool:
+    quads = me.get("unlocked_quadrants", [])
+    return len(quads) == 2 and "NE" in quads and "SW" not in quads
+
+
+def _ne_full() -> bool:
+    if len(ACTIVE_NE) != len(NE_WORKERS):
+        return False
+    return set(ACTIVE_NE) <= NE_BOUND_TODAY
 
 
 def _tile_at(me: dict, idx: int):
@@ -194,6 +231,207 @@ def schedule_ne_buy_at_dusk(me: dict, day: int) -> None:
         f"[ne] dusk_trigger d={day} buy_day={buy_day} money={money}",
         flush=True,
     )
+
+
+def schedule_sw_buy_at_dusk(obs: dict, me: dict, day: int) -> None:
+    """Schedule SW land buy for tomorrow when NE is full and cash crosses threshold."""
+    global SW_BUY_DAY, _SW_DUSK_SKIP_LOG_DAY
+
+    if not SW_ENABLED:
+        return
+    if not _ne_owned(me) or _sw_owned(me):
+        return
+
+    buy_day = day + 1
+    overage = float(obs.get("remainingOverageTime") or 0)
+    money = int(me["money"])
+
+    def _skip(reason: str) -> None:
+        global _SW_DUSK_SKIP_LOG_DAY
+        if _SW_DUSK_SKIP_LOG_DAY == day:
+            return
+        _SW_DUSK_SKIP_LOG_DAY = day
+        print(f"[sw] dusk_skip d={day} reason={reason}", flush=True)
+
+    if SW_BUY_DAY is not None and SW_BUY_DAY > day:
+        return
+    if not _ne_full():
+        _skip("ne_not_full")
+        return
+    if buy_day < SW_BUY_FIRST_DAY or buy_day > SW_BUY_LAST_DAY:
+        _skip("window")
+        return
+    if money < SW_BUY_MIN_CASH:
+        _skip("cash")
+        return
+    if overage < SW_MIN_OVERAGE:
+        _skip("overage")
+        return
+
+    SW_BUY_DAY = buy_day
+    print(
+        f"[sw] dusk_trigger d={day} buy_day={buy_day} money={money} overage={overage}",
+        flush=True,
+    )
+
+
+def dawn_sw_bound_handoff(
+    me: dict,
+    day: int,
+    tile_queues: dict,
+    tile_state: dict | None,
+) -> None:
+    """Rollback SW zones whose hire never bound yesterday."""
+    global SW_BOUND_TODAY, SW_BUY_DAY, ACTIVE_SW
+
+    if (
+        SW_BUY_DAY is not None
+        and day > SW_BUY_DAY
+        and not _sw_owned(me)
+    ):
+        while ACTIVE_SW:
+            _rollback_sw_zone(
+                ACTIVE_SW[-1], me, day, tile_queues, tile_state, land_fail=True
+            )
+        SW_BUY_DAY = None
+    elif SW_BUY_DAY is not None and day > SW_BUY_DAY:
+        SW_BUY_DAY = None
+
+    bound_yday = set(SW_BOUND_TODAY)
+    for w in list(ACTIVE_SW):
+        if SW_DUE_DAY.get(w, day) <= day - 1 and w not in bound_yday:
+            _rollback_sw_zone(w, me, day, tile_queues, tile_state)
+
+    SW_BOUND_TODAY.clear()
+
+
+def _rollback_sw_zone(
+    worker: str,
+    me: dict,
+    day: int,
+    tile_queues: dict,
+    tile_state: dict | None,
+    *,
+    land_fail: bool = False,
+) -> None:
+    global ACTIVE_SW
+    if worker not in ACTIVE_SW and not land_fail:
+        return
+    st_map = tile_state or {}
+    cleared = 0
+    for idx in WORKER_TILES.get(worker, ()):
+        st = st_map.get(idx, {})
+        if st.get("queue_idx", 0) != 0:
+            continue
+        tile = _tile_at(me, idx)
+        if tile is None or tile == "LOCKED":
+            tile_queues[idx] = []
+            st_map[idx] = _fresh_tile_state()
+            cleared += 1
+    if worker in ACTIVE_SW:
+        ACTIVE_SW.remove(worker)
+    SW_DUE_DAY.pop(worker, None)
+    reason = "land_fail" if land_fail else "hire_unbound"
+    print(
+        f"[sw] rollback d={day} zone={worker} reason={reason} cleared={cleared}",
+        flush=True,
+    )
+
+
+def _write_sw_activation(
+    worker: str,
+    assigned: dict[int, list],
+    horizon: int,
+    tile_queues: dict,
+    tile_state: dict | None,
+    offset: int,
+) -> None:
+    global ACTIVE_SW
+
+    st_map = tile_state or {}
+    for idx, chain in assigned.items():
+        if not chain:
+            continue
+        tile_queues[idx] = chain_to_queue_items(chain, horizon)
+        queue = tile_queues[idx]
+        first_lag = queue[0].start_lag if queue else 0
+        st_map[idx] = _fresh_tile_state(first_lag + offset)
+
+    ACTIVE_SW.append(worker)
+
+
+def _activate_next_sw(
+    obs: dict,
+    tile_queues: dict,
+    tile_state: dict | None,
+    price_of: Callable[..., int],
+) -> bool:
+    cap = _sw_workers_cap()
+    if len(ACTIVE_SW) >= len(cap):
+        return False
+
+    day = obs["day"]
+    player = obs["player"]
+    me = obs["farms"][player]
+    if not _sw_owned(me):
+        return False
+
+    pending = [w for w in cap if w not in ACTIVE_SW]
+    if not pending:
+        return False
+    worker = pending[0]
+
+    horizon = NUM_DAYS - day
+    if horizon <= 0:
+        return False
+
+    money = int(me["money"])
+    zone_tiles: list[int] = []
+    for idx in WORKER_TILES[worker]:
+        tile = _tile_at(me, idx)
+        if tile is None:
+            zone_tiles.append(idx)
+            continue
+        if isinstance(tile, dict) and tile.get("kind") == "WEED":
+            zone_tiles.append(idx)
+    if not zone_tiles:
+        return False
+
+    result = solve(
+        [],
+        horizon=horizon,
+        empty_tiles=zone_tiles,
+        empty_counts={worker: len(zone_tiles)},
+        starting_money=money,
+        max_time=15.0,
+        track_shed=False,
+        min_balance=0,
+        price_of=price_of,
+        workers=(worker,),
+        charge_hire_daily=True,
+    )
+
+    assigned = {k: v for k, v in result.assigned.items() if v}
+    busy_day0, busy_any = _busy_counts(assigned)
+    cost = _zone_plan_cost(assigned, horizon, worker, price_of)
+
+    ok = int(worker in result.solved_workers)
+    if busy_day0 < 1 or money - cost < 0 or worker not in result.solved_workers:
+        print(
+            f"[sw] reject d={day} zone={worker} ok={ok} busy_day0={busy_day0} "
+            f"busy_any={busy_any} cost={cost} money={money}",
+            flush=True,
+        )
+        return False
+
+    _write_sw_activation(worker, result.assigned, horizon, tile_queues, tile_state, 0)
+    SW_DUE_DAY[worker] = day
+    print(
+        f"[sw] accept d={day} zone={worker} busy_day0={busy_day0} "
+        f"busy_any={busy_any} cost={cost} SW_BUY_DAY={SW_BUY_DAY}",
+        flush=True,
+    )
+    return True
 
 
 def _fresh_tile_state(first_lag: int = 0) -> dict:
@@ -566,6 +804,7 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
     st_map = tile_state or {}
 
     dawn_ne_bound_handoff(me, day, tile_queues, st_map)
+    dawn_sw_bound_handoff(me, day, tile_queues, st_map)
 
     price_of = _safe_price_of(obs, tile_queues, st_map, day)
 
@@ -575,10 +814,127 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
         print(f"[planner] walk1 failed d={day}: {exc}", flush=True)
     if BUY_LAND_DAY == day and not _ne_owned(me):
         return
+    n_ne = len(ACTIVE_NE)
     try:
         _activate_next_ne(obs, tile_queues, st_map, price_of)
     except Exception as exc:
         print(f"[planner] walk2 failed d={day}: {exc}", flush=True)
+    if (
+        SW_ENABLED
+        and len(ACTIVE_NE) == n_ne
+        and SW_BUY_DAY != day
+    ):
+        try:
+            _activate_next_sw(obs, tile_queues, st_map, price_of)
+        except Exception as exc:
+            print(f"[planner] walk3 failed d={day}: {exc}", flush=True)
+
+
+def replan_after_buy_sw(
+    obs: dict,
+    tile_queues: dict,
+    tile_state: dict | None,
+) -> None:
+    global _SW_BUY_REPLAN_DONE_DAY
+
+    day = obs["day"]
+    player = obs["player"]
+    me = obs["farms"][player]
+    if (
+        not SW_ENABLED
+        or SW_BUY_DAY != day
+        or not _sw_owned(me)
+        or _SW_BUY_REPLAN_DONE_DAY == day
+        or not (2 <= day < SEASON_LAST_DAY)
+    ):
+        return
+
+    _SW_BUY_REPLAN_DONE_DAY = day
+    st_map = tile_state or {}
+    horizon = NUM_DAYS - day
+    if horizon <= 0:
+        return
+
+    from milos.replan_lock import build_replan_lock, empty_locked
+
+    price_of = _safe_price_of(obs, tile_queues, st_map, day)
+    sw_cap = _sw_workers_cap()
+    sw_tile_set = {idx for w in sw_cap for idx in WORKER_TILES[w]}
+
+    replan_tiles, locked_by_worker, locked_tiles = build_replan_lock(
+        me, day, horizon, tile_queues, st_map, price_of
+    )
+    sw_replan = [t for t in replan_tiles if t in sw_tile_set]
+    sw_empty = len(sw_replan)
+
+    money = int(me["money"])
+    overage_before = float(obs.get("remainingOverageTime") or 0)
+    all_w = NW_WORKERS + tuple(ACTIVE_NE) + sw_cap
+    empty_counts = {
+        w: sum(1 for t in sw_replan if t in WORKER_TILES[w]) for w in all_w
+    }
+
+    min_solve_time = SW_BUY_ZONE_TIME * len(sw_cap)
+    max_time = min(SW_BUY_ZONE_TIME * len(all_w), overage_before - SW_OVERAGE_RESERVE)
+
+    print(
+        f"[sw] buy_replan start d={day} money={money} sw_empty={sw_empty} "
+        f"max_time={max_time} overage={overage_before}",
+        flush=True,
+    )
+
+    if max_time < min_solve_time:
+        print(
+            f"[sw] buy_replan skip overage={overage_before} need={min_solve_time}",
+            flush=True,
+        )
+        return
+
+    result = solve(
+        [],
+        horizon=horizon,
+        empty_tiles=sw_replan,
+        empty_counts=empty_counts,
+        locked_by_worker={
+            w: locked_by_worker.get(w) or empty_locked(horizon) for w in all_w
+        },
+        starting_money=money,
+        max_time=max_time,
+        track_shed=False,
+        min_balance=0,
+        price_of=price_of,
+        workers=all_w,
+        charge_hire_daily=True,
+    )
+
+    overage_after = obs.get("remainingOverageTime")
+    active: list[str] = []
+    deferred: list[str] = []
+    for worker in sw_cap:
+        zone_assigned = {
+            idx: result.assigned.get(idx, [])
+            for idx in WORKER_TILES[worker]
+            if result.assigned.get(idx)
+        }
+        if not zone_assigned:
+            deferred.append(worker)
+            continue
+        busy_day0, _ = _busy_counts(zone_assigned)
+        if busy_day0 < 1 or worker not in result.solved_workers:
+            deferred.append(worker)
+            continue
+        _write_sw_activation(
+            worker, zone_assigned, horizon, tile_queues, st_map, 0
+        )
+        SW_DUE_DAY[worker] = day
+        active.append(worker)
+
+    print(
+        f"[sw] buy_replan d={day} money={money} sw_empty={sw_empty} "
+        f"active_sw={','.join(active) or 'none'} "
+        f"deferred={','.join(deferred) or 'none'} overage={overage_after}",
+        flush=True,
+    )
 
 
 def replan_after_buy(

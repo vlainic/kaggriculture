@@ -133,6 +133,7 @@ class Executor:
         self._tile_state: dict[int, dict] = {}
         self._empty_at_dawn: set[int] = set()
         self._day0_productive = False
+        self._sw_slot_base: int | None = None
         self._day = 0
         self._hour = 0
         self._tile_ops_today = {w: 0 for w in workers.WORKERS}
@@ -162,6 +163,10 @@ class Executor:
                 planner.schedule_ne_buy_at_dusk(me, day)
             except Exception as exc:
                 _log(f"[ne] dusk_trigger failed d={day}: {exc}")
+            try:
+                planner.schedule_sw_buy_at_dusk(obs, me, day)
+            except Exception as exc:
+                _log(f"[sw] dusk_trigger failed d={day}: {exc}")
 
         if (
             hour == 1
@@ -178,7 +183,28 @@ class Executor:
                 if _dawn_empty(me, idx, day)
             }
 
+        if (
+            hour == 1
+            and planner.SW_BUY_DAY == day
+            and "SW" in me.get("unlocked_quadrants", [])
+        ):
+            try:
+                planner.replan_after_buy_sw(
+                    obs, script.TILE_QUEUES, self._tile_state
+                )
+            except Exception as exc:
+                _log(f"[sw] buy_replan failed d={day}: {exc}")
+            self._empty_at_dawn = {
+                idx
+                for idx in range(workers.NUM_TILES)
+                if _dawn_empty(me, idx, day)
+            }
+
+        if hour == 2:
+            self._sw_slot_base = len(me.get("hands", []))
+
         if hour == 0:
+            _log(f"[ovg] d={day} remaining={obs.get('remainingOverageTime')}")
             shops = obs.get("town", {}).get("unlocked_shops", [])
             _log(envconfig.shops_dawn_log(day, shops))
             try:
@@ -281,6 +307,7 @@ class Executor:
         self._route_idx = {w: 0 for w in workers.WORKERS}
         self._preamble_idx = {w: 0 for w in workers.WORKERS}
         self._slot_to_worker = {}
+        self._sw_slot_base = None
         for w in workers.WORKERS:
             self._tile_ops_today[w] = 0
             self._endgame_exhausted[w] = set()
@@ -593,6 +620,24 @@ class Executor:
     ) -> str | None:
         if slot in self._slot_to_worker:
             return self._slot_to_worker[slot]
+        base = self._sw_slot_base
+        if base is not None and slot >= base:
+            sw_idx = slot - base
+            if sw_idx < len(planner.ACTIVE_SW):
+                w = planner.ACTIVE_SW[sw_idx]
+                self._slot_to_worker[slot] = w
+                planner.SW_BOUND_TODAY.add(w)
+                from milos.zoning import SW_EXPECTED_SPAWN
+
+                expects = SW_EXPECTED_SPAWN.get(w, ())
+                expect_s = "|".join(f"({x},{y})" for x, y in expects) or "-"
+                owned = int(pos in _owned_shed_tiles(me))
+                _log(
+                    f"[bind] d={day} h={hour} slot{slot}={w} pos={pos} "
+                    f"expect={expect_s} owned={owned} sw"
+                )
+                return w
+            return None
         if slot >= planner.NUM_ACTIVE_HIRES:
             ne_idx = slot - planner.NUM_ACTIVE_HIRES
             if ne_idx < len(planner.ACTIVE_NE):
