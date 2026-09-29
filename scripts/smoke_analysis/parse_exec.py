@@ -91,15 +91,66 @@ def smoke_passed(lines: list[str]) -> bool:
 
 
 HANDS_H0_RE = re.compile(
-    r"\[hands\] d=(\d+) h0 (\w+) .* animal=(\d+) crop=(\d+) est_ops=([\d.]+)"
+    r"\[hands\] d=(\d+) h0 (\w+) .*?qtiles=(\d+).*?animal=(\d+) crop=(\d+) est_ops=([\d.]+)"
 )
-THEO_TILE_RE = re.compile(r"\[theo\] d=(\d+) (\w+) (.+)$")
-THEO_TILE_PART_RE = re.compile(r"t(\d+)=([^ ]+)")
-THEO_EXTRA_RE = re.compile(r"\[theo_extra\] d=(\d+) (\w+) (.+)$")
 HANDS_EOD_RE = re.compile(
     r"\[hands\] d=(\d+) (\w+) eod (?:planned|tiles_dawn)=(\d+) "
     r"executed=(\d+)(?: gap=-?\d+)? laps=(\d+)"
 )
+EXEC_HAND_BIND_RE = re.compile(r"\[exec\] d=(\d+) h=\d+ hand\d+=(\w+)")
+
+
+def parse_worker_first_active_day(
+    lines: list[str],
+    workers: list[str] | tuple[str, ...],
+    *,
+    season_days: int = 30,
+    harvest_by_worker_by_day: dict[str, list[float]] | None = None,
+) -> dict[str, int]:
+    """First day a zone is materially active (tiles, ops, harvest, or execution)."""
+    first: dict[str, int | None] = {w: None for w in workers}
+    if "farmer" in first:
+        first["farmer"] = 0
+
+    def _mark(day: int, worker: str) -> None:
+        if worker not in first or not (0 <= day < season_days):
+            return
+        if first[worker] is None or day < first[worker]:
+            first[worker] = day
+
+    for line in lines:
+        m = HANDS_H0_RE.search(line)
+        if m:
+            day, worker = int(m.group(1)), m.group(2)
+            qtiles = int(m.group(3))
+            est = float(m.group(6))
+            if qtiles > 0 or est > 0:
+                _mark(day, worker)
+            continue
+        m = HANDS_EOD_RE.search(line)
+        if m:
+            day, worker = int(m.group(1)), m.group(2)
+            if int(m.group(4)) > 0:
+                _mark(day, worker)
+
+    if harvest_by_worker_by_day:
+        for worker, series in harvest_by_worker_by_day.items():
+            for day, val in enumerate(series[:season_days]):
+                if val and float(val) > 0:
+                    _mark(day, worker)
+
+    out: dict[str, int] = {}
+    for w in workers:
+        if first[w] is not None:
+            out[w] = first[w]
+        else:
+            out[w] = season_days
+    return out
+
+
+THEO_TILE_RE = re.compile(r"\[theo\] d=(\d+) (\w+) (.+)$")
+THEO_TILE_PART_RE = re.compile(r"t(\d+)=([^ ]+)")
+THEO_EXTRA_RE = re.compile(r"\[theo_extra\] d=(\d+) (\w+) (.+)$")
 
 
 def parse_hands_dawn(lines: list[str], *, season_days: int = 30) -> dict[str, Any]:
@@ -120,9 +171,9 @@ def parse_hands_dawn(lines: list[str], *, season_days: int = 30) -> dict[str, An
             est_ops.setdefault(worker, [None] * season_days)
             animal.setdefault(worker, [None] * season_days)
             crop.setdefault(worker, [None] * season_days)
-            est_ops[worker][day] = float(m.group(5))
-            animal[worker][day] = int(m.group(3))
-            crop[worker][day] = int(m.group(4))
+            est_ops[worker][day] = float(m.group(6))
+            animal[worker][day] = int(m.group(4))
+            crop[worker][day] = int(m.group(5))
             continue
         ex = THEO_EXTRA_RE.search(line)
         if ex:

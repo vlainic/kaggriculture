@@ -49,40 +49,31 @@ def active_layout() -> dict[str, Any]:
         net_tile_ops = {z.name: z.net_tile_ops for z in layout.zones}
         nw = tuple(zoning.NW_WORKERS)
         ne = tuple(zoning.NE_WORKERS)
-        sw = tuple(getattr(zoning, "SW_WORKERS", ()))
+        sw = tuple(zoning.SW_WORKERS)
         land1_tile_count = 25
         land2_tile_min = 26
         land3_tile_min = 51
-        has_sw = layout is getattr(zoning, "MILOS_THREELAND18", object())
-        if has_sw:
-            layout_name = "milos_threeland18"
-            land1_workers = nw
-            land2_workers = ne
-            land3_workers = sw
+        layout_name = getattr(zoning, "_layout_tag", "milos")
+        if not ne and layout is not zoning.MILOS_TWOLAND12:
+            land1_workers = workers_tuple
         else:
-            layout_name = (
-                "milos_twoland12"
-                if layout is zoning.MILOS_TWOLAND12
-                else "milos_oneland"
-            )
-            land1_workers = nw if layout is zoning.MILOS_TWOLAND12 else workers_tuple
-            land2_workers = ne if layout is zoning.MILOS_TWOLAND12 else ()
-            land3_workers = ()
+            land1_workers = nw
         return {
             "workers": workers_tuple,
             "hand_workers": hand_workers,
             "worker_tiles": worker_tiles,
             "net_tile_ops": net_tile_ops,
+            "hand_daily_cost": dict(zoning.HAND_DAILY_COST),
             "land1_workers": land1_workers,
-            "land2_workers": land2_workers,
-            "land3_workers": land3_workers,
-            "land2_probe_worker": land2_workers[0] if land2_workers else None,
-            "land3_probe_worker": land3_workers[0] if land3_workers else None,
+            "land2_workers": ne,
+            "land3_workers": sw,
+            "land2_probe_worker": ne[0] if ne else None,
+            "land3_probe_worker": sw[0] if sw else None,
             "land1_tile_count": land1_tile_count,
             "land2_tile_min": land2_tile_min,
             "land3_tile_min": land3_tile_min,
-            "has_land2": bool(land2_workers),
-            "has_land3": bool(land3_workers),
+            "has_land2": bool(ne),
+            "has_land3": bool(sw),
             "layout_name": layout_name,
             "package": "milos",
         }
@@ -116,6 +107,7 @@ def active_layout() -> dict[str, Any]:
         "hand_workers": hand_workers,
         "worker_tiles": worker_tiles,
         "net_tile_ops": net_tile_ops,
+        "hand_daily_cost": dict(zoning.HAND_DAILY_COST),
         "land1_workers": tuple(w for w in workers_tuple if w in land1_names),
         "land2_workers": land2_workers,
         "land3_workers": land3_workers,

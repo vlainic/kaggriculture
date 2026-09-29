@@ -658,3 +658,71 @@ def plot_zone_capacity(
                 print(f"         act:  {_fmt_ops(act_v)}")
         if n_mismatch == 0:
             print("  (all days match chart + tiles + shed)")
+
+
+def plot_zone_earnings_vs_cost(
+    report: dict[str, Any], *, title: str | None = None
+) -> None:
+    """Per-zone subplots: daily harvest earnings (proxy) vs planner hire daily cost."""
+    workers = list(report.get("workers") or [])
+    if not workers:
+        fig, ax = plt.subplots(figsize=(6, 2))
+        ax.text(0.5, 0.5, "no workers", ha="center", va="center")
+        ax.axis("off")
+        plt.show()
+        return
+
+    earnings = report.get("earnings") or {}
+    harv_by_w = earnings.get("harvest_by_worker_by_day") or {}
+    costs = report.get("hand_daily_cost") or {}
+    first_day = report.get("worker_first_day") or {}
+    stem = title or report.get("log_stem") or "smoke"
+
+    n = len(workers)
+    ncols = min(3, n)
+    nrows = int(np.ceil(n / ncols))
+    fig, axes = plt.subplots(
+        nrows, ncols, figsize=(5 * ncols, 2.8 * nrows), sharex=True, squeeze=False
+    )
+    days = np.arange(SEASON_DAYS)
+    earn_color = "#2e7d32"
+    cost_color = "#c62828"
+
+    for i, worker in enumerate(workers):
+        ax = axes[i // ncols, i % ncols]
+        harv = np.array(
+            (harv_by_w.get(worker) or [0] * SEASON_DAYS)[:SEASON_DAYS], dtype=float
+        )
+        daily_cost = float(costs.get(worker, 0))
+        start = int(first_day.get(worker, 0))
+        cost = np.array(
+            [daily_cost if d >= start else 0.0 for d in range(SEASON_DAYS)]
+        )
+        net = harv - cost
+
+        ax.bar(days, harv, color=earn_color, alpha=0.85, label="harvest × price")
+        ax.bar(days, -cost, color=cost_color, alpha=0.75, label="hire daily (model)")
+        ax.plot(days, net, color="#1565c0", marker=".", ms=4, lw=1, label="net proxy")
+
+        buy_day = report.get("buy_land_day")
+        if buy_day is not None:
+            ax.axvline(buy_day, color="#9e9e9e", ls=":", lw=0.8)
+
+        ax.axhline(0, color="gray", lw=0.6)
+        total_net = float(net.sum())
+        cap_note = f" hire={int(daily_cost)}/d" if daily_cost else ""
+        ax.set_title(f"{worker}{cap_note}  Σnet≈{total_net:,.0f}", fontsize=9)
+        ax.set_xlim(-0.5, SEASON_DAYS - 0.5)
+        ax.set_ylabel("coins/day")
+        if i == 0:
+            ax.legend(fontsize=6, loc="upper left")
+
+    for j in range(n, nrows * ncols):
+        axes[j // ncols, j % ncols].axis("off")
+
+    fig.suptitle(
+        f"{stem} — zone P&L proxy (green=harvest earnings, red=HAND_DAILY_COST when active)",
+        fontsize=11,
+    )
+    plt.tight_layout()
+    plt.show()

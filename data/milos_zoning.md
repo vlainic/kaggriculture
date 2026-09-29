@@ -184,3 +184,49 @@ XVIII -> [75   70  65  60] 55
 - Hire 15 = 13
 - Hire 16 = 14
 - Hire 17 = 11
+
+## NE-land: 5-man (live default with MILOS_THREELAND15)
+
+Mirrors NW 5-man columns. Hired at **h=1** (1 fewer market hour than NW).
+
+All **5** hires at h=1; market buy window h=0–1 (extend to h=2 on NE buy day).
+
+### Tile indices (env order, columns x=5..9)
+
+| Zone | Hire | Tiles |
+|------|------|-------|
+| VII | hire5 | 25–29 |
+| VIII | hire6 | 30–34 |
+| IX | hire7 | 35–39 |
+| X | hire8 | 40–44 |
+| XI | hire9 | 45–49 |
+
+Preamble: `PICKUP` only (walk to owned shed, then column snake).
+
+### Ops-limits
+
+- hire5 = 17, hire6 = 14, hire7 = 14, hire8 = 13, hire9 = 13
+
+## SW-land: 5-man (live default with MILOS_THREELAND15)
+
+Mirrors NW columns south of y=5. Hired at **h=2** (2 fewer market hours than NW).
+
+All **5** hires at h=2; market buy window h=0–3 on SW buy day.
+
+### Tile indices (columns x=4..0 south)
+
+| Zone | Hire | Tiles |
+|------|------|-------|
+| XIII | hire10 | 50–54 |
+| XIV | hire11 | 55–59 |
+| XV | hire12 | 60–64 |
+| XVI | hire13 | 65–69 |
+| XVII | hire14 | 70–74 |
+
+Preamble: `PICKUP` only.
+
+### Ops-limits
+
+- hire10 = 16, hire11 = 13, hire12 = 12, hire13 = 12, hire14 = 11
+
+**Layout env:** `KAGGRI_LAYOUT=threeland15` (default), `threeland18`, `twoland12`; `KAGGRI_SW=0` disables SW buy/activate only.

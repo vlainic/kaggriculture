@@ -18,8 +18,8 @@ SPAWN_TO_HIRE: dict[tuple[int, int], str] = {
     (5, 5): "hire4",
 }
 
-# Fifth hand re-uses an occupied corner (env _spawn_hand least-occupancy rule).
-TWOFOLD_HIRE: str | None = "hire5"
+# Set in bind(): NW hand not in SPAWN_TO_HIRE (hire5 on 6-man NW; None on 5-man).
+TWOFOLD_HIRE: str | None = None
 
 
 @dataclass(frozen=True)
@@ -84,7 +84,7 @@ MILOS_ONELAND = Layout(
             tiles=(0, 1, 2, 3, 4),
             preamble=(),
             start_hour=0,
-            net_tile_ops=18,
+            net_tile_ops=19,
             is_hand=False,
         ),
         Zone(
@@ -92,7 +92,7 @@ MILOS_ONELAND = Layout(
             tiles=(5, 6, 7, 8, 9),
             preamble=("PICKUP", "WEST", "WEST", "WEST", "WEST"),
             start_hour=0,
-            net_tile_ops=14,
+            net_tile_ops=15,
             is_hand=True,
         ),
         Zone(
@@ -100,7 +100,7 @@ MILOS_ONELAND = Layout(
             tiles=(10, 11, 12, 13, 14),
             preamble=("WEST", "PICKUP", "WEST", "WEST", "WEST"),
             start_hour=0,
-            net_tile_ops=14,
+            net_tile_ops=15,
             is_hand=True,
         ),
         Zone(
@@ -108,7 +108,7 @@ MILOS_ONELAND = Layout(
             tiles=(15, 16, 17, 18, 19),
             preamble=("NORTH", "PICKUP", "WEST", "WEST"),
             start_hour=0,
-            net_tile_ops=15,
+            net_tile_ops=16,
             is_hand=True,
         ),
         Zone(
@@ -116,7 +116,7 @@ MILOS_ONELAND = Layout(
             tiles=(20, 21, 22, 23, 24),
             preamble=("WEST", "NORTH", "PICKUP", "WEST"),
             start_hour=0,
-            net_tile_ops=15,
+            net_tile_ops=16,
             is_hand=True,
         ),
     ),
@@ -297,6 +297,113 @@ MILOS_TWOLAND12 = Layout(
 
 _SW_PICKUP = ("PICKUP",)
 
+_SW_EXPECTED_SPAWN_18: dict[str, tuple[tuple[int, int], ...]] = {
+    "hire12": ((4, 5),),
+    "hire15": ((5, 4),),
+    "hire16": ((4, 4), (5, 4)),
+}
+
+MILOS_THREELAND15 = Layout(
+    coords=(
+        *_ONELAND_COORDS,
+        *_column(5, 25),
+        *_column(6, 30),
+        *_column(7, 35),
+        *_column(8, 40),
+        *_column(9, 45),
+        *_column_south(4),
+        *_column_south(3),
+        *_column_south(2),
+        *_column_south(1),
+        *_column_south(0),
+    ),
+    zones=(
+        *MILOS_ONELAND.zones,
+        Zone(
+            name="hire5",
+            tiles=(25, 26, 27, 28, 29),
+            preamble=_NE_PICKUP,
+            start_hour=1,
+            net_tile_ops=18,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire6",
+            tiles=(30, 31, 32, 33, 34),
+            preamble=_NE_PICKUP,
+            start_hour=1,
+            net_tile_ops=15,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire7",
+            tiles=(35, 36, 37, 38, 39),
+            preamble=_NE_PICKUP,
+            start_hour=1,
+            net_tile_ops=15,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire8",
+            tiles=(40, 41, 42, 43, 44),
+            preamble=_NE_PICKUP,
+            start_hour=1,
+            net_tile_ops=14,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire9",
+            tiles=(45, 46, 47, 48, 49),
+            preamble=_NE_PICKUP,
+            start_hour=1,
+            net_tile_ops=14,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire10",
+            tiles=(50, 51, 52, 53, 54),
+            preamble=_SW_PICKUP,
+            start_hour=2,
+            net_tile_ops=17,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire11",
+            tiles=(55, 56, 57, 58, 59),
+            preamble=_SW_PICKUP,
+            start_hour=2,
+            net_tile_ops=14,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire12",
+            tiles=(60, 61, 62, 63, 64),
+            preamble=_SW_PICKUP,
+            start_hour=2,
+            net_tile_ops=13,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire13",
+            tiles=(65, 66, 67, 68, 69),
+            preamble=_SW_PICKUP,
+            start_hour=2,
+            net_tile_ops=13,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire14",
+            tiles=(70, 71, 72, 73, 74),
+            preamble=_SW_PICKUP,
+            start_hour=2,
+            net_tile_ops=12,
+            is_hand=True,
+        ),
+    ),
+    shed_door=_SHED_DOOR,
+    shed_adjacent=_SHED_ADJACENT,
+)
+
 MILOS_THREELAND18 = Layout(
     coords=(
         *_ONELAND_COORDS,
@@ -366,42 +473,29 @@ MILOS_THREELAND18 = Layout(
     shed_adjacent=_SHED_ADJACENT,
 )
 
-NW_WORKERS: tuple[str, ...] = (
-    "farmer",
-    "hire1",
-    "hire2",
-    "hire3",
-    "hire4",
-    "hire5",
-)
-NE_WORKERS: tuple[str, ...] = (
-    "hire6",
-    "hire10",
-    "hire9",
-    "hire8",
-    "hire7",
-    "hire11",
-)
+NW_WORKERS: tuple[str, ...] = ()
+NE_WORKERS: tuple[str, ...] = ()
 NE_TILES: frozenset[int] = frozenset(range(25, 50))
-SW_WORKERS: tuple[str, ...] = (
-    "hire12",
-    "hire16",
-    "hire15",
-    "hire14",
-    "hire13",
-    "hire17",
-)
+SW_WORKERS: tuple[str, ...] = ()
 SW_TILES: frozenset[int] = frozenset(range(50, 75))
+NW_HANDS: int = 4
+SW_EXPECTED_SPAWN: dict[str, tuple[tuple[int, int], ...]] = {}
 
-# Diagnostic spawn expectations (env least-occupancy; log only).
-SW_EXPECTED_SPAWN: dict[str, tuple[tuple[int, int], ...]] = {
-    "hire12": ((4, 5),),
-    "hire15": ((5, 4),),
-    "hire16": ((4, 4), (5, 4)),
-}
 
-SW_ENABLED = os.environ.get("KAGGRI_SW", "1") == "1"
-CURRENT = MILOS_THREELAND18 if SW_ENABLED else MILOS_TWOLAND12
+def _resolve_layout() -> Layout:
+    key = os.environ.get("KAGGRI_LAYOUT", "threeland15").strip().lower()
+    if key == "twoland12":
+        return MILOS_TWOLAND12
+    if key == "threeland18":
+        return MILOS_THREELAND18
+    if key in ("oneland6", "milos_oneland6"):
+        return MILOS_ONELAND6
+    if key in ("oneland", "milos_oneland"):
+        return MILOS_ONELAND
+    return MILOS_THREELAND15
+
+
+CURRENT = _resolve_layout()
 
 TILE_COORDS: tuple[tuple[int, int], ...] = ()
 NUM_TILES = 0
@@ -427,6 +521,7 @@ def bind(layout: Layout) -> None:
     global WORKERS, HAND_WORKERS, NUM_HIRES
     global WORKER_TILES, WORKER_ROUTES, PREAMBLE, HAND_START_HOUR, NET_TILE_OPS
     global HAND_DAILY_COST, HIRE_DAILY_COST
+    global NW_WORKERS, NE_WORKERS, SW_WORKERS, NW_HANDS, TWOFOLD_HIRE, SW_EXPECTED_SPAWN
 
     TILE_COORDS = layout.coords
     NUM_TILES = len(layout.coords)
@@ -452,6 +547,39 @@ def bind(layout: Layout) -> None:
     HAND_DAILY_COST = hand_costs
     HIRE_DAILY_COST = sum(hand_costs.values())
 
+    nw: list[str] = []
+    ne: list[str] = []
+    sw: list[str] = []
+    for z in layout.zones:
+        tmin, tmax = min(z.tiles), max(z.tiles)
+        if tmax < 25:
+            nw.append(z.name)
+        elif tmin >= 25 and tmax < 50:
+            ne.append(z.name)
+        elif tmin >= 50:
+            sw.append(z.name)
+    NW_WORKERS = tuple(nw)
+    NE_WORKERS = tuple(ne)
+    SW_WORKERS = tuple(sw)
+    NW_HANDS = max(0, len(NW_WORKERS) - 1)
+
+    spawn_hires = set(SPAWN_TO_HIRE.values())
+    twofold: str | None = None
+    for name in NW_WORKERS:
+        if name == FARMER:
+            continue
+        if name not in spawn_hires:
+            twofold = name
+            break
+    TWOFOLD_HIRE = twofold
+
+    if layout is MILOS_THREELAND15:
+        SW_EXPECTED_SPAWN = {"hire10": ((4, 5),)}
+    elif layout is MILOS_THREELAND18:
+        SW_EXPECTED_SPAWN = dict(_SW_EXPECTED_SPAWN_18)
+    else:
+        SW_EXPECTED_SPAWN = {}
+
 
 def worker_for_tile(idx: int) -> str:
     for name, tiles in WORKER_TILES.items():
@@ -472,7 +600,10 @@ def tile_est_ops_weight(tile) -> float:
 
 
 bind(CURRENT)
-if CURRENT is MILOS_THREELAND18:
+SW_ENABLED = bool(SW_WORKERS) and os.environ.get("KAGGRI_SW", "1") == "1"
+if CURRENT is MILOS_THREELAND15:
+    _layout_tag = "milos_threeland15"
+elif CURRENT is MILOS_THREELAND18:
     _layout_tag = "milos_threeland18"
 elif CURRENT is MILOS_TWOLAND12:
     _layout_tag = "milos_twoland12"

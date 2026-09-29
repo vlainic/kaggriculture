@@ -5,7 +5,7 @@ from __future__ import annotations
 FARMER = "farmer"
 NUM_DAYS = 30
 FARMER_TILES: tuple[int, ...] = (0, 1, 2, 3, 4)
-FARMER_NET_TILE_OPS = 18
+FARMER_NET_TILE_OPS = 19
 
 # Est-ops weights (same order of magnitude as live zoning)
 EST_OPS_ANIMAL = 4.0

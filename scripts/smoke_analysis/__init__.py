@@ -17,6 +17,7 @@ __all__ = [
     "plot_worker_actions",
     "plot_stuck_skip_freq",
     "plot_zone_capacity",
+    "plot_zone_earnings_vs_cost",
     "summarize_distribution",
     "load_lines",
     "SEASON_DAYS",
@@ -57,6 +58,14 @@ def plot_stuck_skip_freq(
 
 def plot_zone_capacity(report: dict[str, Any], *, title: str | None = None) -> None:
     from smoke_analysis.plot import plot_zone_capacity as _plot
+
+    return _plot(report, title=title)
+
+
+def plot_zone_earnings_vs_cost(
+    report: dict[str, Any], *, title: str | None = None
+) -> None:
+    from smoke_analysis.plot import plot_zone_earnings_vs_cost as _plot
 
     return _plot(report, title=title)
 
@@ -106,14 +115,6 @@ def analyze(path: str | Path) -> dict[str, Any]:
         land2_probe_worker=layout.get("land2_probe_worker"),
     )
 
-    earnings = parse_earnings.parse_earnings(
-        lines,
-        snaps,
-        season_days=SEASON_DAYS,
-        hand_workers=hand_workers,
-        worker_tiles=worker_tiles,
-    )
-
     actions = parse_actions.parse_worker_actions(
         lines,
         season_days=SEASON_DAYS,
@@ -123,6 +124,21 @@ def analyze(path: str | Path) -> dict[str, Any]:
 
     hands_dawn = parse_exec.parse_hands_dawn(lines, season_days=SEASON_DAYS)
     hands_eod = parse_exec.parse_hands_eod(lines, season_days=SEASON_DAYS)
+
+    earnings = parse_earnings.parse_earnings(
+        lines,
+        snaps,
+        season_days=SEASON_DAYS,
+        hand_workers=hand_workers,
+        worker_tiles=worker_tiles,
+    )
+
+    worker_first_day = parse_exec.parse_worker_first_active_day(
+        lines,
+        workers,
+        season_days=SEASON_DAYS,
+        harvest_by_worker_by_day=earnings.get("harvest_by_worker_by_day"),
+    )
 
     return {
         "log_path": str(path),
@@ -151,6 +167,8 @@ def analyze(path: str | Path) -> dict[str, Any]:
         "has_land2": layout["has_land2"],
         "land2_probe_worker": layout.get("land2_probe_worker"),
         "net_tile_ops": dict(layout.get("net_tile_ops") or {}),
+        "hand_daily_cost": dict(layout.get("hand_daily_cost") or {}),
+        "worker_first_day": worker_first_day,
         "package": layout.get("package"),
     }
 

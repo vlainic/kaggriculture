@@ -616,7 +616,12 @@ class Executor:
         )
 
     def _claim_worker(
-        self, slot: int, pos: tuple[int, int], day: int, hour: int
+        self,
+        slot: int,
+        pos: tuple[int, int],
+        day: int,
+        hour: int,
+        me: dict,
     ) -> str | None:
         if slot in self._slot_to_worker:
             return self._slot_to_worker[slot]
@@ -659,14 +664,14 @@ class Executor:
 
     def _bind_hands(self, me: dict, day: int, hour: int) -> None:
         for i, pos in enumerate(me.get("hands", [])):
-            self._claim_worker(i, tuple(pos), day, hour)
+            self._claim_worker(i, tuple(pos), day, hour, me)
 
     def _worker_for_slot(
         self, slot: int, me: dict, day: int, hour: int
     ) -> str | None:
         if slot >= len(me.get("hands", [])):
             return None
-        return self._claim_worker(slot, tuple(me["hands"][slot]), day, hour)
+        return self._claim_worker(slot, tuple(me["hands"][slot]), day, hour, me)
 
     def _worker_pos(
         self, worker: str, me: dict, *, hand_slot: int | None = None

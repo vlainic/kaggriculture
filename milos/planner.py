@@ -14,6 +14,7 @@ from milos.zoning import (
     HAND_DAILY_COST,
     NE_WORKERS,
     NUM_TILES,
+    NW_HANDS,
     NW_WORKERS,
     SW_ENABLED,
     SW_WORKERS,
@@ -121,7 +122,7 @@ SEASON_LAST_DAY = 29
 
 CURRENT_SOLVER = "milos_twoland"
 STARTING_MONEY = 3000
-NUM_ACTIVE_HIRES = 5
+NUM_ACTIVE_HIRES = NW_HANDS
 BUY_LAND_DAY: int | None = None
 DEAD_HANDS: set[str] = set()
 ACTIVE_NE: list[str] = []
@@ -141,11 +142,13 @@ SW_DUE_DAY: dict[str, int] = {}
 SW_LAND_COST = 2000
 SW_BUY_MIN_CASH = 4000
 SW_BUY_FIRST_DAY = 8
-SW_BUY_LAST_DAY = 14
-SW_MAX_ZONES = 3
+SW_BUY_LAST_DAY = 18
+SW_MAX_ZONES = 5
 SW_MIN_OVERAGE = 40.0
 SW_OVERAGE_RESERVE = 12.0
 SW_BUY_ZONE_TIME = 1.5
+BUY_REPLAN_ZONE_TIME = 1.5
+BUY_REPLAN_OVERAGE_RESERVE = 12.0
 _SW_BUY_REPLAN_DONE_DAY: int | None = None
 _SW_DUSK_SKIP_LOG_DAY: int | None = None
 
@@ -869,13 +872,16 @@ def replan_after_buy_sw(
 
     money = int(me["money"])
     overage_before = float(obs.get("remainingOverageTime") or 0)
-    all_w = NW_WORKERS + tuple(ACTIVE_NE) + sw_cap
+    land_w = sw_cap
     empty_counts = {
-        w: sum(1 for t in sw_replan if t in WORKER_TILES[w]) for w in all_w
+        w: sum(1 for t in sw_replan if t in WORKER_TILES[w]) for w in land_w
     }
 
-    min_solve_time = SW_BUY_ZONE_TIME * len(sw_cap)
-    max_time = min(SW_BUY_ZONE_TIME * len(all_w), overage_before - SW_OVERAGE_RESERVE)
+    min_solve_time = BUY_REPLAN_ZONE_TIME * len(land_w)
+    max_time = min(
+        BUY_REPLAN_ZONE_TIME * len(land_w),
+        overage_before - BUY_REPLAN_OVERAGE_RESERVE,
+    )
 
     print(
         f"[sw] buy_replan start d={day} money={money} sw_empty={sw_empty} "
@@ -896,14 +902,14 @@ def replan_after_buy_sw(
         empty_tiles=sw_replan,
         empty_counts=empty_counts,
         locked_by_worker={
-            w: locked_by_worker.get(w) or empty_locked(horizon) for w in all_w
+            w: locked_by_worker.get(w) or empty_locked(horizon) for w in land_w
         },
         starting_money=money,
         max_time=max_time,
         track_shed=False,
         min_balance=0,
         price_of=price_of,
-        workers=all_w,
+        workers=land_w,
         charge_hire_daily=True,
     )
 
@@ -975,17 +981,29 @@ def replan_after_buy(
     ne_empty = len(ne_replan)
 
     money = int(me["money"])
-    overage_before = obs.get("remainingOverageTime")
-    all_w = NW_WORKERS + NE_WORKERS
+    overage_before = float(obs.get("remainingOverageTime") or 0)
+    land_w = NE_WORKERS
     empty_counts = {
-        w: sum(1 for t in ne_replan if t in WORKER_TILES[w]) for w in all_w
+        w: sum(1 for t in ne_replan if t in WORKER_TILES[w]) for w in land_w
     }
+    min_solve_time = BUY_REPLAN_ZONE_TIME * len(land_w)
+    max_time = min(
+        BUY_REPLAN_ZONE_TIME * len(land_w),
+        overage_before - BUY_REPLAN_OVERAGE_RESERVE,
+    )
 
     print(
         f"[ne] buy_replan start d={day} money={money} nw_empty={nw_empty} "
-        f"ne_empty={ne_empty} overage={overage_before}",
+        f"ne_empty={ne_empty} max_time={max_time} overage={overage_before}",
         flush=True,
     )
+
+    if max_time < min_solve_time:
+        print(
+            f"[ne] buy_replan skip overage={overage_before} need={min_solve_time}",
+            flush=True,
+        )
+        return
 
     result = solve(
         [],
@@ -993,14 +1011,14 @@ def replan_after_buy(
         empty_tiles=ne_replan,
         empty_counts=empty_counts,
         locked_by_worker={
-            w: locked_by_worker.get(w) or empty_locked(horizon) for w in all_w
+            w: locked_by_worker.get(w) or empty_locked(horizon) for w in land_w
         },
         starting_money=money,
-        max_time=24.0,
+        max_time=max_time,
         track_shed=False,
         min_balance=0,
         price_of=price_of,
-        workers=all_w,
+        workers=land_w,
         charge_hire_daily=True,
     )
 
