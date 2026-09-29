@@ -21,13 +21,16 @@ bash scripts/summarize_replays.sh <submission_id> --us-name "Your Name"   # → 
 cd scripts && python -m replay_analysis ../kaggle_logs/<id>/replays/episode-*.json   # single game
 ```
 
-**Preferred for batch A/B:** open `experiments/submission_analysis.ipynb` or `submission_comparison.ipynb` — run all cells; set `SUBMISSION_ID` / `ID_A`/`ID_B` + `US_NAME`. Uses `submission_nb.ensure_summary()` (download replays + summarize if needed). Initial TrueSkill: `ensure_episode_skills()` → Kaggle `GetEpisode` API, cache `kaggle_logs/<id>/episode_skills.json` (needs `~/.kaggle/access_token` or kaggle CLI auth).
+**Preferred for batch A/B:** open `experiments/submission_analysis.ipynb` or `submission_comparison.ipynb` — run all cells; set `SUBMISSION_ID` / `ID_A`/`ID_B` + `US_NAME`. Uses `submission_nb.ensure_summary()` (download replays + summarize if needed). Set `REFRESH=True` after `replay_analysis/kpi.py` changes to rewrite cached planner KPIs; for **revenue per tile-day by product**, `submission_nb.revenue_per_tile_day_by_product(game)` recomputes from sells + `crop_tile_days` without refresh. Initial TrueSkill: `ensure_episode_skills()` → Kaggle `GetEpisode` API, cache `kaggle_logs/<id>/episode_skills.json` (needs `~/.kaggle/access_token` or kaggle CLI auth).
 
 ```python
 from kaggle_environments import make
-env = make("kaggriculture", configuration={"episodeSteps": 720}, debug=True)
+# Pass full configuration when testing forecast/drain (intervals, marketParams):
+env = make("kaggriculture", configuration={"episodeSteps": 720, "townCenterSellInterval": 24}, debug=True)
 env.run(["main.py", "random"])
 ```
+
+**Entry point:** `def agent(obs, config=None)` — kaggle-environments only passes `config` when `co_argcount == 2`.
 
 Historical FIVE smoke (pre-pickups fix): peak ~**98k**, later ~**64k**. Pickups without ops de-dupe → sub-**50k**. Re-smoke after Aug 27 ops fix before banking.
 

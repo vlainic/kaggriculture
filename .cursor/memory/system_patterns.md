@@ -4,21 +4,30 @@
 
 **Sept02 overhaul patterns are REJECTED.** Do not copy Wave 2–8 “safety rails” (`cons≥0`, WSP `track_shed=True`, formula `net_tile_ops`, fert dawn pipeline) into live agent. Pre-overhaul WSP: **`track_shed=False`**, **`min_balance=0`**, **unbounded `conservative`**, hand-calibrated `NET_TILE_OPS`. See `progress.md` FAILURE banner.
 
-## Current: milos OneLand 6-man (Sep 26)
+## Current: milos TWOLAND12 (Sep 29)
 
 ```
 import:
-  milos/zoning.py MILOS_ONELAND6 → 25 tiles, farmer + hire1–5
-  TWOFOLD_HIRE=hire5 (5th spawn reuses corner)
-  data/crop_rollouts.json + data/animal_with_pickups.json
+  milos/zoning.py MILOS_TWOLAND12 → NW 25 + NE zones VII–XII
+  NW_WORKERS / NE_WORKERS; NUM_ACTIVE_HIRES=5 (h0 HIRE loop)
+  envconfig.ingest(config) from main.agent(obs, config)
+  price_forecast + drain_calib + wsp/mip (locked_counts, product_caps)
 
 obs → milos.executor.step
-  ├─ hour0: tile_state dawn
-  │         planner.replan (d=1..28) → sell_dp.replan
-  │         market: HIRE×5 + room sells + WHEAT → ANIMAL → SEED; fert dump in sells
-  │         forecast_day_counts → [hands]/[theo]
-  ├─ hours 1–23: snakes; owned-shed PICKUP (raw wheat need); tile_ops
+  ├─ h23: schedule_ne_buy_at_dusk (cash ≥ 3000 → BUY_LAND_DAY tomorrow)
+  ├─ hour0: observe_drain; tile_state dawn; planner.replan (Walk1 + Walk2 if NE owned)
+  │         sell_dp.replan; market BUY_LAND first on buy day; HIRE×5 NW + NE hires h1+
+  ├─ hour1: replan_after_buy on buy day (NE owned); recompute _empty_at_dawn
+  ├─ hours 1–23: snakes; owned-shed PICKUP; tile_ops
   └─ day ≥ 29: endgame harvest
+```
+
+**OneLand 6-man (`MILOS_ONELAND6`)** — prior live layout; still valid reference for shed/wheat patterns.
+
+```
+obs → milos.executor.step (6-man snapshot)
+  ├─ hour0: replan → market HIRE×5 + room + WHEAT → ANIMAL → SEED; fert dump
+  └─ …
 ```
 
 **Day-0 / replan queues:** write from `result.assigned` / `replan_set` — never gate on `WORKER_TILES[solved_worker]` when layout ≠ prestart worker map.

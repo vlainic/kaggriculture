@@ -25,19 +25,38 @@
 
 ---
 
-## Strategic status (Sep 26 — live = milos OneLand **6-man**)
+## Strategic status (Sep 29 — live = milos **TWOLAND12** + forecast fix)
 
 | Track | Status |
 | --- | --- |
-| **Live submission** | **`milos/`** — `CURRENT = MILOS_ONELAND6` (25 tiles, farmer + **5** hires) |
-| **Ops caps** | farmer/hire1–5: **19/16/16/17/17/14** |
+| **Live submission** | **`milos/`** — `CURRENT = MILOS_TWOLAND12` (NW + 6 NE zones, dusk NE buy + h1 buy-replan) |
+| **Price forecast** | Config via `envconfig`; inventory walk; MIP `locked_counts` + caps; `drain_calib` (plan `fix_price_forecast`, all waves done) |
 | **`agent/` TwoLand** | Legacy; not live |
-| **Dawn market** | HIRE×5; room sells; wheat → animals → seeds; fert dump each hour |
-| **Wheat** | Buy: raw feed sum + **one** global zone buffer; PICKUP: raw need only |
-| **Shed** | Cap 100; hourly FERT dump to ≤`max(10, fert need)`; `[snap] shed_total=` |
-| **Day-0 / replan write** | Queues from `result.assigned` / `replan_set` (not worker×WORKER_TILES) |
-| **Smoke** | ~**130k** vs random after shed-cap fix; FEED days 1–28 |
-| **Competition submission** | Local smoke only unless user asks |
+| **Dawn market** | NW HIRE×5; room sells; wheat → animals → seeds; fert dump; buy-day h0–h2 buys |
+| **Wheat / shed** | Global buffer on buy; raw pickup; cap 100 + FERT dump |
+| **Day-0 / replan** | `assigned` / `replan_set` writes; NE Walk 2 + `replan_after_buy` |
+| **Replay analysis** | `kpi.py` animal $/tile-day keyed by product; `submission_nb.revenue_per_tile_day_by_product` for stale caches |
+| **Notebooks** | `submission_comparison` — violin `density_norm=count`; §5 crops + animals |
+| **Competition submit** | User-only unless explicit ask |
+
+**NE / forecast plan chain (implemented):** `ne-land_minimal_trigger` → `cash_trigger_for_ne` (superseded) → `fix_ne_rollback_bugs` → `robust_ne_buy` (+ busy-gate intent). Details: `.cursor/memory/ne_expansion_and_forecast.md`.
+
+## Sep 29 — price forecast + comparison notebook (KEEP)
+
+| Change | Result |
+| --- | --- |
+| `fix_price_forecast` W1–W5 | No forecast crash on MELON profile; real config intervals; self-glut in MIP; drain calibrator |
+| `main.py` `agent(obs, config)` | Kaggle passes `configuration` into agent |
+| `kpi.py` `crop_tile_days.get(prod)` | Animal products in $/tile-day when summaries refreshed |
+| `submission_nb.revenue_per_tile_day_by_product` | §5 chart shows EGG/MILK/WOOL without re-summarize |
+| Violin normalization | Width ∝ n per outcome bucket (fair A vs B visual) |
+
+## Strategic status (Sep 26 — milos OneLand **6-man**, historical)
+
+| Track | Status |
+| --- | --- |
+| **Was live** | `MILOS_ONELAND6` (25 tiles, farmer + **5** hires) — superseded by TWOLAND12 |
+| **Smoke** | ~**130k** vs random after shed-cap fix |
 
 ## Sep 26 — 6-man layout + wheat + shed-cap (KEEP)
 

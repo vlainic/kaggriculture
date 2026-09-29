@@ -1,64 +1,43 @@
 # Active Context
 
-## Current focus (Sep 26, 2026)
+## Current focus (Sep 29, 2026)
 
-**Live submission = `milos/` OneLand 6-man** — `main.py` → `milos.executor.step`. Layout: **`MILOS_ONELAND6`** (`CURRENT` in `milos/zoning.py`): 25 tiles, farmer + **5 hires** (hire5 = north row / zone VI). Spec in [`data/milos_zoning.md`](../../data/milos_zoning.md). Ops caps (live): **19/16/16/17/17/14**. Hire fib sum = **12**/day. `NUM_ACTIVE_HIRES = NUM_HIRES` (5).
+**Live submission = `milos/` TwoLand 12-hand layout** — `main.py` → `agent(obs, config=None)` → `milos.executor.step`. Layout: **`MILOS_TWOLAND12`** (`CURRENT` in `milos/zoning.py`): NW 25 tiles (farmer + **5** h0 HIREs) + **6 NE zones** (hire6–11) activated incrementally. Spec: [`data/milos_zoning.md`](../../data/milos_zoning.md) + NE columns in zoning module.
 
-`agent/` TwoLand WSP remains legacy. Smoke builds `milos/` into the tarball.
+`agent/` TwoLand WSP remains legacy. Smoke tarball uses `milos/`.
 
-### Critical engine rules
+### NE land buy (current behavior)
 
-1. **Shed-adjacent ONLY IF OWNED** — PICKUP/DROP no-op on `LOCKED`. Gate via `_owned_shed_tiles`.
-2. **Shed capacity 100** — env silently rejects `BUY_PRODUCT` / `BUY_ANIMAL` when `sum(shed) >= 100`. 6-man collects more fertilizer; floor-blocked FERT sells filled the shed and starved dawn wheat buys (days ~25–27). Fix: aggressive FERT dump + dawn make-room sells.
+- **Dusk (h23):** `schedule_ne_buy_at_dusk` — if NE unowned, `money >= 3000`, buy day in **2..22** → `BUY_LAND_DAY = tomorrow`, log `[ne] dusk_trigger`.
+- **Buy morning h0:** `BUY_LAND` first (market); `replan()` Walk 1 only (no Walk 2 before land).
+- **Buy morning h1:** `replan_after_buy` — one CP-SAT cascade over NW+NE workers, write **NE tiles only**; recompute `_empty_at_dawn`; HIREs + buys may spill to **h2** on buy day.
+- **Later dawns:** Walk 2 `_activate_next_ne` when NE owned (`busy_day0 >= 1`, cash, solver ok); `NE_DUE_DAY` + hire-landed rollback via `dawn_ne_bound_handoff`.
+- **Plan history:** see [ne_expansion_and_forecast.md](./ne_expansion_and_forecast.md).
 
-### Status
+### Price forecast (post–fix_price_forecast)
 
-| Item | State |
-| --- | --- |
-| Live agent | **`milos/`** `MILOS_ONELAND6` (farmer + hire1–5) |
-| Hire5 bind | `TWOFOLD_HIRE="hire5"` — 5th hand reuses spawn corner; `_claim_worker` on duplicate |
-| Day-0 queues | Load `prestart.json` (5-man chains by tile idx); write via **`result.assigned`** (not `solved_workers`×`WORKER_TILES`) |
-| Dawn replan write | **`apply_replan`** iterates `replan_set` / `assigned` the same way |
-| Market dawn | HIRE×5 + room sells + **wheat → animals → seeds**; then sells |
-| **Wheat buy** | `total_wheat_feed_need` = raw animal feed sum + **one** global `(zones+1)//2` buffer |
-| **Wheat PICKUP** | `wheat_pickup_needed` = **raw zone need − inv only** (no per-zone buffer — kills FCFS race) |
-| **Fert dump** | `FERT_SHED_CAP=10`; every market hour dump excess first (ignore price floor); reserve = `max(10, fert pickup need)` |
-| Shed diagnostic | `[snap] … shed_total=N` |
-| Smoke (post-shed fix) | ~**130k** vs random; FEED every day 1–28; h=1 WHEAT≈24 FERT≈10 |
-| Agents submit | Never without explicit ask |
+- Episode **config** ingested once (`milos/envconfig.py`): intervals, `marketParams`, shed cap.
+- Dawn replan uses inventory walk + `price_of(product, rel_day, extra_units)`; MIP self-impact via `locked_counts` + glut **product_caps**.
+- **Drain calibrator** (`drain_calib`) shrinks modelled town drain on clean days (ramp not in config).
+- Fallback on forecast exception: **current market quotes**, not blind I0 optimism.
 
-### Sep 26 — 6-man + shed-cap (KEEP)
+### Critical engine rules (unchanged)
 
-**Layout:** `MILOS_ONELAND6` reuses 5-man tile indices; zone VI = tiles 9/14/19/24 (`t10,t15,t20,t25`). hire5 preamble `("PICKUP",)`; `_step_to_owned_shed` covers NE spawn.
+1. **Shed-adjacent ONLY IF OWNED** — PICKUP/DROP no-op on `LOCKED`.
+2. **Shed capacity 100** — silent buy reject; FERT dump + dawn make-room sells.
+3. **Wheat:** global buffer on buy only; pickup = raw zone need (no per-zone buffer in pickup).
 
-**Bug chain (fixed in order):**
-1. **Missing hire5 queues** — `_build_from_solver` / `apply_replan` looped `solved_workers` × new `WORKER_TILES` → north-row tiles never queued. Fix: iterate `result.assigned` / `replan_set`.
-2. **Wheat FCFS race** — per-zone buffer in `wheat_pickup_needed` × 6 zones over-claimed shed; hire4 last in preamble starved. Fix: buffer only in `total_wheat_feed_need`; pickup = raw need.
-3. **Uniform zero FEED days 25–27** — not wheat math; shed full of floor-blocked **FERTILIZER** → silent buy reject → 0 wheat for everyone. Fix A: hourly fert dump to cap 10. Fix B: dawn `_make_room_sells` before buys.
+### Replay notebooks
 
-**Do not:** put buffer back into per-zone pickup; trust logged `BUY_PRODUCT WHEAT` without checking `shed_total`; let FERT pile past ~10 under price floor.
-
-### Sep 25 — wheat padding (SUPERSEDED shape)
-
-Original zone-buffer-in-`wheat_pickup_needed` caused 6-man races. **Current:** global buffer on buy only; pickup is raw. Intent (margin vs exact need) remains via `total_wheat_feed_need`.
-
-### Sep 23 — hire4 CARE / theo / replan (KEEP)
-
-CARE requires `fed_today`; dawn replan + full-stack HARVEST sim; see prior notes in git history / progress.md.
-
-### Anti-patterns (still)
-
-- Mid-day BUY wheat/animal/seed
-- **Per-zone wheat buffer** in `wheat_pickup_needed` (6-man FCFS race)
-- Ignoring **shed_total ≥ 100** when diagnosing “no FEED”
-- Letting FERT sell only via price floor (fills shed on 6-man)
-- Freezing routes waiting for wheat/PLACE
-- Offering CARE without `fed_today`
-- Agents submitting without explicit ask
-- Building day-0 queues via `WORKER_TILES[solved_worker]` when layout ≠ prestart worker map
+- `experiments/submission_comparison.ipynb` — A/B KPIs; §5 animals via `revenue_per_tile_day_by_product`; `REFRESH=True` only needed to refresh cached planner fields in JSON.
+- Agents **never** Kaggle-submit without explicit ask.
 
 ### Immediate next steps
 
-1. Optional: regenerate `milos/wsp/prestart.json` under 6-man caps/zones (still reusing 5-man prestart by tile idx)
-2. Keep theo/act + shed_total monitoring after market/executor changes
-3. TwoLand `agent/` only if user re-points `main.py`
+1. Watch next submission `[cfg]` / `[shops]` / `[fc] drain` on real episodes (local engine may not match competition shop dedupe).
+2. Tune `NE_BUY_MIN_CASH` or glut `floor_ratio` if smokes regress.
+3. Optional: `REFRESH=True` once on comparison notebooks after KPI changes.
+
+### Anti-patterns (still)
+
+- Mid-day BUY wheat/animal/seed; per-zone wheat pickup buffer; freezing routes for wheat/PLACE; CARE without `fed_today`; building queues via `WORKER_TILES[solved_worker]` when layout ≠ prestart map; trusting cached `revenue_per_tile_day_by_crop` without recompute or refresh; agents submitting without ask.

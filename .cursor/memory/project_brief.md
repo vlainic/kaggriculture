@@ -12,15 +12,16 @@ Kaggle Simulations competition **Kaggriculture** — 720-turn, two-player farmin
 
 Heuristic/rule-based Python agent (no ML/RL pipeline) that wins on the ladder.
 
-## Current implementation (Sep 26, 2026)
+## Current implementation (Sep 29, 2026)
 
-**Active stack:** **`milos/` OneLand 6-man** — `main.py` → `milos.executor.step`.
+**Active stack:** **`milos/` TwoLand expansion** — `main.py` → `agent(obs, config=None)` → `milos.executor.step`.
 
-- Layout: **`MILOS_ONELAND6`** (25 tiles, farmer + 5 hires; zone VI north row). Spec in `data/milos_zoning.md`.
-- Market: HIRE×5; room sells if needed; **wheat → animals → seeds**; hourly FERT dump to ≤~10; farmer PASSes at h=0.
-- **Wheat:** dawn buy uses raw feed + one global zone buffer; shed PICKUP uses raw zone need only.
-- Tile ops + dawn replan + sell_dp as before; owned-shed PICKUP/DROP.
-- **Legacy:** `agent/` TwoLand WSP still in repo, not live dispatch.
+- Layout: **`MILOS_TWOLAND12`** (NW 25 tiles + 6 NE zones; farmer + 5 dawn HIREs + gradual NE hires). Spec in `data/milos_zoning.md` / `milos/zoning.py`.
+- **NE buy:** dusk cash trigger → h0 `BUY_LAND` → h1 `replan_after_buy` joint NE cascade (see `.cursor/memory/ne_expansion_and_forecast.md`).
+- **Pricing:** config-aware forecast + drain calibrator + MIP glut caps (`fix_price_forecast` plan).
+- Market: NW HIRE×5; room sells; **wheat → animals → seeds**; FERT dump; buy-day extended hours for NE overflow.
+- **Wheat / shed:** unchanged global-buffer buy, raw pickup, cap-100 hygiene.
+- **Legacy:** `agent/` TwoLand WSP in repo, not live dispatch.
 
 ## Deliverable
 
