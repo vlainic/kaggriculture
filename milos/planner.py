@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 
 from milos.wsp import data as wsp_data
@@ -427,6 +428,11 @@ def _activate_next_sw(
         )
         return False
 
+    if not _zone_activation_value_check(
+        "sw", day, worker, result.zone_objectives.get(worker), cost
+    ):
+        return False
+
     _write_sw_activation(worker, result.assigned, horizon, tile_queues, tile_state, 0)
     SW_DUE_DAY[worker] = day
     print(
@@ -500,6 +506,56 @@ def _zone_plan_cost(
         total_spend -= sum(seg.get("spend_by_day", []))
     hire = HAND_DAILY_COST.get(worker, 0) * horizon
     return total_spend + hire
+
+
+def _zone_value_min_net() -> int:
+    try:
+        return int(os.environ.get("KAGGRI_ZONE_MIN_NET", "0"))
+    except ValueError:
+        return 0
+
+
+def _zone_value_margin_ratio() -> float:
+    try:
+        return float(os.environ.get("KAGGRI_ZONE_MARGIN_RATIO", "0"))
+    except ValueError:
+        return 0.0
+
+
+def _zone_value_ok(obj: int | float | None, cost: int) -> tuple[bool, str]:
+    """Fail open when obj is missing; otherwise require obj - cost >= min_net."""
+    if obj is None:
+        return True, "value_unknown"
+    net = float(obj) - float(cost)
+    min_net = _zone_value_min_net()
+    ratio = _zone_value_margin_ratio()
+    if ratio > 0 and cost > 0:
+        if float(obj) < (1.0 + ratio) * float(cost):
+            return False, "low_value"
+    if net < min_net:
+        return False, "low_value"
+    return True, "ok"
+
+
+def _zone_activation_value_check(
+    tag: str, day: int, worker: str, obj: int | float | None, cost: int
+) -> bool:
+    ok, reason = _zone_value_ok(obj, cost)
+    if reason == "value_unknown":
+        print(
+            f"[{tag}] d={day} zone={worker} value_unknown cost={cost}",
+            flush=True,
+        )
+        return True
+    if not ok:
+        net = int(float(obj) - float(cost))
+        print(
+            f"[{tag}] reject d={day} zone={worker} reason=low_value "
+            f"obj={int(obj)} cost={cost} net={net}",
+            flush=True,
+        )
+        return False
+    return True
 
 
 def _busy_counts(assigned: dict[int, list]) -> tuple[int, int]:
@@ -598,6 +654,11 @@ def _activate_next_ne(
             f"busy_any={busy_any} cost={cost} money={money}",
             flush=True,
         )
+        return
+
+    if not _zone_activation_value_check(
+        "ne", day, worker, result.zone_objectives.get(worker), cost
+    ):
         return
 
     _write_ne_activation(worker, result.assigned, horizon, tile_queues, tile_state, 0)
@@ -924,16 +985,28 @@ def replan_after_buy_sw(
         }
         if not zone_assigned:
             deferred.append(worker)
-            continue
+            break
         busy_day0, _ = _busy_counts(zone_assigned)
         if busy_day0 < 1 or worker not in result.solved_workers:
             deferred.append(worker)
-            continue
+            break
+        zone_cost = _zone_plan_cost(zone_assigned, horizon, worker, price_of)
+        if not _zone_activation_value_check(
+            "sw", day, worker, result.zone_objectives.get(worker), zone_cost
+        ):
+            deferred.append(worker)
+            break
         _write_sw_activation(
             worker, zone_assigned, horizon, tile_queues, st_map, 0
         )
         SW_DUE_DAY[worker] = day
         active.append(worker)
+
+    if len(active) < 2:
+        print(
+            f"[sw] buy_replan wasted_land d={day} n_active={len(active)}",
+            flush=True,
+        )
 
     print(
         f"[sw] buy_replan d={day} money={money} sw_empty={sw_empty} "
@@ -1033,11 +1106,17 @@ def replan_after_buy(
         }
         if not zone_assigned:
             deferred.append(worker)
-            continue
+            break
         busy_day0, _ = _busy_counts(zone_assigned)
         if busy_day0 < 1 or worker not in result.solved_workers:
             deferred.append(worker)
-            continue
+            break
+        zone_cost = _zone_plan_cost(zone_assigned, horizon, worker, price_of)
+        if not _zone_activation_value_check(
+            "ne", day, worker, result.zone_objectives.get(worker), zone_cost
+        ):
+            deferred.append(worker)
+            break
         _write_ne_activation(
             worker, zone_assigned, horizon, tile_queues, st_map, 0
         )

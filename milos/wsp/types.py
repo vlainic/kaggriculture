@@ -25,3 +25,4 @@ class SolveResult:
     solved_workers: tuple[str, ...]
     buy_land: bool = False
     zone_outcomes: dict[str, str] = field(default_factory=dict)
+    zone_objectives: dict[str, int] = field(default_factory=dict)

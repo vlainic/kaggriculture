@@ -509,4 +509,5 @@ def solve_zone(
         "picked": picked,
         "balance": [int(solver.Value(b)) for b in balance_vars],
         "conservative": [int(solver.Value(c)) for c in conservative_vars],
+        "objective": int(solver.ObjectiveValue()),
     }

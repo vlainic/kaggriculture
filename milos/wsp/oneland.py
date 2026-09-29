@@ -124,6 +124,8 @@ def solve(
     opening = [starting_money] * horizon
     assigned: dict[int, list] = {}
     solved_workers: list[str] = []
+    zone_outcomes: dict[str, str] = {}
+    zone_objectives: dict[str, int] = {}
     locked_harvest: dict[str, int] = {}
     patterns = mip.build_patterns(horizon, price_of)
     locks = locked_by_worker or {}
@@ -132,6 +134,7 @@ def solve(
         n_empty = counts.get(worker, 0)
         locked = locks.get(worker) or _empty_locked(horizon)
         if n_empty == 0:
+            zone_outcomes[worker] = "empty"
             opening = _locked_conservative_handoff(
                 opening,
                 locked,
@@ -176,6 +179,7 @@ def solve(
             product_caps=caps,
         )
         if res is None:
+            zone_outcomes[worker] = "infeasible"
             print(
                 f"[milos/wsp] oneland skip zone={worker} INFEASIBLE keep cascade",
                 flush=True,
@@ -190,6 +194,11 @@ def solve(
             continue
 
         picked = res["picked"]
+        zone_objectives[worker] = int(res["objective"])
+        if not picked:
+            zone_outcomes[worker] = "picks0"
+        else:
+            zone_outcomes[worker] = "ok"
         assigned.update(
             mip.decode_wsp_assignment(
                 empty_set,
@@ -207,4 +216,6 @@ def solve(
         assigned,
         len(solved_workers) == len(WORKERS),
         tuple(solved_workers),
+        zone_outcomes=zone_outcomes,
+        zone_objectives=zone_objectives,
     )
