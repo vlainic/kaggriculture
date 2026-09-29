@@ -12,118 +12,86 @@
 **Root causes (confirmed):**
 1. `conservative` floored at 0 + `cons >= min_balance` on spend-only ledger → cascade INFEASIBLE
 2. `track_shed=True` on WSP replan put W/F buys into conservative `spend_terms`
-3. Pickup-only §7.3 + formula `net_tile_ops` over-booked ops (formula omitted intra-zone route laps; pin to empirical caps did not restore BASE on n=3)
-4. Batching waves hid bisect; n=3 smoke gates were noise (within-step spreads > wave deltas)
+3. Pickup-only §7.3 + formula `net_tile_ops` over-booked ops
+4. Batching waves hid bisect; n=3 smoke gates were noise
 
-**Do not:**
-- Re-enable Wave 5b `track_shed=True` / fert pipeline as “just missing a knob”
-- Floor `conservative` at 0 or put `min_balance` on `cons`
-- Treat plan todos like “resubmit” / “re-ladder 5b” as permission to rebuild the overhaul
-- Ship `_formula_net_tile_ops` until `_route_move_cost` (intra-zone) is wired and validated at ≥30 episodes
-
-**Recovery pointer:** good tip is **`d35bff5`** (`Enhance replay analysis…`). Local backup of broken stack: branch **`backup/sept02-recovery`** (local only until pushed). Overhaul plans under `.cursor/plans/sept02_*` are historical autopsy, not a roadmap to re-run.
+**Do not:** re-enable Wave 5b `track_shed=True`; floor `conservative` at 0; treat plan “resubmit” as permission to rebuild overhaul. Good tip: **`d35bff5`**.
 
 ---
 
-## Strategic status (Sep 29 — live = milos **TWOLAND12** + forecast fix)
+## Strategic status (Sep 29 — live = milos **THREELAND15** + zone value gate)
 
 | Track | Status |
 | --- | --- |
-| **Live submission** | **`milos/`** — `CURRENT = MILOS_TWOLAND12` (NW + 6 NE zones, dusk NE buy + h1 buy-replan) |
-| **Price forecast** | Config via `envconfig`; inventory walk; MIP `locked_counts` + caps; `drain_calib` (plan `fix_price_forecast`, all waves done) |
+| **Live submission** | **`milos/`** — `CURRENT = MILOS_THREELAND15` (NW 5 + NE 5 + SW 5; `KAGGRI_LAYOUT` / `KAGGRI_SW=1`) |
+| **Zone value gate** | Shipped — activate iff `obj − _zone_plan_cost >= 0`; buy-day break; Walk 2/3 retry; fail-open on missing obj |
+| **Price forecast** | Config via `envconfig`; inventory walk; MIP caps; `drain_calib` |
 | **`agent/` TwoLand** | Legacy; not live |
-| **Dawn market** | NW HIRE×5; room sells; wheat → animals → seeds; fert dump; buy-day h0–h2 buys |
+| **Dawn market** | NW HIRE×`NW_HANDS`; room sells; wheat → animals → seeds; fert dump; buy-day h0–h2 |
 | **Wheat / shed** | Global buffer on buy; raw pickup; cap 100 + FERT dump |
-| **Day-0 / replan** | `assigned` / `replan_set` writes; NE Walk 2 + `replan_after_buy` |
-| **Replay analysis** | `kpi.py` animal $/tile-day keyed by product; `submission_nb.revenue_per_tile_day_by_product` for stale caches |
-| **Notebooks** | `submission_comparison` — violin `density_norm=count`; §5 crops + animals |
+| **Day-0 / replan** | `assigned` / `replan_set` writes; NE/SW buy-replans + Walk 2/3 |
+| **Smoke analysis** | Layout-aware + `plot_zone_earnings_vs_cost` |
 | **Competition submit** | User-only unless explicit ask |
 
-**NE / forecast plan chain (implemented):** `ne-land_minimal_trigger` → `cash_trigger_for_ne` (superseded) → `fix_ne_rollback_bugs` → `robust_ne_buy` (+ busy-gate intent). Details: `.cursor/memory/ne_expansion_and_forecast.md`.
+**Plan chain:** NE dusk/buy-replan → SW expansion (`sw_land_expansion`) → 5-man three lands (`5-man_three_lands`) → **zone value gate** (`zone_value_activation_gate`). Details: `.cursor/memory/ne_expansion_and_forecast.md`.
+
+## Sep 29 — zone value activation gate (KEEP)
+
+| Change | Result |
+| --- | --- |
+| `mip.solve_zone` → `objective` | Surfaced on `SolveResult.zone_objectives` via twoland/oneland |
+| `_zone_value_ok` / `_zone_activation_value_check` | `obj − cost >= min_net` (ship 0); None → `value_unknown` fail-open |
+| Buy-day NE/SW loops | Gate + **break** on first fail; SW `wasted_land` if `n_active < 2` |
+| Walk 2/3 | Same gate; no reject latch |
+| Smoke | SW buy-day `hire10–12`; `hire13`/`hire14` `low_value`; NE fills 5 via Walk 2; reward ~147k one run (noise) |
+
+**Verify by:** `active_sw` prefix, NE all-5, `low_value` logs — **not** final reward across multi-smoke.
+
+## Sep 29 — ThreeLand15 + SW (KEEP)
+
+| Change | Result |
+| --- | --- |
+| `MILOS_THREELAND15` | 5-man NW/NE/SW; `NUM_ACTIVE_HIRES=NW_HANDS`; `SW_MAX_ZONES=5`, `SW_BUY_LAST_DAY=18` |
+| Buy-day replan | Solves **only** new-land workers; overage-clamped `max_time` |
+| Ops +1 (code) | NW/NE/SW live caps +1 vs older `milos_zoning.md` heuristics — **do not** edit md for that without ask |
+| `KAGGRI_SW` default `1` | SW on unless explicitly off |
 
 ## Sep 29 — price forecast + comparison notebook (KEEP)
 
 | Change | Result |
 | --- | --- |
-| `fix_price_forecast` W1–W5 | No forecast crash on MELON profile; real config intervals; self-glut in MIP; drain calibrator |
-| `main.py` `agent(obs, config)` | Kaggle passes `configuration` into agent |
-| `kpi.py` `crop_tile_days.get(prod)` | Animal products in $/tile-day when summaries refreshed |
-| `submission_nb.revenue_per_tile_day_by_product` | §5 chart shows EGG/MILK/WOOL without re-summarize |
-| Violin normalization | Width ∝ n per outcome bucket (fair A vs B visual) |
+| `fix_price_forecast` W1–W5 | Config intervals; self-glut; drain calibrator; live-quote fallback |
+| `kpi.py` / `submission_nb` | Animal $/tile-day by product; violin `density_norm=count` |
 
-## Strategic status (Sep 26 — milos OneLand **6-man**, historical)
+## Strategic status (earlier — TWOLAND12 / OneLand 6-man)
 
-| Track | Status |
-| --- | --- |
-| **Was live** | `MILOS_ONELAND6` (25 tiles, farmer + **5** hires) — superseded by TWOLAND12 |
-| **Smoke** | ~**130k** vs random after shed-cap fix |
+Historical: TWOLAND12 was live briefly; before that `MILOS_ONELAND6` ~130k after shed-cap fix. See older KEEP sections below.
 
 ## Sep 26 — 6-man layout + wheat + shed-cap (KEEP)
 
 | Change | Result |
 | --- | --- |
-| `MILOS_ONELAND6` | Zone VI north row (idx 9/14/19/24); hire5; `TWOFOLD_HIRE`; `NUM_ACTIVE_HIRES=NUM_HIRES` |
-| `_build_from_solver` / `apply_replan` | Write all `assigned` tiles — hire5 got queues; replan no longer skips orphan tiles |
-| Wheat buffer move | Global buffer only in `total_wheat_feed_need`; pickup no longer races |
-| Fert dump + make-room | Stops silent dawn buy fails when shed full of FERT; smoke ~130k, WHEAT at h=1 restored |
-| Root cause of uniform starvation | `sum(shed)>=100` rejects buys — not a per-zone pickup race |
+| `MILOS_ONELAND6` | Zone VI north row; hire5; wheat global buffer; fert dump → ~130k smoke |
 
-## Sep 25 — wheat padding buffer (SUPERSEDED placement)
+## Sep 23 — hire4 CARE + theo/act + dawn replan (KEEP)
 
-Zone buffer in `wheat_pickup_needed` was correct intent for 5-man margin; on 6-man it became a FCFS race. **Keep global buffer on buy; pickup = raw need.**
-
-## Sep 23 — hire4 CARE loop + theo/act exec parser (KEEP)
-
-| Change | Result |
-| --- | --- |
-| Root cause | FEED skipped (no wheat) but CARE still offered → sim no-op → hourly CARE in forecast |
-| `tile_ops` + `executor` | CARE requires `fed_today` |
-| `parse_actor` / `compare_theo_act` | hand0=hireN attribution; post-fix mismatch≈0 |
-
-## Sep 23 — milos dawn replan + theo sim (KEEP)
-
-| Change | Result |
-| --- | --- |
-| `replan_lock` + `planner.replan` | Mid-season empty/WEED → CP-SAT; `track_shed=False`; INFEASIBLE keeps queues |
-| `plant_harvest_transfer` | One HARVEST = full yield stack in sim |
-
-## Sep 22–23 — milos live hardening (KEEP)
-
-| Change | Result |
-| --- | --- |
-| Endgame double HARVEST | `_endgame_harvested` |
-| Dawn buys h=0 only | wheat → animals → seeds |
-| Owned-shed gate | `_owned_shed_tiles` |
-
-## What works (live milos 6-man)
-
-| Item | Notes |
-| --- | --- |
-| Six snakes + tile_ops | hire5 north row; twofold spawn bind |
-| Dawn wheat/animal/seed | Room sells first if needed; then buys |
-| Fert shed hygiene | Cap dump every market hour |
-| Wheat buy vs pickup | Global buffer on buy; raw on pickup |
-| Capacity / snap | `[theo]`; `shed_total=` in snap |
-| Dawn replan | Eligible empties; write by tile assigned |
-
-## Strategic status (Sep 21 — historical: TwoLand)
-
-See older sections below for TwoLand / Sept02 / diagnosis history.
+CARE requires `fed_today`; theo/act parser; mid-season replan `track_shed=False`.
 
 ## Known issues
 
 | Issue | Notes |
 | --- | --- |
-| **Shed cap 100** | Silent buy reject — watch `shed_total`; dump low-value staples |
-| **Prestart still 5-man solved_workers** | Tile chains OK by index; optional regen under 6-man |
-| **Shed-adjacent ≠ owned** | Always filter LOCKED |
+| **Shed cap 100** | Silent buy reject — watch `shed_total` |
+| **Fib hire on SW** | Late zones (hire13/14) often fail value gate — intentional |
+| **Buy-day cash starve** | Early `low_value` / busy fail is temporary; Walk 2/3 retries |
+| **`milos_zoning.md` ops** | May lag code +1 on NW — heuristics doc, not ops source of truth |
 | **Sept02 overhaul** | FAILURE — do not resume |
 | Kaggle agent logs API | 403 often; replays work |
 
 ## What's left
 
-1. Optional regen `milos/wsp/prestart.json` for 6-man zone/ops
-2. Keep theo/act + shed_total after market changes
+1. Multi-smoke sanity on value gate (prefix length, NE fill, wasted_land rate)
+2. Optional dusk SW profitability pre-check if wasted_land common
 3. Do not Kaggle submit without ask
 4. `agent/` TwoLand only if user re-points `main.py`
 
@@ -131,10 +99,9 @@ See older sections below for TwoLand / Sept02 / diagnosis history.
 
 - Per-zone wheat buffer in `wheat_pickup_needed`
 - Mid-day BUY wheat/animal/seed
-- Rely on price-floor-only FERT sells under 6-man animal density
-- Build queues via `WORKER_TILES[solved_worker]` when layout ≠ prestart workers
-- Freeze routes waiting for wheat/PLACE
-- CARE without `fed_today`
+- Treat missing `zone_objectives` as reject
+- Latch buy-day `low_value` forever
+- Judge gate by final reward noise (~3k vs ~130k+)
 - Point `main.py` to `agent/` / Kaggle submit without ask
 - Mid-zone walk-to-shed / Sept02 overhaul
-
+- Edit `data/milos_zoning.md` for ops +1 without ask

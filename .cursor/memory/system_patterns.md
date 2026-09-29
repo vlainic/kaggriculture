@@ -4,25 +4,37 @@
 
 **Sept02 overhaul patterns are REJECTED.** Do not copy Wave 2–8 “safety rails” (`cons≥0`, WSP `track_shed=True`, formula `net_tile_ops`, fert dawn pipeline) into live agent. Pre-overhaul WSP: **`track_shed=False`**, **`min_balance=0`**, **unbounded `conservative`**, hand-calibrated `NET_TILE_OPS`. See `progress.md` FAILURE banner.
 
-## Current: milos TWOLAND12 (Sep 29)
+## Current: milos THREELAND15 (Sep 29)
 
 ```
 import:
-  milos/zoning.py MILOS_TWOLAND12 → NW 25 + NE zones VII–XII
-  NW_WORKERS / NE_WORKERS; NUM_ACTIVE_HIRES=5 (h0 HIRE loop)
+  milos/zoning.py MILOS_THREELAND15 (KAGGRI_LAYOUT default)
+  NW / NE / SW workers; NUM_ACTIVE_HIRES=NW_HANDS (4); KAGGRI_SW=1
   envconfig.ingest(config) from main.agent(obs, config)
-  price_forecast + drain_calib + wsp/mip (locked_counts, product_caps)
+  price_forecast + drain_calib + wsp/mip (locked_counts, product_caps, zone_objectives)
 
 obs → milos.executor.step
-  ├─ h23: schedule_ne_buy_at_dusk (cash ≥ 3000 → BUY_LAND_DAY tomorrow)
-  ├─ hour0: observe_drain; tile_state dawn; planner.replan (Walk1 + Walk2 if NE owned)
-  │         sell_dp.replan; market BUY_LAND first on buy day; HIRE×5 NW + NE hires h1+
-  ├─ hour1: replan_after_buy on buy day (NE owned); recompute _empty_at_dawn
+  ├─ h23: schedule_ne_buy_at_dusk; schedule_sw_buy_at_dusk (NE full + cash/overage)
+  ├─ hour0: observe_drain; dawn handoffs; planner.replan
+  │         Walk1 active; Walk2 next NE; Walk3 next SW (if NE not just expanded)
+  │         sell_dp; market BUY_LAND first on buy day; HIRE×NW_HANDS + bound land hires
+  ├─ hour1: replan_after_buy (NE) / replan_after_buy_sw (SW); recompute _empty_at_dawn
   ├─ hours 1–23: snakes; owned-shed PICKUP; tile_ops
   └─ day ≥ 29: endgame harvest
 ```
 
-**OneLand 6-man (`MILOS_ONELAND6`)** — prior live layout; still valid reference for shed/wheat patterns.
+### Zone value activation gate
+
+- **When:** buy-day NE/SW activation loops + `_activate_next_ne` / `_activate_next_sw`.
+- **Rule:** `obj − _zone_plan_cost(assigned, horizon, worker) >= min_net` (ship `min_net=0`).
+  - `obj` = CP-SAT harvest revenue only (`SolveResult.zone_objectives`).
+  - `cost` = full-horizon seed/animal spend + `HAND_DAILY_COST[worker] * D`.
+- **Missing obj:** fail open (`value_unknown`); busy/cash/`solved_workers` still gate.
+- **Buy-day:** break on first reject (same-day prefix). **Do not latch** — Walk 2/3 retries.
+- **SW diagnostic:** `wasted_land` if buy-day `n_active < 2`.
+- Env (local): `KAGGRI_ZONE_MIN_NET`, `KAGGRI_ZONE_MARGIN_RATIO`.
+
+**TWOLAND12 / OneLand 6-man** — prior layouts; still valid reference for shed/wheat patterns.
 
 ```
 obs → milos.executor.step (6-man snapshot)
@@ -61,11 +73,12 @@ obs → milos.executor.step (6-man snapshot)
 
 ```
 milos/
-  executor.py   # turn loop, _claim_worker / TWOFOLD_HIRE, shed_total snap
-  market.py     # fert dump, make_room_sells, h=0 buys
+  executor.py   # turn loop, slot bind, shed_total snap, dusk NE/SW hooks
+  market.py     # fert dump, make_room_sells, h=0 buys, BUY_LAND
   script.py     # wheat_pickup_needed (raw); total_wheat_feed_need (global buffer)
-  planner.py    # assigned-tile queue write; NUM_ACTIVE_HIRES=NUM_HIRES
-  zoning.py     # MILOS_ONELAND6 CURRENT
+  planner.py    # replan walks; buy-replans; zone value gate; NUM_ACTIVE_HIRES=NW_HANDS
+  zoning.py     # MILOS_THREELAND15 CURRENT (default); bind() derives NW/NE/SW
+  wsp/          # twoland cascade; mip.solve_zone → objective
   …
 ```
 
@@ -163,6 +176,9 @@ Self-contained under `milos/`. Smoke ships `milos/` in tarball. No `agent/` impo
 27. **Price-floor-only FERT sells under high COLLECT_FERTILIZER** — fills shed; dump to `FERT_SHED_CAP`.
 28. **Day-0 queues via `WORKER_TILES[solved_worker]`** when layout workers ≠ prestart `solved_workers`.
 29. **Freeze `_route_idx` / PASS-hold waiting for wheat or PLACE** — stalls the zone for most of the day.
+30. **Treat missing `zone_objectives` as reject** — silently blocks Walk 2/3; fail open with `value_unknown`.
+31. **Latch buy-day `low_value` forever** — cash-starved rejects are temporary; Walk 2/3 must retry.
+32. **Judge activation gate by final reward alone** — hire14 drop is ~3k inside smoke noise; use prefix / NE-fill / P&L proxy.
 
 ---
 

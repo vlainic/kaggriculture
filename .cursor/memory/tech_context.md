@@ -9,7 +9,8 @@
 | Optimizer | OR-Tools CP-SAT — import + dawn replan |
 | Catalog | `agent/dp_catalog.py` WIS (not handmade JSON at runtime) |
 | Animals | `data/animal_with_pickups.json` |
-| Agent style | Milos heuristic executor + dawn market + sell_dp — no RL (legacy CP-SAT in `agent/`) |
+| Agent style | Milos heuristic executor + dawn market + sell_dp + WSP replan — no RL (legacy CP-SAT in `agent/`) |
+| Live layout | `MILOS_THREELAND15` (`KAGGRI_LAYOUT`); SW via `KAGGRI_SW` |
 | Bundle | `main.py` + `milos/` + `data/` (crop + animal_with_pickups + handmade for fallback) + vendored ortools |
 
 ## Local evaluation
@@ -88,8 +89,12 @@ Agents never submit without explicit user request (`kaggle-submission.mdc`).
 
 | Env | Effect |
 | --- | --- |
-| `KAGGRI_VERBOSE=1` | `agent.flags.VERBOSE` — emit `[wsp_plan]` (smoke_test.sh sets this; submission does not) |
-| `KAGGRI_LANDS=3` | ThreeLand layout + `threeland_wsp` |
+| `KAGGRI_VERBOSE=1` | Emit `[wsp_plan]` (smoke_test.sh sets this; submission does not) |
+| `KAGGRI_LAYOUT` | `threeland15` (default), `threeland18`, `twoland12`, oneland variants |
+| `KAGGRI_SW` | `"1"` default — enable SW land path when layout has SW workers |
+| `KAGGRI_ZONE_MIN_NET` | Local — min `obj−cost` for activation (ship default 0) |
+| `KAGGRI_ZONE_MARGIN_RATIO` | Local — if >0 require `obj >= (1+r)*cost` |
+| `KAGGRI_LANDS=3` | Legacy **agent/** ThreeLand + `threeland_wsp` (not milos) |
 
 ## Key docs
 
@@ -101,8 +106,9 @@ Agents never submit without explicit user request (`kaggle-submission.mdc`).
 | `docs/twoland/diagnosis_0911.md` | OneLand vs TwoLand diagnosis; reject static NW caps; post-NE ops crash |
 | `docs/twolands/twoland_readd.md` | TwoLand re-add spec (probe + NE glue + LOCKED carve-out) |
 | `scripts/smoke_analysis/` | Local smoke log KPIs/plots; **layout-aware** via `layout.py` |
-| `milos/` | Live OneLand **6-man** (`MILOS_ONELAND6`); wheat buy global buffer; fert shed dump; assigned-tile queue write |
-| `data/milos_zoning.md` | 5-man + **6-man** NW-land specs / ops limits |
+| `milos/` | Live **THREELAND15**; wheat global buffer; fert shed dump; NE/SW buy + zone value gate |
+| `data/milos_zoning.md` | Layout / ops heuristics (may lag code ops +1) |
+| `scripts/smoke_analysis/` | Smoke KPIs + `plot_zone_earnings_vs_cost` |
 | `scripts/download_submission_logs.sh` | Bulk episode replays from Kaggle CLI |
 | `scripts/summarize_replays.sh` | Batch replay analysis → `<id>.json` |
 | `scripts/replay_analysis/` | Replay metrics/KPI module |

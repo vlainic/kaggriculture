@@ -133,6 +133,26 @@ with open("replay.json", "w") as f:
 
 Three built-in agents are available by name: `"pass"`, `"random"`, and `"starter"` (a deterministic baseline).
 
+### Local smoke (this repo)
+
+```bash
+bash scripts/smoke_test.sh
+```
+
+Default single smoke is **our `main.py` vs logged V55** on **default engine config** (do not pass nonstandard `townCenterSellInterval` when benchmarking V55). Raw V55 is auto-extracted from `kaggle_nbs/kaggriculture-v55-one-turn-market-race-edge.ipynb`; smoke loads [`scripts/v55_logged_opponent.py`](../scripts/v55_logged_opponent.py) which wraps it and prints `[opp]` tile/market ops and `[opp_snap]` dawn money/shed. Environment knobs:
+
+- `SMOKE_OPPONENT` — built-in name or path (default `scripts/v55_logged_opponent.py`). Raw: `opponents/v55/main.py`. Regression: `SMOKE_OPPONENT=random`.
+- `SMOKE_US_SEAT` — `0` or `1` (default `0`); swaps `[ours, opp]` vs `[opp, ours]`.
+- `SMOKE_OPP_VERBOSE` — `1` (default) to emit `[opp]` logs; `0` to silence.
+
+**Dual track** (regression + head-to-head):
+
+```bash
+SMOKE_RUNS=6 bash scripts/smoke_multi_run.sh
+```
+
+Runs `N` episodes vs `random` (seat 0, execution regression) and `N` vs V55 with alternating seats; writes `scripts/smoke_runs/summary.txt` with W/L/T and mean margin. Random answers “did we break ThreeLand15?”; V55 answers “do we win?”.
+
 ## Set Up the Kaggle CLI
 
 Install the CLI:
@@ -266,7 +286,16 @@ kaggle competitions leaderboard kaggriculture -s
 # Test locally (agents: use this script — no upload)
 bash scripts/smoke_test.sh
 
-# Or inline smoke
+# Seat 1 vs V55 (default opponent is already V55)
+SMOKE_US_SEAT=1 bash scripts/smoke_test.sh
+
+# Quick regression vs random
+SMOKE_OPPONENT=random bash scripts/smoke_test.sh
+
+# Dual track: random regression + V55 W/L/T
+SMOKE_RUNS=6 bash scripts/smoke_multi_run.sh
+
+# Or inline smoke (default config)
 python -c "
 from kaggle_environments import make
 env = make('kaggriculture', debug=True)

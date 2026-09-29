@@ -1,6 +1,45 @@
-# NE land expansion and price forecast (plan chain)
+# NE / SW land expansion, price forecast, and zone value gate
 
-Historical plans live under `.cursor/plans/`. **Live code:** `milos/zoning.py` → `CURRENT = MILOS_TWOLAND12` (NW 25 tiles + 6 NE zones, 11 hire slots total, `NUM_ACTIVE_HIRES = 5` for NW h0 HIREs).
+Historical plans live under `.cursor/plans/`. **Live code:** `milos/zoning.py` → `CURRENT = MILOS_THREELAND15` (default), `NUM_ACTIVE_HIRES = NW_HANDS`, SW on via `KAGGRI_SW=1`.
+
+## Live layout (Sep 29)
+
+| Layout | Env | Hands |
+| --- | --- | --- |
+| **THREELAND15** (live) | `KAGGRI_LAYOUT=threeland15` | NW farmer+hire1–4, NE hire5–9, SW hire10–14 |
+| THREELAND18 | `threeland18` | 6-man NW + NE + SW |
+| TWOLAND12 | `twoland12` | NW + NE only (historical live) |
+
+Buy-day NE/SW replans solve **only** that land’s workers with full money and overage-clamped `max_time`.
+
+---
+
+## Zone value activation gate — `zone_value_activation_gate` (completed Sep 29)
+
+**Problem:** Feasible/cash-OK SW zones (esp. hire14) can have solver `obj` below hire+spend over remaining days.
+
+**Rule:** accept new NE/SW zone iff `obj − _zone_plan_cost >= min_net` (ship `min_net=0`).
+- `obj` = CP-SAT harvest objective (gross of hire/spend).
+- `cost` = full-horizon seed/animal spend + `HAND_DAILY_COST × D`.
+- Missing obj → fail open (`value_unknown`).
+- Buy-day: break on first reject (prefix). Walk 2/3 retries (no latch).
+- SW buy-day: log `wasted_land` if `n_active < 2`.
+
+**Shipped in:** `milos/wsp/{mip,twoland,oneland,types}.py`, `milos/planner.py`.
+
+**Verify:** `active_sw` stops before hire14; NE fills all 5; not final reward.
+
+---
+
+## SW expansion — `sw_land_expansion` + `5-man_three_lands` (completed)
+
+**Shipped:**
+- Dusk `schedule_sw_buy_at_dusk`: NE full+bound, cash ≥ 4000, overage ≥ 40, day 8..18.
+- `replan_after_buy_sw` + Walk 3 `_activate_next_sw`; rollbacks via `dawn_sw_bound_handoff`.
+- THREELAND15 5-man rosters; `SW_MAX_ZONES=5`, `SW_BUY_LAST_DAY=18`.
+- Ops +1 in code for live three-land caps (do not edit `milos_zoning.md` for that unless asked).
+
+---
 
 ## NE buying — plans implemented (order of evolution)
 
@@ -9,81 +48,48 @@ Historical plans live under `.cursor/plans/`. **Live code:** `milos/zoning.py` �
 **Goal:** Add NE as six zones (VII–XII) that activate one at a time after NW is running.
 
 **Shipped:**
-- `MILOS_TWOLAND12` layout, `NW_WORKERS` / `NE_WORKERS` / `NE_TILES`, NE zones with PICKUP-only preambles and doc ops caps.
-- `oneland.solve(workers=...)` so inactive NE hands are not charged daily cost.
-- `planner.replan()` **Walk 1** over `active_workers()`; **Walk 2** `_activate_next_ne` for front pending zone.
-- Original land path: zone VII mini-solve could set `BUY_LAND_DAY = day+1` with busy/cash gates; `is_buy_morning_locked` treated NE as empty on buy morning; market `BUY_LAND` first at h0 + h1 HIREs × `len(ACTIVE_NE)`; buy window h0–h1 for overflow.
-- Executor: slot-based NE bind → `NE_BOUND_TODAY`; fix LOCKED tiles marked `active` in `_on_new_day`.
-
-**Pain:** `BUY_LAND_DAY` tied to VII CP-SAT accept → nondeterministic / never-buy episodes.
+- `MILOS_TWOLAND12` layout, `NW_WORKERS` / `NE_WORKERS`, Walk 1/2, early VII-tied buy path.
+- Pain: `BUY_LAND_DAY` tied to VII CP-SAT → nondeterministic never-buy.
 
 ### 2. `cash_trigger_for_ne` (completed, later superseded)
 
-**Goal:** Decouple land buy from VII solve — trigger when `money >= NE_BUY_MIN_CASH` at dawn.
-
-**Shipped:** `_maybe_trigger_ne_buy` in `replan()` before walks; `BUY_LAND_DAY = today`; Walk 2 VII on buy morning with LOCKED tiles + land reserve; executor recomputed `_empty_at_dawn` after replan on buy day.
-
-**Superseded by:** dusk scheduling + buy-day joint replan (`robust_ne_buy`).
+Dawn cash trigger → superseded by dusk + buy-day joint replan (`robust_ne_buy`).
 
 ### 3. `fix_ne_rollback_bugs` (completed)
 
-**Goal:** Stop false NE rollbacks and queue wipes.
+`NE_DUE_DAY` + `dawn_ne_bound_handoff`; `_write_ne_activation` only writes assigned tiles.
 
-**Shipped:**
-- `NE_DUE_DAY` replaces `NE_PENDING_EXPECT` / `NE_BOUND_PREV_DAY` / `NE_ACTIVATED_DAY`; `dawn_ne_bound_handoff` rolls back only when due day passed and hire did not bind yesterday.
-- `_write_ne_activation` loops `assigned.items()` only (no wipe of planted tiles).
-- Separate try/except for Walk 1 vs Walk 2; `[ne] reject` includes `ok=`.
+### 4. `lower_ne_busy_gate` (intent absorbed)
 
-### 4. `lower_ne_busy_gate` (partial / intent absorbed)
+Land buy via dusk; Walk 2 when owned with `busy_day0 < 1` + cash + solver + **zone value gate**.
 
-**Goal:** Buy NE without utilization gate; later zones `busy_day0 < 1` instead of `< 2`.
+### 5. `robust_ne_buy` (completed)
 
-**Live today:** Land buy no longer goes through Walk 2 VII gate — **`schedule_ne_buy_at_dusk`** sets `BUY_LAND_DAY`. Walk 2 only runs when NE is **owned**; gate is `busy_day0 < 1` + cash + solver ok (not the old `< 2` on all zones).
-
-### 5. `robust_ne_buy` (completed in code)
-
-**Goal:** Forecast failures must not block buy; dusk cash trigger; one joint NE cascade at h1 on buy day.
-
-**Shipped:**
-- **W1:** `_safe_price_of` wraps forecast (fallback to market quotes / I0 path); Walk 2 uses `pending[0]` not `NE_WORKERS[len(ACTIVE_NE)]`.
-- **W2:** `schedule_ne_buy_at_dusk` at h23 (`NE_BUY_MIN_CASH=3000`, days 2–22); removed dawn `_maybe_trigger_ne_buy`; market h0 `BUY_LAND` guarded with NE not already owned.
-- **W3:** `is_buy_morning_locked` → always `False`; buy morning skips Walk 2; **`replan_after_buy`** at h1 (NE tiles only, NW locked in cascade but not rewritten); `_empty_at_dawn` recompute at h1; market buy hours `(0,1,2)` on `BUY_LAND_DAY`.
-
-**Tunables:** `NE_BUY_MIN_CASH`, `NE_BUY_FIRST_DAY`, `NE_BUY_LAST_DAY`, buy-replan `max_time=24`.
+- `_safe_price_of`; dusk `schedule_ne_buy_at_dusk` (`NE_BUY_MIN_CASH=2000` live, days 2–22).
+- Buy morning: skip Walk 2; `replan_after_buy` at h1 (NE workers only on ThreeLand15); market hours 0–2 on buy day.
 
 ### 6. `daily_price_forecast` (completed, earlier)
 
-**Goal:** Replace dawn price heuristic with inventory walk (frozen queues, shops, town center).
-
-**Shipped:** `milos/price_forecast.py`, replan `price_of(product, rel_day)`; removed separate glut/effective_price heuristics in one wave.
-
-**Gap left for next plan:** solver self-impact and competition config mismatch.
+`milos/price_forecast.py` inventory walk; gaps filled by `fix_price_forecast`.
 
 ---
 
-## Price forecast fix — `fix_price_forecast` (completed, Sep 2026 chat)
-
-**Problem:** Wool/melon looked valuable while market glutted ($1); local engine ≠ competition (e.g. `townCenterSellInterval: 24`, duplicate shop unlocks); MELON `with_fert` KeyError crashed forecast → optimistic I0 fallback; MIP ignored own wool supply (`del locked_counts`).
-
-**Waves (one commit each):**
+## Price forecast fix — `fix_price_forecast` (completed)
 
 | Wave | What |
 | --- | --- |
-| **W1** | `_resolve_profile` fallback in `_add_profile_harvests`; `_safe_price_of` falls back to **live market quotes**, logs `[fc] FORECAST FAILED` |
-| **W2** | `main.py` `agent(obs, config=None)` + `milos/envconfig.py` (intervals, shed cap, `marketParams`); duplicate-shop-safe demand; `sell_dp` speculative shop term discounted (`P_NEW_SHOP`, drop for glut products); `[cfg]` / `[shops]` logs |
-| **W3** | `walk_prices_and_inv`; `price_of(..., extra_units)`; `extra_units=0` on all fallback lambdas |
-| **W4** | `mip._pattern_weight` uses `locked_counts` + per-unit curve; `product_caps` / `_glut_headroom` in oneland/twoland solves |
-| **W5** | `milos/drain_calib.py` — clean-day observed vs modelled drain, clamp 0.1–1.0; `observe_drain` at h0; `note_sells` in market |
+| **W1** | Profile/forecast fail → **live market quotes**, log `[fc] FORECAST FAILED` |
+| **W2** | `agent(obs, config)` + `envconfig`; shop-safe demand; sell_dp shop term |
+| **W3** | `walk_prices_and_inv`; `price_of(..., extra_units)` |
+| **W4** | MIP `locked_counts` + `product_caps` |
+| **W5** | `drain_calib` clean-day clamp |
 
-**Verify:** 3× `smoke_test.sh` + one run with `townCenterSellInterval=24`; grep `[fc]`, `[cfg]`, WOOL inventory/caps/drain. Do not submit unless asked.
-
-**Submissions referenced in comparison nb:** e.g. `56640030` vs `56641070` (robust NE vs better forecast).
+Do not submit unless asked.
 
 ---
 
-## Replay / notebook notes (Sep 2026)
+## Replay / notebook notes
 
-- **`scripts/replay_analysis/kpi.py`:** `revenue_per_tile_day_by_crop` must use `crop_tile_days.get(prod)` (product keys EGG/MILK/WOOL), not animal names.
-- **Cached summaries** (`kaggle_logs/<id>/<id>.json`) store planner KPIs at summarize time — stale `revenue_per_tile_day_by_crop` after KPI fixes.
-- **`experiments/submission_nb.revenue_per_tile_day_by_product(game)`** recomputes from `sells.by_player[us].revenue` ÷ `planner.crop_tile_days` so comparison §5 shows animals without `REFRESH=True`.
-- **`submission_comparison.ipynb` §1:** split violins use `density_norm="count"` so bar width reflects episode count (fair A vs B when win rates differ).
+- Animal `$/tile-day` keyed by product (EGG/MILK/WOOL); `submission_nb.revenue_per_tile_day_by_product` for stale caches.
+- Comparison violins: `density_norm="count"`.
+- Smoke: `plot_zone_earnings_vs_cost` motivated the zone value gate.
