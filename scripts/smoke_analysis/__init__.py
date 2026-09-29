@@ -5,7 +5,15 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from smoke_analysis import parse_actions, parse_earnings, parse_exec, parse_planner, parse_snap
+from smoke_analysis import (
+    parse_actions,
+    parse_earnings,
+    parse_exec,
+    parse_opp,
+    parse_planner,
+    parse_sell_prices,
+    parse_snap,
+)
 from smoke_analysis.kpi import compute_kpis
 from smoke_analysis.load import SEASON_DAYS, load_lines, parse_seed
 
@@ -18,6 +26,8 @@ __all__ = [
     "plot_stuck_skip_freq",
     "plot_zone_capacity",
     "plot_zone_earnings_vs_cost",
+    "plot_us_vs_opp_daily",
+    "plot_sell_price_heatmap",
     "summarize_distribution",
     "load_lines",
     "SEASON_DAYS",
@@ -66,6 +76,18 @@ def plot_zone_earnings_vs_cost(
     report: dict[str, Any], *, title: str | None = None
 ) -> None:
     from smoke_analysis.plot import plot_zone_earnings_vs_cost as _plot
+
+    return _plot(report, title=title)
+
+
+def plot_us_vs_opp_daily(report: dict[str, Any], *, title: str | None = None) -> None:
+    from smoke_analysis.plot import plot_us_vs_opp_daily as _plot
+
+    return _plot(report, title=title)
+
+
+def plot_sell_price_heatmap(report: dict[str, Any], *, title: str | None = None) -> None:
+    from smoke_analysis.plot import plot_sell_price_heatmap as _plot
 
     return _plot(report, title=title)
 
@@ -133,6 +155,23 @@ def analyze(path: str | Path) -> dict[str, Any]:
         worker_tiles=worker_tiles,
     )
 
+    opp = parse_opp.parse_opp(lines, season_days=SEASON_DAYS)
+    vs_opp = {
+        **opp,
+        "us_tile_ops_by_day": parse_opp.us_tile_ops_by_day(
+            actions, season_days=SEASON_DAYS
+        ),
+        "opp_tile_ops_by_day": opp["tile_ops_by_day"],
+        "us_net_cash_by_day": earnings.get("net_cash_by_day") or [0.0] * SEASON_DAYS,
+        "opp_net_cash_by_day": opp["net_cash_by_day"],
+        "us_money_by_day": parse_snap.money_by_day(snaps, season_days=SEASON_DAYS),
+        "opp_money_by_day": opp["money_by_day"],
+    }
+
+    sell_prices = parse_sell_prices.parse_sell_price_heatmap(
+        lines, snaps, season_days=SEASON_DAYS
+    )
+
     worker_first_day = parse_exec.parse_worker_first_active_day(
         lines,
         workers,
@@ -156,6 +195,8 @@ def analyze(path: str | Path) -> dict[str, Any]:
         "money": {"by_day": parse_snap.money_by_day(snaps, season_days=SEASON_DAYS)},
         "earnings": earnings,
         "actions": actions,
+        "vs_opp": vs_opp,
+        "sell_prices": sell_prices,
         "hires": hires,
         "hands": {**hands_dawn, **hands_eod},
         "planner": planner,
@@ -239,6 +280,15 @@ def summarize(report: dict[str, Any]) -> str:
         f"skip_cascade={len(report.get('planner', {}).get('skip_cascade', []))} "
         f"infeasible={len(report.get('planner', {}).get('infeasible', []))}",
     ]
+    vs = report.get("vs_opp") or {}
+    if vs.get("present"):
+        us_ops = sum(vs.get("us_tile_ops_by_day") or [])
+        opp_ops = sum(vs.get("opp_tile_ops_by_day") or [])
+        lines.append(
+            f"vs_opp: tile_ops us={us_ops} opp={opp_ops} "
+            f"reward_us={vs.get('reward_us')} reward_opp={vs.get('reward_opp')} "
+            f"margin={vs.get('margin')}"
+        )
     idle = report.get("kpi", {}).get("idle_proxy", {})
     lines.append(
         f"idle: mean_empty={idle.get('mean_empty_per_dawn', 0):.1f} "

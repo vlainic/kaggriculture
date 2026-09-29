@@ -726,3 +726,152 @@ def plot_zone_earnings_vs_cost(
     )
     plt.tight_layout()
     plt.show()
+
+
+def plot_us_vs_opp_daily(report: dict[str, Any], *, title: str | None = None) -> None:
+    """Compare us vs opp: total tile ops/day and dawn net-cash Δ/day."""
+    vs = report.get("vs_opp") or {}
+    stem = title or report.get("log_stem") or "smoke"
+    if not vs.get("present"):
+        fig, ax = plt.subplots(figsize=(10, 2.5))
+        ax.text(
+            0.5,
+            0.5,
+            "no [opp] logs — smoke vs scripts/v55_logged_opponent.py",
+            ha="center",
+            va="center",
+        )
+        ax.axis("off")
+        ax.set_title(f"{stem} — us vs opp")
+        plt.tight_layout()
+        plt.show()
+        return
+
+    us_ops = vs.get("us_tile_ops_by_day") or [0] * SEASON_DAYS
+    opp_ops = vs.get("opp_tile_ops_by_day") or [0] * SEASON_DAYS
+    us_net = vs.get("us_net_cash_by_day") or [0] * SEASON_DAYS
+    opp_net = vs.get("opp_net_cash_by_day") or [0] * SEASON_DAYS
+    days = np.arange(SEASON_DAYS)
+    width = 0.4
+
+    fig, (ax0, ax1) = plt.subplots(2, 1, figsize=(14, 7), sharex=True)
+
+    ax0.bar(days - width / 2, us_ops[:SEASON_DAYS], width, color=US_COLOR, alpha=0.85, label="us")
+    ax0.bar(days + width / 2, opp_ops[:SEASON_DAYS], width, color="#c62828", alpha=0.75, label="opp")
+    ax0.set_ylabel("tile ops")
+    ax0.set_title("Total tile ops per day (PICKUP+field acts; MOVE/PASS excluded)")
+    ax0.legend(fontsize=8)
+    ax0.grid(True, axis="y", linestyle="--", alpha=0.35)
+
+    ax1.bar(days - width / 2, us_net[:SEASON_DAYS], width, color=US_COLOR, alpha=0.85, label="us")
+    ax1.bar(days + width / 2, opp_net[:SEASON_DAYS], width, color="#c62828", alpha=0.75, label="opp")
+    ax1.axhline(0, color="gray", lw=0.8)
+    ax1.set_xlabel("day")
+    ax1.set_ylabel("coins")
+    ax1.set_title("Net cash Δ per day (dawn money[d] − dawn money[d−1])")
+    ax1.legend(fontsize=8)
+    ax1.grid(True, axis="y", linestyle="--", alpha=0.35)
+    ax1.set_xlim(-0.5, SEASON_DAYS - 0.5)
+
+    ru, ro, mg = vs.get("reward_us"), vs.get("reward_opp"), vs.get("margin")
+    extras = []
+    if ru is not None:
+        extras.append(f"us={ru:.0f}")
+    if ro is not None:
+        extras.append(f"opp={ro:.0f}")
+    if mg is not None:
+        extras.append(f"margin={mg:.0f}")
+    suffix = ("  " + " ".join(extras)) if extras else ""
+    fig.suptitle(f"{stem} — us vs opp{suffix}", fontsize=11)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_sell_price_heatmap(report: dict[str, Any], *, title: str | None = None) -> None:
+    """Heatmap: product × (dawn quote / base), color = sold units (us + opp panels)."""
+    from matplotlib.colors import LogNorm
+
+    sp = report.get("sell_prices") or {}
+    stem = title or report.get("log_stem") or "smoke"
+    products = sp.get("products") or []
+    rel_bins = sp.get("rel_bins") or [1.0]
+    us = np.asarray(sp.get("us_amount") or [], dtype=float)
+    opp = np.asarray(sp.get("opp_amount") or [], dtype=float)
+
+    if not products or (not sp.get("present_us") and not sp.get("present_opp")):
+        fig, ax = plt.subplots(figsize=(10, 2.5))
+        ax.text(0.5, 0.5, "no SELL lines parsed", ha="center", va="center")
+        ax.axis("off")
+        ax.set_title(f"{stem} — sell @ relative price")
+        plt.tight_layout()
+        plt.show()
+        return
+
+    n_panels = int(bool(sp.get("present_us"))) + int(bool(sp.get("present_opp")))
+    fig, axes = plt.subplots(
+        1,
+        max(n_panels, 1),
+        figsize=(7 * max(n_panels, 1) + 1.2, 5),
+        squeeze=False,
+    )
+    panels: list[tuple[str, np.ndarray]] = []
+    if sp.get("present_us"):
+        panels.append(("us", us if us.size else np.zeros((len(products), len(rel_bins)))))
+    if sp.get("present_opp"):
+        panels.append(("opp", opp if opp.size else np.zeros((len(products), len(rel_bins)))))
+
+    # Gradual sequential map; shared log scale so us/opp are comparable.
+    cmap = plt.colormaps["YlOrRd"].copy()
+    cmap.set_bad("#fafafa")
+    positives = [g[g > 0] for _, g in panels if g.size]
+    flat = np.concatenate(positives) if positives else np.array([1.0])
+    vmin = max(1.0, float(np.min(flat)))
+    vmax = max(vmin * 1.01, float(np.max(flat)))
+    norm = LogNorm(vmin=vmin, vmax=vmax)
+
+    x = np.asarray(rel_bins, dtype=float)
+    if len(x) == 1:
+        width = float(sp.get("rel_bin_width") or 0.05)
+        x_left, x_right = x[0] - width / 2, x[0] + width / 2
+    else:
+        mid = 0.5 * (x[1:] - x[:-1])
+        edges = np.empty(len(x) + 1)
+        edges[1:-1] = x[:-1] + mid
+        edges[0] = x[0] - mid[0]
+        edges[-1] = x[-1] + mid[-1]
+        x_left, x_right = float(edges[0]), float(edges[-1])
+
+    ims = []
+    for ax, (label, grid) in zip(axes[0], panels):
+        masked = np.ma.masked_where(grid <= 0, grid)
+        im = ax.imshow(
+            masked,
+            aspect="auto",
+            cmap=cmap,
+            norm=norm,
+            interpolation="nearest",
+            origin="upper",
+            extent=(x_left, x_right, len(products) - 0.5, -0.5),
+        )
+        ims.append(im)
+        ax.axvline(1.0, color="#424242", ls="--", lw=1.0, alpha=0.8)
+        ax.set_yticks(range(len(products)), products)
+        ax.set_xlabel("relative price (dawn quote / base)")
+        ax.set_ylabel("product")
+        n_ev = (sp.get("n_sell_events") or {}).get(label, 0)
+        ax.set_title(f"{label} sold units ({n_ev} SELL events)")
+
+    fig.suptitle(
+        f"{stem} — sells by product × relative price (dawn snap quote)",
+        fontsize=11,
+    )
+    fig.tight_layout(rect=(0, 0, 0.92, 0.96))
+    cbar = fig.colorbar(
+        ims[0],
+        ax=axes.ravel().tolist(),
+        location="right",
+        fraction=0.04,
+        pad=0.04,
+    )
+    cbar.set_label("units sold (shared log scale)")
+    plt.show()

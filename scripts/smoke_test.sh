@@ -10,6 +10,13 @@ cd "$ROOT"
 SUBMISSION="submission.tar.gz"
 BUILD="$ROOT/build/submission"
 
+V55_MAIN="$ROOT/opponents/v55/main.py"
+V55_LOGGED="$ROOT/scripts/v55_logged_opponent.py"
+# Default: logged V55 wrapper ([opp]/[opp_snap] exec+money). Raw: opponents/v55/main.py
+SMOKE_OPPONENT="${SMOKE_OPPONENT:-$V55_LOGGED}"
+SMOKE_US_SEAT="${SMOKE_US_SEAT:-0}"
+SMOKE_OPP_VERBOSE="${SMOKE_OPP_VERBOSE:-1}"
+
 if command -v conda >/dev/null 2>&1; then
   # shellcheck disable=SC1091
   source "$(conda info --base)/etc/profile.d/conda.sh"
@@ -21,6 +28,7 @@ if [[ ! -d vendor/ortools ]]; then
   bash "$ROOT/scripts/vendor_ortools.sh"
 fi
 
+# Explicit copy list only — never opponents/ (second main.py would break submission).
 echo "==> Building ${SUBMISSION} (main.py + milos/ + data/ + vendored ortools)"
 rm -rf "$BUILD"
 mkdir -p "$BUILD"
@@ -34,104 +42,30 @@ find "$BUILD" -name '*.pyc' -delete 2>/dev/null || true
 
 tar -czf "$SUBMISSION" -C "$BUILD" .
 ls -lh "$SUBMISSION"
+if tar -tzf "$SUBMISSION" | grep -qi opponents; then
+  echo "FAIL: submission tarball must not contain opponents/" >&2
+  exit 1
+fi
 
-echo "==> Smoke test: main.py vs random (720 steps) [local env]"
+if [[ "$SMOKE_OPPONENT" == "$V55_MAIN" \
+   || "$SMOKE_OPPONENT" == "opponents/v55/main.py" \
+   || "$SMOKE_OPPONENT" == "$V55_LOGGED" \
+   || "$SMOKE_OPPONENT" == *"v55_logged_opponent.py" ]]; then
+  if [[ ! -f "$V55_MAIN" ]]; then
+    echo "==> Extracting V55 opponent"
+    python3 "$ROOT/scripts/extract_v55_opponent.py"
+  fi
+fi
+
+echo "==> Smoke test: main.py vs ${SMOKE_OPPONENT} us_seat=${SMOKE_US_SEAT} (720 steps, default config)"
 export KAGGRI_VERBOSE=1
+export SMOKE_ROOT="$ROOT"
+export SMOKE_OPPONENT
+export SMOKE_US_SEAT
+export SMOKE_OPP_VERBOSE
 {
-echo "==> Log: ${SMOKE_LOG}"
-python3 -c "
-import io
-import re
-import sys
-from collections import defaultdict
-from contextlib import redirect_stdout
-
-from kaggle_environments import make
-
-env = make('kaggriculture', configuration={'episodeSteps': 720}, debug=True)
-log_buf = io.StringIO()
-with redirect_stdout(log_buf):
-    env.run(['main.py', 'random'])
-run_log = log_buf.getvalue()
-sys.stdout.write(run_log)
-
-final = env.steps[-1]
-for i, s in enumerate(final):
-    print(f'Player {i}: reward={s.reward}, status={s.status}')
-    if s.status != 'DONE':
-        raise SystemExit(f'Smoke test failed: player {i} status={s.status!r}')
-
-lines = run_log.splitlines()
-
-SEASON_LAST_DAY = 29
-
-exec_re = re.compile(r'\[exec\] d=(\d+) h=(\d+)')
-by_day_hand2 = defaultdict(list)
-early_wheat_sells = []
-for line in lines:
-    m = exec_re.search(line)
-    if not m:
-        continue
-    day, hour = int(m.group(1)), int(m.group(2))
-    if (
-        day < SEASON_LAST_DAY
-        and ' market ' in line
-        and 'SELL WHEAT' in line
-        and hour < 5
-    ):
-        early_wheat_sells.append(line.strip())
-    if ' hand2 ' in line:
-        act = line.split(' hand2 ', 1)[1].split(' farmer')[0].strip()
-        by_day_hand2[day].append((hour, act))
-
-build = sum(
-    1 for acts in by_day_hand2.values() for _, a in acts
-    if a.startswith('BUILD_COOP') or a.startswith('BUILD_PASTURE')
-)
-place = sum(
-    1 for acts in by_day_hand2.values() for _, a in acts
-    if a.startswith('PLACE')
-)
-# Empty pasture/coop persists after harvest; replan PLACE reuses structure (no new BUILD).
-if place > 0 and build == 0:
-    print(
-        f'FAIL: hand2 PLACE={place} with BUILD_COOP/BUILD_PASTURE=0 (need at least one build)',
-        file=sys.stderr,
-    )
-    raise SystemExit(1)
-
-for day, acts in sorted(by_day_hand2.items()):
-    place_hours = [h for h, a in acts if a.startswith('PLACE')]
-    if not place_hours:
-        continue
-    feed_hours = [h for h, a in acts if a.startswith('FEED')]
-    if not feed_hours:
-        print(f'FAIL: d={day} hand2 PLACE without same-day FEED', file=sys.stderr)
-        raise SystemExit(1)
-
-if early_wheat_sells:
-    print('FAIL: SELL WHEAT during hours 0-4:', file=sys.stderr)
-    for line in early_wheat_sells[:5]:
-        print(f'  {line}', file=sys.stderr)
-    raise SystemExit(1)
-
-day0_buy_seed = any(
-    ' market ' in line and 'BUY_SEED' in line
-    for line in lines
-    if line.startswith('[exec] d=0 ')
-)
-day0_plant = any(
-    (' farmer PLANT' in line or ' hand' in line and ' PLANT' in line)
-    for line in lines
-    if line.startswith('[exec] d=0 ')
-)
-if not day0_buy_seed and not day0_plant:
-    print('FAIL: day-0 had zero BUY_SEED and zero PLANT', file=sys.stderr)
-    raise SystemExit(1)
-
-print(f'Smoke checks passed: hand2 BUILD_COOP/BUILD_PASTURE={build} PLACE={place}, no early SELL WHEAT, day-0 productive')
-print('Smoke test passed.')
-"
+  echo "==> Log: ${SMOKE_LOG}"
+  python3 "$ROOT/scripts/smoke_episode.py"
 } 2>&1 | tee "$SMOKE_LOG"
 
 echo "==> Done (no Kaggle upload). To submit: scripts/smoke_and_submit.sh --submit \"message\""
