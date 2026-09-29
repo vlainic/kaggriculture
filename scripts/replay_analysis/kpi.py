@@ -703,11 +703,11 @@ def _planner_for_player(
     utilization = occupied_turns / unlocked_turns if unlocked_turns else 0.0
 
     rev_per_tile_day: dict[str, float] = {}
-    for crop, rev in revenue_by_product.items():
-        animal = _product_to_crop_or_animal(crop)
-        td = crop_tile_days.get(animal, 0)
+    for prod, rev in revenue_by_product.items():
+        # crop_tile_days is keyed by crop name or animal product (EGG/MILK/WOOL)
+        td = crop_tile_days.get(prod, 0)
         if td:
-            rev_per_tile_day[crop] = rev / td
+            rev_per_tile_day[prod] = rev / td
 
     end_priv = records[-1].observation.get("private") or {}
     end_shed = end_priv.get("shed") or {}
@@ -763,6 +763,7 @@ def _planner_for_player(
 
 
 def _product_to_crop_or_animal(product: str) -> str:
+    """Map animal product → animal name; crops pass through. Unused by tile-day KPI."""
     for animal in ("GOOSE", "CHICKEN", "COW", "SHEEP"):
         try:
             if animal_rollouts.product_for(animal) == product:

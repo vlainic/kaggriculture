@@ -326,6 +326,34 @@ def us_kpi(game: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], dict[s
     )
 
 
+def revenue_per_tile_day_by_product(game: dict[str, Any]) -> dict[str, float]:
+    """$/tile-day per product (crops + EGG/MILK/WOOL).
+
+    Recomputes from sell-sim revenue and planner tile-days so cached summaries
+    stay valid after KPI fixes without a full re-summarize.
+    """
+    u = game_us_index(game)
+    _, _, plan_k = us_kpi(game)
+    tile_days = plan_k.get("crop_tile_days") or {}
+    sells_block = game.get("sells") or {}
+    by_player = sells_block.get("by_player") or []
+    revenue = (
+        (by_player[u].get("revenue") or {})
+        if u < len(by_player) and isinstance(by_player[u], dict)
+        else {}
+    )
+    if not revenue:
+        cached = plan_k.get("revenue_per_tile_day_by_crop") or {}
+        return {k: float(v) for k, v in cached.items()}
+
+    out: dict[str, float] = {}
+    for prod, rev in revenue.items():
+        td = int(tile_days.get(prod) or 0)
+        if td:
+            out[str(prod)] = float(rev) / td
+    return out
+
+
 def reward_us(game: dict[str, Any]) -> float | None:
     u = game_us_index(game)
     rewards = game.get("rewards") or []
