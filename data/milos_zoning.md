@@ -1,5 +1,149 @@
 # MILOS FINAL
 
+## ThreeLand 4-man (proposed — not live)
+
+Geometry matches [`handmade_pseudoplan.md`](handmade_pseudoplan.md) and legacy `agent/zoning.py` `FOUR` (9 + 6 + 6 + 4 tiles per land). **Not implemented** in `milos/zoning.py`; live default remains **5-man** `MILOS_THREELAND15` below.
+
+---
+
+## NW-land: 4-man
+
+All **3** hires bought at h=0 (HIRE orders first in the h=0 market list).
+
+- market h=0 only (no mid-day BUY wheat / animal / seed):
+    - wheat (feed reserve)
+    - then animal (shed pickup before PLACE)
+    - finally plant seed
+
+### Tile numbering (1-based)
+
+Shed door = tile **1** at `(4, 4)`.
+
+```text
+24 23 13 14 15
+25 22 12 11 10
+19 18  9  8  7
+20 17  4  5  6
+21 16  3  2  1
+```
+
+**0-based indices** (env visit order): farmer `0..8`, Top `9..14`, Left `15..20`, Corner `21..24`.
+
+### Zone assignment
+
+| Zone | Worker | Tiles (1-based) | Count |
+|------|--------|-----------------|------:|
+| Farmer | farmer | 1–9 | 9 |
+| Top | hire1 | 10–15 | 6 |
+| Left | hire2 | 16–21 | 6 |
+| Corner | hire3 | 22–25 | 4 |
+
+- Hire1 spawned **NE** of shed (top-right adjacent); handles **Top**.
+- Hire2 spawned **SW** of shed (bottom-left adjacent); handles **Left**.
+- Hire3 handles **Corner** (also hired at h=0 with hire1/hire2).
+
+### Pre-defined movement snakes
+
+- Farmer: buying & pickup (if needed); in-zone **2×W, N, 2×E, N, 2×W**
+- Hire1 (Top): **W**, then pickup if animal else **3×N** to zone; in-zone **2×W, N, 2×E**
+- Hire2 (Left): **N**, then pickup if animal else **3×W** to zone; in-zone **2×N, W, 2×S**
+- Hire3 (Corner): **W**, then pickup if animal else **3×W + 3×N** to zone; in-zone **N, W, S**
+
+### Ops-limits
+
+- Farmer = 14
+- Hire1 = 12
+- Hire2 = 12
+- Hire3 = 10
+
+---
+
+## NE-land: 4-man
+
+Mirror NW across the land boundary: coord `(x, y) → (9 − x, y)`. Tiles **26–50**. Hired at **h=1** (−1 net tile op vs NW). Market h=0–1 (extend to h=2 on NE buy day); no mid-day BUY after buy window closes.
+
+### Tile numbering (1-based)
+
+LR mirror of NW (`x' = 9 − x`, same `y`; north = top, matching NW diagram):
+
+```text
+40 39 38 48 49
+35 36 37 47 50
+32 33 34 43 44
+31 30 29 42 45
+26 27 28 41 46
+```
+
+### Zone assignment
+
+| Zone | Worker | Tiles (1-based) | Count |
+|------|--------|-----------------|------:|
+| Farmer mirror | hire4 | 26–34 | 9 |
+| Top mirror | hire5 | 35–40 | 6 |
+| East mirror (was Left) | hire6 | 41–46 | 6 |
+| Corner mirror | hire7 | 47–50 | 4 |
+
+Preamble: walk to **owned NE shed-adjacent**, `PICKUP` wheat/animals as needed, then mirrored travel (**E** instead of **W**).
+
+### Pre-defined movement snakes (mirror of NW)
+
+- Hire4 (9-tile patch): in-zone **2×E, N, 2×W, N, 2×E** (mirror of farmer snake); approach via owned NE shed-adjacent **PICKUP** then column entry as implemented
+- Hire5 (Top mirror): **E**, pickup if animal else **3×N**; in-zone **2×E, N, 2×W**
+- Hire6 (East mirror): **N**, pickup if animal else **3×E**; in-zone **2×N, E, 2×S**
+- Hire7 (Corner mirror): **E**, pickup if animal else **3×E + 3×N**; in-zone **N, E, S**
+
+### Ops-limits
+
+- Hire4 = 13
+- Hire5 = 11
+- Hire6 = 11
+- Hire7 = 9
+
+---
+
+## SW-land: 4-man
+
+Mirror NW south: `(x, y) → (x, 9 − y)`. Tiles **51–75**. Hired at **h=1** (−1 net tile op vs NW, same as NE). Market h=0–1 (extend on SW buy day); no mid-day BUY after buy window closes.
+
+### Tile numbering (1-based)
+
+UD mirror of NW (`y' = 9 − y`, same `x`; north/toward shed = top):
+
+```text
+71 66 53 52 51
+70 67 54 55 56
+69 68 59 58 57
+75 72 62 61 60
+74 73 63 64 65
+```
+
+### Zone assignment
+
+| Zone | Worker | Tiles (1-based) | Count |
+|------|--------|-----------------|------:|
+| Farmer mirror | hire8 | 51–59 | 9 |
+| Top mirror | hire9 | 60–65 | 6 |
+| West mirror (was Left) | hire10 | 66–71 | 6 |
+| Corner mirror | hire11 | 72–75 | 4 |
+
+Preamble: **owned SW shed-adjacent**, `PICKUP`, then mirrored travel (**S** instead of **N** where applicable).
+
+### Pre-defined movement snakes (mirror of NW)
+
+- Hire8 (9-tile patch): in-zone **2×W, S, 2×E, S, 2×W** (mirror of farmer snake); **PICKUP** at owned SW shed-adjacent first
+- Hire9 (Top mirror): **W**, pickup if animal else **3×S**; in-zone **2×W, S, 2×E**
+- Hire10 (West mirror): **S**, pickup if animal else **3×W**; in-zone **2×S, W, 2×N**
+- Hire11 (Corner mirror): **W**, pickup if animal else **3×W + 3×S**; in-zone **S, W, N**
+
+### Ops-limits
+
+- Hire8 = 13
+- Hire9 = 11
+- Hire10 = 11
+- Hire11 = 9
+
+---
+
 ## NW-land: 5-man
 All 4 hires bought at h=0 (when implemented: HIRE orders first in the h=0 market list).
 - market h=0 only (no mid-day BUY wheat / animal / seed):
@@ -229,4 +373,4 @@ Preamble: `PICKUP` only.
 
 - hire10 = 16, hire11 = 13, hire12 = 12, hire13 = 12, hire14 = 11
 
-**Layout env:** `KAGGRI_LAYOUT=threeland15` (default), `threeland18`, `twoland12`; `KAGGRI_SW=0` disables SW buy/activate only.
+**Layout env (live):** `KAGGRI_LAYOUT=threeland15` (default), `threeland18`, `twoland12`; `KAGGRI_SW=0` disables SW buy/activate only. The **4-man ThreeLand** sections above are **documentation only** until a layout lands in `milos/zoning.py`.
