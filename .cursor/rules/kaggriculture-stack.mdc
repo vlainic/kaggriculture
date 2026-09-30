@@ -13,7 +13,7 @@ alwaysApply: true
 - **Domain & code conventions:** load `.cursor/skills/kaggriculture-domain/SKILL.md` for mechanics; load `.cursor/skills/kaggriculture-agent-conventions/SKILL.md` before writing/refactoring agent code.
 - **Agent scope:** do not add tests, eval harnesses, `agent/` modules, or `.venv` unless the user explicitly asks. A request for data (e.g. a JSON file) means that artifact only.
 - **Kaggle submit:** agents must **never** run `kaggle competitions submit` or `scripts/smoke_and_submit.sh` unless the user explicitly asks to submit in that message. Local smoke only: `scripts/smoke_test.sh` or `kaggle-environments`. See `.cursor/rules/kaggle-submission.mdc`.
-- **Live dispatch:** `main.py` → **`milos/`** ThreeLand **`MILOS_THREELAND15`** (NW farmer+hire1–4, NE hire5–9, SW hire10–14). Default `KAGGRI_LAYOUT=threeland15`, `KAGGRI_SW=1`. `agent/` TwoLand WSP remains in-repo as legacy.
+- **Live dispatch:** `main.py` → **`milos/`** ThreeLand **`MILOS_THREELAND12`** (4-man per land: NW farmer+hire1–3, NE hire4–7, SW hire8–11). Default `KAGGRI_LAYOUT=threeland12`, `KAGGRI_SW=1`. Day-0 `wsp4_prestart` + NE buy; day-1 NE staple fill. Legacy 5-man: `threeland15`. `agent/` TwoLand WSP remains in-repo as legacy.
 - **Milos wheat:** dawn `total_wheat_feed_need` = raw feed sum + **one** global `(zones_with_animals+1)//2` buffer. Shed `wheat_pickup_needed` = **raw zone need − inv only** (no per-zone buffer). Do not freeze routes waiting for wheat/PLACE.
 - **Shed cap 100:** env silently rejects `BUY_PRODUCT`/`BUY_ANIMAL` when full. Dump FERTILIZER every market hour to `max(10, fert need)`; dawn `_make_room_sells` before buys if needed. Watch `[snap] shed_total=`.
 - **Day-0 / replan queues:** write from `result.assigned` / `replan_set` — do not gate on `WORKER_TILES[solved_worker]` when layout ≠ prestart worker list (`TWOFOLD_HIRE` / hire5).
@@ -23,7 +23,7 @@ alwaysApply: true
 - **NE/SW buy:** dusk triggers → buy morning land-only `replan_after_buy` / `replan_after_buy_sw`. Walk 2/3 activate next pending zone when owned.
 - **Zone value gate:** activate NE/SW zone only if solver `obj − _zone_plan_cost >= 0` (ship default). Missing `obj` fails open. Buy-day break on first reject; Walk 2/3 retry (no latch). Local: `KAGGRI_ZONE_MIN_NET` / `KAGGRI_ZONE_MARGIN_RATIO`.
 - **Animals / ops:** agent loads `data/animal_with_pickups.json`. Ops cap is **`daily_tile_ops` / `net_tile_ops` only** (+ hire preamble). Do not also charge pickup side-channels — double-count.
-- **Zone layouts:** milos `CURRENT` from `KAGGRI_LAYOUT` (live **threeland15**). Legacy `agent/zoning.py` catalogs `FOUR` / `FIVE` / `TWO` / `THREE`. Hire cost = fib of hands; `NUM_ACTIVE_HIRES = NW_HANDS`.
+- **Zone layouts:** milos `CURRENT` from `KAGGRI_LAYOUT` (live **threeland12**). Legacy `agent/zoning.py` catalogs `FOUR` / `FIVE` / `TWO` / `THREE`. Hire cost = fib of hands; `NUM_ACTIVE_HIRES = NW_HANDS`.
 - **Live solver:** milos `twoland.solve` cascade (workers filtered per land). Legacy agent: `CURRENT_SOLVER = "twoland_wsp"`.
 - **Shed pickup:** the four center tiles are shed-adjacent **only if owned** (`tile != "LOCKED"`). PICKUP/DROP no-op on LOCKED centers. Executor: `_owned_shed_tiles` / `_step_to_owned_shed`. Do **not** mid-zone walk-to-shed (Sept02 failure).
 - **Smoke analysis:** `scripts/smoke_analysis/` follows live layout via `layout.py`; includes `plot_zone_earnings_vs_cost`. Do not hardcode land2 worker lists.

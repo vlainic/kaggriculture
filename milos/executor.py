@@ -19,7 +19,7 @@ from milos import (
     workers,
     zoning,
 )
-from milos.zoning import NET_TILE_OPS
+from milos.zoning import NET_TILE_OPS, is_threeland12
 
 _DEBUG = True
 
@@ -201,9 +201,6 @@ class Executor:
                 if _dawn_empty(me, idx, day)
             }
 
-        if hour == 2:
-            self._sw_slot_base = len(me.get("hands", []))
-
         if hour == 0:
             _log(f"[ovg] d={day} remaining={obs.get('remainingOverageTime')}")
             shops = obs.get("town", {}).get("unlocked_shops", [])
@@ -223,7 +220,9 @@ class Executor:
             if day == 1 and not self._day0_productive:
                 _log("[exec] WARN day-0 had zero BUY_SEED and zero PLANT")
             if day <= script.SEASON_LAST_DAY:
-                if 2 <= day < script.SEASON_LAST_DAY:
+                if 2 <= day < script.SEASON_LAST_DAY or (
+                    day == 1 and is_threeland12()
+                ):
                     try:
                         planner.replan(obs, script.TILE_QUEUES, self._tile_state)
                     except Exception as exc:
@@ -259,8 +258,19 @@ class Executor:
         )
         harvest_only = day >= script.SEASON_LAST_DAY
 
+        if hour == 1:
+            self._sw_slot_base = planner.NUM_ACTIVE_HIRES + len(
+                planner.NE_HIRED_TODAY
+            )
+        elif hour == 2 and self._sw_slot_base is None:
+            self._sw_slot_base = planner.NUM_ACTIVE_HIRES + len(
+                planner.NE_HIRED_TODAY
+            )
+
         if day <= script.SEASON_LAST_DAY:
             self._bind_hands(me, day, hour)
+            if hour in (1, 2):
+                self._log_hire_mismatch(me, day, hour)
 
         if market.defer_farmer_hour0(hour, day):
             farmer, fnote = ["PASS"], "market-hour"
@@ -647,11 +657,14 @@ class Executor:
     ) -> str | None:
         if slot in self._slot_to_worker:
             return self._slot_to_worker[slot]
+        nw_n = planner.NUM_ACTIVE_HIRES
+        ne_list = planner.NE_HIRED_TODAY
+        sw_list = planner.SW_HIRED_TODAY
         base = self._sw_slot_base
         if base is not None and slot >= base:
             sw_idx = slot - base
-            if sw_idx < len(planner.ACTIVE_SW):
-                w = planner.ACTIVE_SW[sw_idx]
+            if sw_idx < len(sw_list):
+                w = sw_list[sw_idx]
                 self._slot_to_worker[slot] = w
                 planner.SW_BOUND_TODAY.add(w)
                 from milos.zoning import SW_EXPECTED_SPAWN
@@ -665,14 +678,13 @@ class Executor:
                 )
                 return w
             return None
-        if slot >= planner.NUM_ACTIVE_HIRES:
-            ne_idx = slot - planner.NUM_ACTIVE_HIRES
-            if ne_idx < len(planner.ACTIVE_NE):
-                w = planner.ACTIVE_NE[ne_idx]
-                self._slot_to_worker[slot] = w
-                planner.NE_BOUND_TODAY.add(w)
-                _log(f"[bind] d={day} h={hour} slot{slot}={w} pos={pos} ne")
-                return w
+        if nw_n <= slot < nw_n + len(ne_list):
+            w = ne_list[slot - nw_n]
+            self._slot_to_worker[slot] = w
+            planner.NE_BOUND_TODAY.add(w)
+            _log(f"[bind] d={day} h={hour} slot{slot}={w} pos={pos} ne")
+            return w
+        if slot >= nw_n:
             return None
         w = workers.hire_worker_for_hand_pos(pos)
         taken = set(self._slot_to_worker.values())
@@ -683,6 +695,21 @@ class Executor:
             self._slot_to_worker[slot] = w
             _log(f"[bind] d={day} h={hour} slot{slot}={w} pos={pos}")
         return w
+
+    def _log_hire_mismatch(self, me: dict, day: int, hour: int) -> None:
+        nw_n = planner.NUM_ACTIVE_HIRES
+        ne_n = len(planner.NE_HIRED_TODAY)
+        sw_n = len(planner.SW_HIRED_TODAY)
+        if hour == 1:
+            expected = nw_n + ne_n
+        else:
+            expected = nw_n + ne_n + sw_n
+        hands_n = len(me.get("hands", []))
+        if hands_n != expected:
+            _log(
+                f"[bind] hire_mismatch d={day} h={hour} hands={hands_n} "
+                f"expected={expected}"
+            )
 
     def _bind_hands(self, me: dict, day: int, hour: int) -> None:
         for i, pos in enumerate(me.get("hands", [])):

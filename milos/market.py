@@ -371,6 +371,8 @@ def build_orders(
             buy_land_reserved = planner.SW_LAND_COST
             money = max(0, money - buy_land_reserved)
             spendable = max(0, money - wheat_reserve * wheat_price)
+        planner.NE_HIRED_TODAY = ()
+        planner.SW_HIRED_TODAY = ()
         for _ in range(planner.NUM_ACTIVE_HIRES):
             orders.append(["HIRE"])
 
@@ -379,7 +381,13 @@ def build_orders(
         and day <= script.SEASON_LAST_DAY
         and "NE" in me.get("unlocked_quadrants", [])
     ):
-        for _ in range(len(planner.ACTIVE_NE)):
+        ne_hired = tuple(
+            w
+            for w in planner.ACTIVE_NE
+            if planner.NE_DUE_DAY.get(w, day) <= day
+        )
+        planner.NE_HIRED_TODAY = ne_hired
+        for _ in ne_hired:
             orders.append(["HIRE"])
 
     if (
@@ -387,7 +395,13 @@ def build_orders(
         and day <= script.SEASON_LAST_DAY
         and "SW" in me.get("unlocked_quadrants", [])
     ):
-        for _ in range(len(planner.ACTIVE_SW)):
+        sw_hired = tuple(
+            w
+            for w in planner.ACTIVE_SW
+            if planner.SW_DUE_DAY.get(w, day) <= day
+        )
+        planner.SW_HIRED_TODAY = sw_hired
+        for _ in sw_hired:
             orders.append(["HIRE"])
 
     shed_for_sells: dict | None = None

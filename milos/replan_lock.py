@@ -456,19 +456,44 @@ def _tile_empty_for_replan(tile) -> bool:
     return tile is None or (isinstance(tile, dict) and tile.get("kind") == "WEED")
 
 
-def replan_eligible(idx: int, tile, st: dict, queues: dict) -> bool:
+def replan_eligible(
+    idx: int,
+    tile,
+    st: dict,
+    queues: dict,
+    *,
+    staple_bootstrap_workers: frozenset[str] | None = None,
+) -> bool:
     if st.get("pending_dig"):
         return False
     if not _tile_empty_for_replan(tile):
         return False
     qi = st.get("queue_idx", 0)
     queue = queues.get(idx, [])
-    return not (qi == 0 and queue)
+    if qi == 0 and queue:
+        if staple_bootstrap_workers:
+            worker = worker_for_tile(idx)
+            if worker in staple_bootstrap_workers:
+                return True
+        return False
+    return True
 
 
-def any_replan_eligible(me: dict, st_map: dict, tile_queues: dict) -> bool:
+def any_replan_eligible(
+    me: dict,
+    st_map: dict,
+    tile_queues: dict,
+    *,
+    staple_bootstrap_workers: frozenset[str] | None = None,
+) -> bool:
     for i in range(NUM_TILES):
-        if replan_eligible(i, _tile_at(me, i), st_map.get(i, {}), tile_queues):
+        if replan_eligible(
+            i,
+            _tile_at(me, i),
+            st_map.get(i, {}),
+            tile_queues,
+            staple_bootstrap_workers=staple_bootstrap_workers,
+        ):
             return True
     return False
 
@@ -482,6 +507,7 @@ def build_replan_lock(
     price_of: Callable[..., int],
     *,
     market_inv: dict[str, int] | None = None,
+    staple_bootstrap_workers: frozenset[str] | None = None,
 ) -> tuple[list[int], dict[str, dict], int]:
     """Return (replan_tile_indices, locked_by_worker, locked_tile_count)."""
     from milos.wsp import mip
@@ -499,7 +525,13 @@ def build_replan_lock(
             tile = _tile_at(me, idx)
             st = st_map.get(idx, {})
             worker = worker_for_tile(idx)
-            if replan_eligible(idx, tile, st, tile_queues):
+            if replan_eligible(
+                idx,
+                tile,
+                st,
+                tile_queues,
+                staple_bootstrap_workers=staple_bootstrap_workers,
+            ):
                 replan_tiles.append(idx)
             else:
                 seg = _stamp_tile_commitment(

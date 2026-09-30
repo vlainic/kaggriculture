@@ -6,7 +6,7 @@ import os
 from collections.abc import Callable
 
 from milos.wsp import data as wsp_data
-from milos.wsp.twoland import solve
+from milos.wsp.twoland import STAPLE_CROPS, solve
 from milos.wsp.log import WspPlan
 from milos.wsp.types import SolveResult
 from milos.wsp.config import ANIMAL_NAMES, NUM_DAYS, PROFILE_SUFFIXES
@@ -22,6 +22,7 @@ from milos.zoning import (
     TILE_COORDS,
     WORKER_TILES,
     WORKERS,
+    is_threeland12,
 )
 
 PlanBoard = dict[int, list]
@@ -165,6 +166,7 @@ ZONE_SOLVE_STREAK: dict[str, int] = {}
 STAND_DOWN_UNTIL: dict[str, int] = {}
 ACTIVE_NE: list[str] = []
 NE_BOUND_TODAY: set[str] = set()
+NE_HIRED_TODAY: tuple[str, ...] = ()
 NE_DUE_DAY: dict[str, int] = {}
 NE_LAND_COST = 1000
 NE_BUY_MIN_CASH = 2000
@@ -176,6 +178,7 @@ _BUY_REPLAN_DONE_DAY: int | None = None
 SW_BUY_DAY: int | None = None
 ACTIVE_SW: list[str] = []
 SW_BOUND_TODAY: set[str] = set()
+SW_HIRED_TODAY: tuple[str, ...] = ()
 SW_DUE_DAY: dict[str, int] = {}
 SW_LAND_COST = 2000
 SW_BUY_MIN_CASH = 4000
@@ -189,6 +192,15 @@ BUY_REPLAN_ZONE_TIME = 1.5
 BUY_REPLAN_OVERAGE_RESERVE = 12.0
 _SW_BUY_REPLAN_DONE_DAY: int | None = None
 _SW_DUSK_SKIP_LOG_DAY: int | None = None
+STAPLE_BOOTSTRAP_WORKERS: set[str] = set()
+
+
+def _sw_buy_min_cash() -> int:
+    return 3000 if is_threeland12() else SW_BUY_MIN_CASH
+
+
+def _sw_min_overage() -> float:
+    return 20.0 if is_threeland12() else SW_MIN_OVERAGE
 
 
 def _sw_workers_cap() -> tuple[str, ...]:
@@ -302,10 +314,10 @@ def schedule_sw_buy_at_dusk(obs: dict, me: dict, day: int) -> None:
     if buy_day < SW_BUY_FIRST_DAY or buy_day > SW_BUY_LAST_DAY:
         _skip("window")
         return
-    if money < SW_BUY_MIN_CASH:
+    if money < _sw_buy_min_cash():
         _skip("cash")
         return
-    if overage < SW_MIN_OVERAGE:
+    if overage < _sw_min_overage():
         _skip("overage")
         return
 
@@ -401,34 +413,21 @@ def _write_sw_activation(
     ACTIVE_SW.append(worker)
 
 
-def _activate_next_sw(
+def _try_activate_sw(
+    worker: str,
     obs: dict,
     tile_queues: dict,
     tile_state: dict | None,
     price_of: Callable[..., int],
-) -> bool:
-    cap = _sw_workers_cap()
-    if len(ACTIVE_SW) >= len(cap):
-        return False
-
+    money: int,
+) -> tuple[bool, int]:
     day = obs["day"]
     player = obs["player"]
     me = obs["farms"][player]
-    if not _sw_owned(me):
-        return False
-
-    pending = [w for w in cap if w not in ACTIVE_SW]
-    if not pending:
-        return False
-    worker = pending[0]
-    if day < STAND_DOWN_UNTIL.get(worker, 0):
-        return False
-
     horizon = NUM_DAYS - day
     if horizon <= 0:
-        return False
+        return False, money
 
-    money = int(me["money"])
     zone_tiles: list[int] = []
     for idx in WORKER_TILES[worker]:
         tile = _tile_at(me, idx)
@@ -438,10 +437,9 @@ def _activate_next_sw(
         if isinstance(tile, dict) and tile.get("kind") == "WEED":
             zone_tiles.append(idx)
     if not zone_tiles:
-        return False
+        return False, money
 
     sink_units, opp_units = _wsp_sink_opp(obs, horizon)
-
     result = solve(
         [],
         horizon=horizon,
@@ -460,34 +458,66 @@ def _activate_next_sw(
         wheat_feed_units=_wsp_wheat_feed_units(
             me, tile_state, obs.get("private"), day
         ),
+        crops_allowlist=STAPLE_CROPS if is_threeland12() else None,
     )
 
     assigned = {k: v for k, v in result.assigned.items() if v}
-    busy_day0, busy_any = _busy_counts(assigned)
+    _, busy_any = _busy_counts(assigned)
     cost = _zone_plan_cost(assigned, horizon, worker, price_of)
-
     ok = int(worker in result.solved_workers)
-    if busy_day0 < 1 or money - cost < 0 or worker not in result.solved_workers:
+    if not ok or busy_any < 1 or money < cost:
         print(
-            f"[sw] reject d={day} zone={worker} ok={ok} busy_day0={busy_day0} "
+            f"[sw] reject d={day} zone={worker} ok={ok} "
             f"busy_any={busy_any} cost={cost} money={money}",
             flush=True,
         )
-        return False
+        return False, money
 
     if not _zone_activation_value_check(
         "sw", day, worker, result.zone_objectives.get(worker), cost
     ):
-        return False
+        return False, money
 
     _write_sw_activation(worker, result.assigned, horizon, tile_queues, tile_state, 0)
     SW_DUE_DAY[worker] = day
+    if is_threeland12():
+        STAPLE_BOOTSTRAP_WORKERS.add(worker)
     print(
-        f"[sw] accept d={day} zone={worker} busy_day0={busy_day0} "
-        f"busy_any={busy_any} cost={cost} SW_BUY_DAY={SW_BUY_DAY}",
+        f"[sw] accept d={day} zone={worker} busy_any={busy_any} "
+        f"cost={cost} money={money} SW_BUY_DAY={SW_BUY_DAY}",
         flush=True,
     )
-    return True
+    return True, money - cost
+
+
+def _activate_next_sw(
+    obs: dict,
+    tile_queues: dict,
+    tile_state: dict | None,
+    price_of: Callable[..., int],
+) -> bool:
+    cap = _sw_workers_cap()
+    if len(ACTIVE_SW) >= len(cap):
+        return False
+
+    day = obs["day"]
+    player = obs["player"]
+    me = obs["farms"][player]
+    if not _sw_owned(me):
+        return False
+
+    money = int(me["money"])
+    accepted = False
+    for worker in cap:
+        if worker in ACTIVE_SW:
+            continue
+        if day < STAND_DOWN_UNTIL.get(worker, 0):
+            continue
+        ok, money = _try_activate_sw(
+            worker, obs, tile_queues, tile_state, price_of, money
+        )
+        accepted = accepted or ok
+    return accepted
 
 
 def _fresh_tile_state(first_lag: int = 0) -> dict:
@@ -639,34 +669,23 @@ def _write_ne_activation(
     ACTIVE_NE.append(worker)
 
 
-def _activate_next_ne(
+def _try_activate_ne_staple(
+    worker: str,
     obs: dict,
     tile_queues: dict,
     tile_state: dict | None,
     price_of: Callable[..., int],
-) -> None:
-    if len(ACTIVE_NE) >= len(NE_WORKERS):
-        return
+    money: int,
+) -> tuple[bool, int]:
+    global STAPLE_BOOTSTRAP_WORKERS
 
     day = obs["day"]
     player = obs["player"]
     me = obs["farms"][player]
-    pending = [w for w in NE_WORKERS if w not in ACTIVE_NE]
-    if not pending:
-        return
-    worker = pending[0]
-    if day < STAND_DOWN_UNTIL.get(worker, 0):
-        return
-    ne_owned = _ne_owned(me)
-
-    if not ne_owned:
-        return
-
     horizon = NUM_DAYS - day
     if horizon <= 0:
-        return
+        return False, money
 
-    money = int(me["money"])
     zone_tiles: list[int] = []
     for idx in WORKER_TILES[worker]:
         tile = _tile_at(me, idx)
@@ -676,10 +695,9 @@ def _activate_next_ne(
         if isinstance(tile, dict) and tile.get("kind") == "WEED":
             zone_tiles.append(idx)
     if not zone_tiles:
-        return
+        return False, money
 
     sink_units, opp_units = _wsp_sink_opp(obs, horizon)
-
     result = solve(
         [],
         horizon=horizon,
@@ -698,33 +716,65 @@ def _activate_next_ne(
         wheat_feed_units=_wsp_wheat_feed_units(
             me, tile_state, obs.get("private"), day
         ),
+        crops_allowlist=STAPLE_CROPS if is_threeland12() else None,
     )
 
     assigned = {k: v for k, v in result.assigned.items() if v}
-    busy_day0, busy_any = _busy_counts(assigned)
+    _, busy_any = _busy_counts(assigned)
     cost = _zone_plan_cost(assigned, horizon, worker, price_of)
-
     ok = int(worker in result.solved_workers)
-    if busy_day0 < 1 or money - cost < 0 or worker not in result.solved_workers:
+    if not ok or busy_any < 1 or money < cost:
         print(
-            f"[ne] reject d={day} zone={worker} ok={ok} busy_day0={busy_day0} "
+            f"[ne] reject d={day} zone={worker} ok={ok} "
             f"busy_any={busy_any} cost={cost} money={money}",
             flush=True,
         )
-        return
+        return False, money
 
     if not _zone_activation_value_check(
         "ne", day, worker, result.zone_objectives.get(worker), cost
     ):
-        return
+        return False, money
 
     _write_ne_activation(worker, result.assigned, horizon, tile_queues, tile_state, 0)
     NE_DUE_DAY[worker] = day
+    if is_threeland12():
+        STAPLE_BOOTSTRAP_WORKERS.add(worker)
     print(
-        f"[ne] accept d={day} zone={worker} busy_day0={busy_day0} "
-        f"busy_any={busy_any} cost={cost} BUY_LAND_DAY={BUY_LAND_DAY}",
+        f"[ne] accept d={day} zone={worker} busy_any={busy_any} "
+        f"cost={cost} money={money} staple={int(is_threeland12())}",
         flush=True,
     )
+    return True, money - cost
+
+
+def _fill_all_ne_day1(
+    obs: dict,
+    tile_queues: dict,
+    tile_state: dict | None,
+    price_of: Callable[..., int],
+) -> None:
+    if not _ne_owned(obs["farms"][obs["player"]]):
+        return
+    money = int(obs["farms"][obs["player"]]["money"])
+    day = obs["day"]
+    for worker in NE_WORKERS:
+        if worker in ACTIVE_NE:
+            continue
+        if day < STAND_DOWN_UNTIL.get(worker, 0):
+            continue
+        _, money = _try_activate_ne_staple(
+            worker, obs, tile_queues, tile_state, price_of, money
+        )
+
+
+def _activate_next_ne(
+    obs: dict,
+    tile_queues: dict,
+    tile_state: dict | None,
+    price_of: Callable[..., int],
+) -> None:
+    _fill_all_ne_day1(obs, tile_queues, tile_state, price_of)
 
 
 def _opponent_product_tile_counts(opp_farm: dict) -> dict[str, int]:
@@ -914,13 +964,24 @@ def _replan_active(
     st_map = tile_state or {}
     act = active_workers()
     act_tile_set = {idx for w in act for idx in WORKER_TILES[w]}
+    staple = (
+        frozenset(STAPLE_BOOTSTRAP_WORKERS) if is_threeland12() else None
+    )
 
-    if not any_replan_eligible(me, st_map, tile_queues):
+    if not any_replan_eligible(
+        me, st_map, tile_queues, staple_bootstrap_workers=staple
+    ):
         return
 
     replan_tiles, locked_by_worker, locked_tiles = build_replan_lock(
-        me, day, horizon, tile_queues, st_map, price_of,
+        me,
+        day,
+        horizon,
+        tile_queues,
+        st_map,
+        price_of,
         market_inv=_wsp_market_inv(obs),
+        staple_bootstrap_workers=staple,
     )
     replan_tiles = [t for t in replan_tiles if t in act_tile_set]
 
@@ -995,7 +1056,8 @@ def _replan_active(
 
 def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None:
     day = obs["day"]
-    if day < 2 or day >= SEASON_LAST_DAY:
+    min_day = 1 if is_threeland12() else 2
+    if day < min_day or day >= SEASON_LAST_DAY:
         return
     horizon = NUM_DAYS - day
     if horizon <= 0:
@@ -1009,6 +1071,11 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
     dawn_sw_bound_handoff(me, day, tile_queues, st_map)
 
     price_of = _safe_price_of(obs, tile_queues, st_map, day)
+
+    if day == 1 and is_threeland12():
+        if _ne_owned(me):
+            _fill_all_ne_day1(obs, tile_queues, st_map, price_of)
+        return
 
     try:
         _replan_active(obs, tile_queues, st_map, price_of)
@@ -1119,6 +1186,7 @@ def replan_after_buy_sw(
         wheat_feed_units=_wsp_wheat_feed_units(
             me, st_map, obs.get("private"), day
         ),
+        crops_allowlist=STAPLE_CROPS if is_threeland12() else None,
     )
 
     overage_after = obs.get("remainingOverageTime")
@@ -1133,8 +1201,8 @@ def replan_after_buy_sw(
         if not zone_assigned:
             deferred.append(worker)
             break
-        busy_day0, _ = _busy_counts(zone_assigned)
-        if busy_day0 < 1 or worker not in result.solved_workers:
+        _, busy_any = _busy_counts(zone_assigned)
+        if busy_any < 1 or worker not in result.solved_workers:
             deferred.append(worker)
             break
         zone_cost = _zone_plan_cost(zone_assigned, horizon, worker, price_of)
@@ -1147,6 +1215,8 @@ def replan_after_buy_sw(
             worker, zone_assigned, horizon, tile_queues, st_map, 0
         )
         SW_DUE_DAY[worker] = day
+        if is_threeland12():
+            STAPLE_BOOTSTRAP_WORKERS.add(worker)
         active.append(worker)
 
     if len(active) < 2:
@@ -1263,8 +1333,8 @@ def replan_after_buy(
         if not zone_assigned:
             deferred.append(worker)
             break
-        busy_day0, _ = _busy_counts(zone_assigned)
-        if busy_day0 < 1 or worker not in result.solved_workers:
+        _, busy_any = _busy_counts(zone_assigned)
+        if busy_any < 1 or worker not in result.solved_workers:
             deferred.append(worker)
             break
         zone_cost = _zone_plan_cost(zone_assigned, horizon, worker, price_of)
@@ -1396,7 +1466,30 @@ def _hardcoded_day0_queues() -> dict[int, list]:
     }
 
 
+def _build_threeland12_day0() -> dict[int, list]:
+    from pathlib import Path
+
+    global BUY_LAND_DAY
+
+    BUY_LAND_DAY = 0
+    path = Path(__file__).resolve().parent / "wsp" / "wsp4_prestart.json"
+    with path.open(encoding="utf-8") as f:
+        data = json.load(f)
+    assigned = {int(k): list(v) for k, v in data["assigned"].items()}
+    queues: dict[int, list] = {idx: [] for idx in range(NUM_TILES)}
+    for idx, chain in assigned.items():
+        queues[idx] = chain_to_queue_items(chain, NUM_DAYS)
+    print(
+        f"[planner] day0 wsp4 prestart tiles={len(assigned)} BUY_LAND_DAY=0",
+        flush=True,
+    )
+    return queues
+
+
 def _build_from_solver() -> dict[int, list]:
+    if is_threeland12():
+        return _build_threeland12_day0()
+
     import time
 
     t0 = time.monotonic()

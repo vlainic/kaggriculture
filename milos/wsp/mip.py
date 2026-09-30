@@ -344,12 +344,19 @@ def _stamp_placement(
     }
 
 
-def build_patterns(horizon: int, price_of: Callable[..., int]) -> list:
+def build_patterns(
+    horizon: int,
+    price_of: Callable[..., int],
+    *,
+    crops_allowlist: frozenset[str] | None = None,
+) -> list:
     crops_data = rollouts.crops()
     animals_data = rollouts.animals()
     patterns = []
     pid = 0
     for crop_name, crop_spec in crops_data["crops"].items():
+        if crops_allowlist is not None and crop_name not in crops_allowlist:
+            continue
         for profile_name in CROP_PROFILES:
             if profile_name not in crop_spec:
                 continue
@@ -365,21 +372,27 @@ def build_patterns(horizon: int, price_of: Callable[..., int]) -> list:
                 patterns.append({"id": f"P{pid}", **seg})
                 pid += 1
 
-    for animal_name, animal_spec in animals_data["animals"].items():
-        if animal_name == "GOOSE":
-            continue
-        for profile_name in ANIMAL_PROFILES:
-            if profile_name not in animal_spec:
+    if crops_allowlist is None:
+        for animal_name, animal_spec in animals_data["animals"].items():
+            if animal_name == "GOOSE":
                 continue
-            profile_key = f"{animal_name}_{profile_name}"
-            for start_day in range(horizon):
-                seg = _stamp_placement(
-                    profile_key, start_day, horizon, price_of, crops_data, animals_data
-                )
-                if seg is None:
+            for profile_name in ANIMAL_PROFILES:
+                if profile_name not in animal_spec:
                     continue
-                patterns.append({"id": f"P{pid}", **seg})
-                pid += 1
+                profile_key = f"{animal_name}_{profile_name}"
+                for start_day in range(horizon):
+                    seg = _stamp_placement(
+                        profile_key,
+                        start_day,
+                        horizon,
+                        price_of,
+                        crops_data,
+                        animals_data,
+                    )
+                    if seg is None:
+                        continue
+                    patterns.append({"id": f"P{pid}", **seg})
+                    pid += 1
     return patterns
 
 

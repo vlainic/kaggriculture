@@ -13,6 +13,8 @@ from milos.wsp.farmer import _load_prestart_raw
 from milos.wsp.types import SolveResult
 from milos.zoning import HAND_WORKERS, NET_TILE_OPS, NUM_TILES, WORKERS, WORKER_TILES
 
+STAPLE_CROPS = frozenset({"WHEAT", "CARROT"})
+
 
 def _locked_conservative_handoff(
     opening: list[int],
@@ -109,6 +111,7 @@ def solve(
     opp_units: dict[str, int] | None = None,
     market_inv: dict[str, int] | None = None,
     wheat_feed_units: int = 0,
+    crops_allowlist: frozenset[str] | None = None,
     **kwargs,
 ) -> SolveResult:
     del chains, kwargs
@@ -131,7 +134,7 @@ def solve(
     locked_harvest: dict[str, int] = {}
     inv_for_quote = market_inv if market_inv is not None else {}
     mip.set_quote_market_inv(inv_for_quote)
-    patterns = mip.build_patterns(horizon, price_of)
+    patterns = mip.build_patterns(horizon, price_of, crops_allowlist=crops_allowlist)
     locks = locked_by_worker or {}
 
     try:

@@ -10,13 +10,19 @@ from milos.wsp.config import EST_OPS_ANIMAL, EST_OPS_CROP, FARMER_NET_TILE_OPS
 _SHED_DOOR = (4, 4)
 _SHED_ADJACENT = frozenset({(4, 4), (5, 4), (4, 5), (5, 5)})
 
-# Spawn corner → hire zone (identity at dawn, not HIRE order).
-SPAWN_TO_HIRE: dict[tuple[int, int], str] = {
+# NW spawn corner → hire zone only (not NE/SW; those bind by hire slot in executor).
+_SPAWN_FIVE: dict[tuple[int, int], str] = {
     (4, 4): "hire1",
     (5, 4): "hire2",
     (4, 5): "hire3",
     (5, 5): "hire4",
 }
+_SPAWN_FOUR: dict[tuple[int, int], str] = {
+    (5, 4): "hire1",
+    (4, 5): "hire2",
+    (5, 5): "hire3",
+}
+SPAWN_TO_HIRE: dict[tuple[int, int], str] = dict(_SPAWN_FIVE)
 
 # Set in bind(): NW hand not in SPAWN_TO_HIRE (hire5 on 6-man NW; None on 5-man).
 TWOFOLD_HIRE: str | None = None
@@ -46,6 +52,152 @@ def _column(x: int, t0: int) -> tuple[tuple[int, int], ...]:
 
 def _column_south(x: int) -> tuple[tuple[int, int], ...]:
     return tuple((x, y) for y in range(5, 10))
+
+
+_FOUR_COORDS: tuple[tuple[int, int], ...] = (
+    (4, 4),
+    (3, 4),
+    (2, 4),
+    (2, 3),
+    (3, 3),
+    (4, 3),
+    (4, 2),
+    (3, 2),
+    (2, 2),
+    (4, 1),
+    (3, 1),
+    (2, 1),
+    (2, 0),
+    (3, 0),
+    (4, 0),
+    (1, 4),
+    (1, 3),
+    (1, 2),
+    (0, 2),
+    (0, 3),
+    (0, 4),
+    (1, 1),
+    (1, 0),
+    (0, 0),
+    (0, 1),
+)
+
+
+def _coord_index(coords: list[tuple[int, int]], c: tuple[int, int]) -> int:
+    try:
+        return coords.index(c)
+    except ValueError:
+        coords.append(c)
+        return len(coords) - 1
+
+
+def _mirror_zone_tiles(
+    coords: list[tuple[int, int]],
+    src_indices: tuple[int, ...],
+    mirror_fn,
+) -> tuple[int, ...]:
+    out: list[int] = []
+    for i in src_indices:
+        x, y = coords[i]
+        mc = mirror_fn(x, y)
+        out.append(_coord_index(coords, mc))
+    return tuple(out)
+
+
+def _build_threeland12_layout() -> Layout:
+    coords: list[tuple[int, int]] = list(_FOUR_COORDS)
+    farmer_t = (0, 1, 2, 3, 4, 5, 6, 7, 8)
+    top_t = (9, 10, 11, 12, 13, 14)
+    left_t = (15, 16, 17, 18, 19, 20)
+    corner_t = (21, 22, 23, 24)
+    nw_zones = (
+        Zone(
+            name="farmer",
+            tiles=farmer_t,
+            preamble=(),
+            start_hour=0,
+            net_tile_ops=15,
+            is_hand=False,
+        ),
+        Zone(
+            name="hire1",
+            tiles=top_t,
+            preamble=("WEST", "PICKUP", "NORTH", "NORTH", "NORTH"),
+            start_hour=0,
+            net_tile_ops=13,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire2",
+            tiles=left_t,
+            preamble=("NORTH", "PICKUP", "WEST", "WEST", "WEST"),
+            start_hour=0,
+            net_tile_ops=13,
+            is_hand=True,
+        ),
+        Zone(
+            name="hire3",
+            tiles=corner_t,
+            preamble=(
+                "WEST",
+                "NORTH",
+                "PICKUP",
+                "WEST",
+                "WEST",
+                "WEST",
+                "NORTH",
+                "NORTH",
+                "NORTH",
+            ),
+            start_hour=0,
+            net_tile_ops=11,
+            is_hand=True,
+        ),
+    )
+    ne_mirror = lambda x, y: (9 - x, y)
+    sw_mirror = lambda x, y: (x, 9 - y)
+    ne_specs = (
+        ("hire4", farmer_t, 14),
+        ("hire5", top_t, 12),
+        ("hire6", left_t, 12),
+        ("hire7", corner_t, 10),
+    )
+    sw_specs = (
+        ("hire8", farmer_t, 13),
+        ("hire9", top_t, 11),
+        ("hire10", left_t, 11),
+        ("hire11", corner_t, 9),
+    )
+    ne_zones: list[Zone] = []
+    for name, src, ops in ne_specs:
+        ne_zones.append(
+            Zone(
+                name=name,
+                tiles=_mirror_zone_tiles(coords, src, ne_mirror),
+                preamble=("PICKUP",),
+                start_hour=1,
+                net_tile_ops=ops,
+                is_hand=True,
+            )
+        )
+    sw_zones: list[Zone] = []
+    for name, src, ops in sw_specs:
+        sw_zones.append(
+            Zone(
+                name=name,
+                tiles=_mirror_zone_tiles(coords, src, sw_mirror),
+                preamble=("PICKUP",),
+                start_hour=2,
+                net_tile_ops=ops,
+                is_hand=True,
+            )
+        )
+    return Layout(
+        coords=tuple(coords),
+        zones=nw_zones + tuple(ne_zones) + tuple(sw_zones),
+        shed_door=_SHED_DOOR,
+        shed_adjacent=_SHED_ADJACENT,
+    )
 
 
 MILOS_FARMER = Layout(
@@ -297,6 +449,8 @@ MILOS_TWOLAND12 = Layout(
 
 _SW_PICKUP = ("PICKUP",)
 
+MILOS_THREELAND12 = _build_threeland12_layout()
+
 _SW_EXPECTED_SPAWN_18: dict[str, tuple[tuple[int, int], ...]] = {
     "hire12": ((4, 5),),
     "hire15": ((5, 4),),
@@ -483,16 +637,20 @@ SW_EXPECTED_SPAWN: dict[str, tuple[tuple[int, int], ...]] = {}
 
 
 def _resolve_layout() -> Layout:
-    key = os.environ.get("KAGGRI_LAYOUT", "threeland15").strip().lower()
+    key = os.environ.get("KAGGRI_LAYOUT", "threeland12").strip().lower()
+    if key == "threeland12":
+        return MILOS_THREELAND12
     if key == "twoland12":
         return MILOS_TWOLAND12
+    if key == "threeland15":
+        return MILOS_THREELAND15
     if key == "threeland18":
         return MILOS_THREELAND18
     if key in ("oneland6", "milos_oneland6"):
         return MILOS_ONELAND6
     if key in ("oneland", "milos_oneland"):
         return MILOS_ONELAND
-    return MILOS_THREELAND15
+    return MILOS_THREELAND12
 
 
 CURRENT = _resolve_layout()
@@ -573,12 +731,22 @@ def bind(layout: Layout) -> None:
             break
     TWOFOLD_HIRE = twofold
 
+    SPAWN_TO_HIRE.clear()
+    if layout is MILOS_THREELAND12:
+        SPAWN_TO_HIRE.update(_SPAWN_FOUR)
+    else:
+        SPAWN_TO_HIRE.update(_SPAWN_FIVE)
+
     if layout is MILOS_THREELAND15:
         SW_EXPECTED_SPAWN = {"hire10": ((4, 5),)}
     elif layout is MILOS_THREELAND18:
         SW_EXPECTED_SPAWN = dict(_SW_EXPECTED_SPAWN_18)
     else:
         SW_EXPECTED_SPAWN = {}
+
+
+def is_threeland12() -> bool:
+    return CURRENT is MILOS_THREELAND12
 
 
 def worker_for_tile(idx: int) -> str:
@@ -601,7 +769,9 @@ def tile_est_ops_weight(tile) -> float:
 
 bind(CURRENT)
 SW_ENABLED = bool(SW_WORKERS) and os.environ.get("KAGGRI_SW", "1") == "1"
-if CURRENT is MILOS_THREELAND15:
+if CURRENT is MILOS_THREELAND12:
+    _layout_tag = "milos_threeland12"
+elif CURRENT is MILOS_THREELAND15:
     _layout_tag = "milos_threeland15"
 elif CURRENT is MILOS_THREELAND18:
     _layout_tag = "milos_threeland18"

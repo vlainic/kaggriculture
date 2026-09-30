@@ -1,8 +1,8 @@
 # MILOS FINAL
 
-## ThreeLand 4-man (proposed — not live)
+## ThreeLand 4-man (live default)
 
-Geometry matches [`handmade_pseudoplan.md`](handmade_pseudoplan.md) and legacy `agent/zoning.py` `FOUR` (9 + 6 + 6 + 4 tiles per land). **Not implemented** in `milos/zoning.py`; live default remains **5-man** `MILOS_THREELAND15` below.
+Geometry matches [`handmade_pseudoplan.md`](handmade_pseudoplan.md) and legacy `agent/zoning.py` `FOUR` (9 + 6 + 6 + 4 tiles per land). Implemented as **`MILOS_THREELAND12`** in `milos/zoning.py` (`KAGGRI_LAYOUT=threeland12`, default). Legacy **5-man** remains `KAGGRI_LAYOUT=threeland15`.
 
 ---
 
@@ -373,4 +373,4 @@ Preamble: `PICKUP` only.
 
 - hire10 = 16, hire11 = 13, hire12 = 12, hire13 = 12, hire14 = 11
 
-**Layout env (live):** `KAGGRI_LAYOUT=threeland15` (default), `threeland18`, `twoland12`; `KAGGRI_SW=0` disables SW buy/activate only. The **4-man ThreeLand** sections above are **documentation only** until a layout lands in `milos/zoning.py`.
+**Layout env (live):** `KAGGRI_LAYOUT=threeland12` (default), `threeland15`, `threeland18`, `twoland12`; `KAGGRI_SW=0` disables SW buy/activate only. Day-0 loads `milos/wsp/wsp4_prestart.json` and buys NE at h=0; day-1 fills NE zones (staple WHEAT/CARROT probe); SW dusk cash ≥ $3000, overage ≥ 20s.
