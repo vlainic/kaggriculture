@@ -88,7 +88,31 @@ def _pattern_weight(
             rev += price_of(product, hday, n)
             n += 1
         counts[product] = n
-    return rev - pat["setup_cost"]
+    bonus = _animal_valuation_bonus(pat, price_of)
+    return rev - pat["setup_cost"] + bonus
+
+
+def _fert_credit_day(day: int) -> float:
+    return 90.0 * max(0.2, (29 - day) / 29.0)
+
+
+def _animal_valuation_bonus(pat, price_of: Callable[..., int]) -> int:
+    key = pat.get("profile_key", "")
+    if not any(a in key for a in ("COW", "SHEEP")):
+        return 0
+    horizon = len(pat.get("daily_feed") or [])
+    bonus = 0
+    for d in range(horizon):
+        if pat["daily_collect"][d]:
+            bonus += int(_fert_credit_day(d))
+        if pat["daily_feed"][d]:
+            try:
+                bonus -= int(price_of("WHEAT", d))
+            except TypeError:
+                from milos.wsp.config import WHEAT_PRICE
+
+                bonus -= WHEAT_PRICE
+    return bonus
 
 
 def _stamp_placement(
@@ -209,6 +233,8 @@ def build_patterns(horizon: int, price_of: Callable[..., int]) -> list:
                 pid += 1
 
     for animal_name, animal_spec in animals_data["animals"].items():
+        if animal_name == "GOOSE":
+            continue
         for profile_name in ANIMAL_PROFILES:
             if profile_name not in animal_spec:
                 continue

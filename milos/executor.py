@@ -7,6 +7,7 @@ import re
 
 from milos import (
     envconfig,
+    fix_flags,
     market,
     planner,
     price_forecast,
@@ -208,9 +209,16 @@ class Executor:
             shops = obs.get("town", {}).get("unlocked_shops", [])
             _log(envconfig.shops_dawn_log(day, shops))
             try:
-                price_forecast.observe_drain(obs)
+                price_forecast.log_fc_err(obs)
             except Exception as exc:
-                _log(f"[fc] drain observe failed d={day}: {exc}")
+                _log(f"[fc_err] log failed d={day}: {exc}")
+            try:
+                if fix_flags.fix_calib():
+                    price_forecast.note_dawn_market(obs)
+                else:
+                    price_forecast.observe_drain(obs)
+            except Exception as exc:
+                _log(f"[fc] dawn market failed d={day}: {exc}")
             self._on_new_day(me, day)
             if day == 1 and not self._day0_productive:
                 _log("[exec] WARN day-0 had zero BUY_SEED and zero PLANT")
@@ -225,13 +233,27 @@ class Executor:
                         me, self._tile_state, private
                     )
                     sell_dp.replan(obs, self._tile_state, wheat_feed_reserve=wheat_feed)
+                    price_forecast.store_d1_forecast(
+                        obs, script.TILE_QUEUES, self._tile_state
+                    )
                 except Exception as exc:
                     _log(f"[sell_dp] replan failed d={day}: {exc}")
 
         if hour == 0:
             self._log_snap(obs, me, day, hour)
+            from milos.market_shed_log import log_shed_composition
+
+            log_shed_composition(private, day, hour)
             self._log_hand_queues(obs, me, private, day)
             self._log_stuck_tiles(me, day)
+        if hour == 23:
+            from milos.market_shed_log import (
+                log_shed_composition,
+                log_shed_drop_estimate,
+            )
+
+            log_shed_composition(private, day, hour)
+            log_shed_drop_estimate(private, day)
         orders = market.build_orders(
             obs, me, private, day, hour, self._tile_state, self._empty_at_dawn
         )

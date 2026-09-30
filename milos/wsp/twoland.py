@@ -110,14 +110,6 @@ def solve(
     del chains, kwargs
     worker_list = workers if workers is not None else WORKERS
     counts = empty_counts or {w: 0 for w in worker_list}
-    if _is_prestart_solve(horizon, empty_tiles, counts, worker_list):
-        assigned, complete, solved_workers = _load_prestart_raw()
-        print(
-            f"[milos/wsp] twoland prestart tiles={len(assigned)} "
-            f"complete={complete} workers={solved_workers}",
-            flush=True,
-        )
-        return SolveResult(assigned, complete, solved_workers)
 
     if price_of is None:
         base = rollouts.i0_base_prices()

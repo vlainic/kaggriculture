@@ -8,6 +8,7 @@ from milos import (
     animal_rollouts,
     drain_calib,
     envconfig,
+    fix_flags,
     pricing,
     rollouts,
     tile_ops,
@@ -44,10 +45,165 @@ LIQUIDATE_FROM_DAY = 27
 _ALL_SHOPS = tuple(rollouts.SHOP_PRODUCT_DEMAND.keys())
 _TOWN_CENTER_PRODUCTS = tuple(p for p in SELL_PRODUCTS if p != "FERTILIZER")
 
+OPP_DUMP_THRESHOLD = 0.05
+WOOL_SOFT_CAP = 20
+
 _schedule: dict | None = None
 _prev_market_inv: dict[str, int] | None = None
+_prev_unlocked_shops: list[str] | None = None
 _our_sells_yesterday: dict[str, int] = {p: 0 for p in SELL_PRODUCTS}
 _opp_ema: dict[str, float] = {p: 0.0 for p in SELL_PRODUCTS}
+_opp_last: dict[str, float] = {p: 0.0 for p in SELL_PRODUCTS}
+_lead_suppress: dict = {"due_step": -1, "qty": {}}
+_lead_carry: dict[str, int] = {p: 0 for p in PREMIUM_PRODUCTS}
+_dawn_quote: dict[str, int] = {}
+GREEDY_THETA = 0.85
+GREEDY_THETA_LIQ = 0.3
+GREEDY_TARGET_LO = 40
+GREEDY_TARGET_HI = 70
+GREEDY_TARGET_MARGIN = 10
+
+
+def reset_episode() -> None:
+    global _schedule, _prev_market_inv, _prev_unlocked_shops, _our_sells_yesterday
+    global _opp_ema, _opp_last, _lead_suppress, _lead_carry, _dawn_quote
+    _schedule = None
+    _prev_market_inv = None
+    _prev_unlocked_shops = None
+    _our_sells_yesterday = {p: 0 for p in SELL_PRODUCTS}
+    _opp_ema = {p: 0.0 for p in SELL_PRODUCTS}
+    _opp_last = {p: 0.0 for p in SELL_PRODUCTS}
+    _lead_suppress = {"due_step": -1, "qty": {}}
+    _lead_carry = {p: 0 for p in PREMIUM_PRODUCTS}
+    _dawn_quote = {}
+    drain_calib.reset_episode()
+
+
+def note_dawn_quotes(market_inv: dict, day: int, hour: int) -> None:
+    """Capture dawn quotes for greedy THETA anchor (once per day at h=0)."""
+    if hour != 0:
+        return
+    global _dawn_quote
+    for product in PREMIUM_PRODUCTS:
+        inv = int(market_inv.get(product, pricing.I0_DEFAULT))
+        _dawn_quote[product] = pricing.quoted(product, inv)
+
+
+def _greedy_shed_target(
+    day: int,
+    *,
+    premium_inflow: dict[str, int] | None,
+    hour: int = 0,
+    hand_inv_units: int = 0,
+) -> tuple[int, float]:
+    cap = shed_cap()
+    if day >= LIQUIDATE_FROM_DAY:
+        return 0, GREEDY_THETA_LIQ
+    extra = sum((premium_inflow or {}).values())
+    target = cap - extra - GREEDY_TARGET_MARGIN
+    target = max(GREEDY_TARGET_LO, min(GREEDY_TARGET_HI, target))
+    if hour >= 12 and hand_inv_units > 0:
+        harvest_room = max(0, cap - hand_inv_units - GREEDY_TARGET_MARGIN)
+        target = min(target, harvest_room)
+    return target, GREEDY_THETA
+
+
+def _shed_total(shed: dict) -> int:
+    return sum(int(v) for v in shed.values())
+
+
+def _greedy_room_products(hour: int) -> tuple[str, ...]:
+    staples: tuple[str, ...] = ("CARROT", "TOMATO", "EGG")
+    if hour >= 5:
+        return staples + ("WHEAT", "FERTILIZER")
+    return staples + ("FERTILIZER",)
+
+
+def greedy_premium_sells(
+    shed: dict,
+    market_inv: dict,
+    day: int,
+    *,
+    premium_inflow: dict[str, int] | None = None,
+    hour: int = 0,
+    hand_inv_units: int = 0,
+    fert_reserve: int = 10,
+) -> dict[str, int]:
+    """Water-fill sells for this hour; mutates shed. One batch per product."""
+    target, theta = _greedy_shed_target(
+        day,
+        premium_inflow=premium_inflow,
+        hour=hour,
+        hand_inv_units=hand_inv_units,
+    )
+    working = {k: int(v) for k, v in shed.items()}
+    virtual_inv = {
+        p: int(market_inv.get(p, pricing.I0_DEFAULT)) for p in SELL_PRODUCTS
+    }
+    out: dict[str, int] = {}
+    max_steps = _shed_total(working)
+    for _ in range(max_steps):
+        total = _shed_total(working)
+        room = total > target
+        best_p: str | None = None
+        best_m = -1
+        products = list(PREMIUM_PRODUCTS)
+        if room:
+            products.extend(_greedy_room_products(hour))
+        seen: set[str] = set()
+        for product in products:
+            if product in seen:
+                continue
+            seen.add(product)
+            cnt = int(working.get(product, 0))
+            if product == "FERTILIZER":
+                cnt = max(0, cnt - fert_reserve)
+            if cnt <= 0:
+                continue
+            inv = virtual_inv.get(product, pricing.I0_DEFAULT)
+            marginal = pricing.marginal_price(product, inv)
+            floor = pricing.price_floor(product, PRICE_FLOOR_RATIO)
+            if marginal < floor:
+                continue
+            base = pricing.base_price(product)
+            good_price = marginal >= theta * base
+            if product in PREMIUM_PRODUCTS:
+                if not good_price and not room:
+                    continue
+            elif not room:
+                continue
+            if marginal > best_m:
+                best_m = marginal
+                best_p = product
+        if best_p is None:
+            break
+        inv = virtual_inv[best_p]
+        working[best_p] = int(working.get(best_p, 0)) - 1
+        out[best_p] = out.get(best_p, 0) + 1
+        price = pricing.marginal_price(best_p, inv)
+        if price > 1:
+            virtual_inv[best_p] = inv + 1
+    for product, qty in out.items():
+        shed[product] = int(shed.get(product, 0)) - qty
+    return out
+
+
+def _hold_cost() -> int:
+    return 10 if fix_flags.fix_sell() else HOLD_COST
+
+
+def _inv_pad_lo() -> int:
+    return 120 if fix_flags.fix_sell() else INV_PAD_LO
+
+
+def _inv_band(start_inv: int) -> tuple[int, int]:
+    if fix_flags.fix_sell():
+        lo = start_inv - _inv_pad_lo()
+        hi = start_inv + INV_PAD_HI
+        return lo, hi
+    lo = max(pricing.I0_DEFAULT - 80, start_inv - INV_PAD_LO)
+    hi = min(pricing.I0_DEFAULT + 400, start_inv + INV_PAD_HI)
+    return lo, hi
 
 
 def shed_cap() -> int:
@@ -56,12 +212,6 @@ def shed_cap() -> int:
 
 def _log(msg: str) -> None:
     print(msg, flush=True)
-
-
-def _inv_band(start_inv: int) -> tuple[int, int]:
-    lo = max(pricing.I0_DEFAULT - 80, start_inv - INV_PAD_LO)
-    hi = min(pricing.I0_DEFAULT + 400, start_inv + INV_PAD_HI)
-    return lo, hi
 
 
 def _clip_inv(inv: int, inv_lo: int, inv_hi: int) -> int:
@@ -102,8 +252,12 @@ def _town_center_drain(abs_day: int) -> dict[str, float]:
 
 
 def town_drain_by_day(obs: dict, horizon: int) -> list[dict[str, float]]:
+    from milos import town_drain
+
     day = obs["day"]
     unlocked = list(obs.get("town", {}).get("unlocked_shops", []))
+    if fix_flags.fix_prior():
+        return town_drain.build_drain_horizon(day, unlocked, horizon, use_prior=True)
     seen = set(unlocked)
     locked = [s for s in _ALL_SHOPS if s not in seen]
     locked_demand = rollouts.shop_demand_by_product(locked)
@@ -146,6 +300,7 @@ def _update_opponent_residual(obs: dict, town_yesterday: dict[str, float]) -> No
         our = _our_sells_yesterday.get(p, 0)
         town = town_yesterday.get(p, 0.0)
         residual = max(0.0, delta - our + town)
+        _opp_last[p] = residual
         _opp_ema[p] = OPP_EMA_ALPHA * residual + (1.0 - OPP_EMA_ALPHA) * _opp_ema.get(p, 0.0)
 
     _prev_market_inv = {p: int(inv.get(p, pricing.I0_DEFAULT)) for p in SELL_PRODUCTS}
@@ -357,7 +512,7 @@ def _solve_product(
                 table = pricing.sell_prefix_table(product, inv, sell)
                 rev = table[sell][0]
                 next_inv, next_stock = transition(inv, stock, sell, d)
-                hold_penalty = HOLD_COST * (stock - sell)
+                hold_penalty = _hold_cost() * (stock - sell)
                 future = dp[d + 1].get((next_inv, next_stock), -10.0**18)
                 val = rev + future - hold_penalty
                 if val >= best_val:
@@ -450,7 +605,8 @@ def _drip_quota(stock: int) -> int:
 
 
 def replan(obs: dict, tile_state: dict, wheat_feed_reserve: int = 0) -> None:
-    global _schedule, _prev_market_inv
+    global _schedule, _prev_market_inv, _prev_unlocked_shops
+    from milos import town_drain
 
     t0 = time.perf_counter()
     day = obs["day"]
@@ -461,17 +617,24 @@ def replan(obs: dict, tile_state: dict, wheat_feed_reserve: int = 0) -> None:
 
     horizon = min(DP_HORIZON, days_left)
     town = town_drain_by_day(obs, horizon)
+    unlocked = list(obs.get("town", {}).get("unlocked_shops", []))
     if day > 0:
-        prev_town = _known_shop_drain(
-            list(obs.get("town", {}).get("unlocked_shops", []))
-        )
-        tc = _town_center_drain(day - 1)
-        for p in _TOWN_CENTER_PRODUCTS:
-            prev_town[p] = prev_town.get(p, 0.0) + tc.get(p, 0.0)
+        if fix_flags.fix_sell():
+            prev_town = town_drain.town_drain_yesterday(
+                _prev_unlocked_shops,
+                unlocked,
+                day - 1,
+            )
+        else:
+            prev_town = _known_shop_drain(unlocked)
+            tc = _town_center_drain(day - 1)
+            for p in _TOWN_CENTER_PRODUCTS:
+                prev_town[p] = prev_town.get(p, 0.0) + tc.get(p, 0.0)
         _update_opponent_residual(obs, prev_town)
     else:
         inv = obs["market"]["inventory"]
         _prev_market_inv = {p: int(inv.get(p, pricing.I0_DEFAULT)) for p in SELL_PRODUCTS}
+    _prev_unlocked_shops = list(unlocked)
 
     opp = opponent_sell_per_day(horizon)
     harvest = harvest_inflow_by_day(obs, tile_state, horizon)
@@ -527,8 +690,9 @@ def replan(obs: dict, tile_state: dict, wheat_feed_reserve: int = 0) -> None:
     _schedule = {
         "day": day,
         "quota": today_quota,
-        "sold": {p: 0 for p in PREMIUM_PRODUCTS},
+        "sold": {p: _lead_carry.get(p, 0) for p in PREMIUM_PRODUCTS},
         "active": True,
+        "next_quota": {p: sells[p][1] if len(sells[p]) > 1 else 0 for p in PREMIUM_PRODUCTS},
     }
     quota_s = " ".join(f"{k}={today_quota[k]}" for k in PREMIUM_PRODUCTS)
     clamp_s = f" clamped={' '.join(clamped)}" if clamped else ""
@@ -570,6 +734,182 @@ def plan_sell_qty(
 
 
 def commit_sell(product: str, qty: int) -> None:
-    if _schedule and qty > 0 and product in PREMIUM_PRODUCTS:
+    if qty <= 0 or product not in PREMIUM_PRODUCTS:
+        return
+    if _schedule:
         _schedule["sold"][product] = _schedule["sold"].get(product, 0) + qty
-        record_sells({product: qty})
+    record_sells({product: qty})
+
+
+def projected_premium_inflow_today(obs: dict, tile_state: dict) -> dict[str, int]:
+    rows = harvest_inflow_by_day(obs, tile_state, 1)
+    return {p: int(rows[p][0]) for p in PREMIUM_PRODUCTS}
+
+
+def clearable_sell_units_today(
+    day: int,
+    market_inv: dict,
+    shed: dict,
+    prices: dict,
+    wheat_feed_need: int,
+) -> int:
+    total = 0
+    for product in PREMIUM_PRODUCTS + STAPLE_PRODUCTS:
+        count = int(shed.get(product, 0))
+        if count <= 0:
+            continue
+        inv = int(market_inv.get(product, pricing.I0_DEFAULT))
+        dump = pricing.allowed_sell_qty(
+            product,
+            inv,
+            count,
+            day,
+            mode="dump",
+            wheat_reserve=wheat_feed_need if product == "WHEAT" else 0,
+            max_sell_per_day=MAX_SELL_PER_DAY,
+            liquidate_from_day=LIQUIDATE_FROM_DAY,
+            floor_ratio=PRICE_FLOOR_RATIO,
+        )
+        dp_rem = 0
+        if schedule_active(day) and product in PREMIUM_PRODUCTS and _schedule:
+            quota = int(_schedule["quota"].get(product, 0))
+            sold = int(_schedule["sold"].get(product, 0))
+            dp_rem = max(0, quota - sold)
+        total += max(int(dump), dp_rem)
+    return total
+
+
+def clearable_units_by_product(
+    day: int,
+    market_inv: dict,
+    shed: dict,
+    wheat_feed_need: int,
+) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for product in PREMIUM_PRODUCTS + STAPLE_PRODUCTS:
+        count = int(shed.get(product, 0))
+        if count <= 0 and not (
+            schedule_active(day) and product in PREMIUM_PRODUCTS and _schedule
+        ):
+            out[product] = 0
+            continue
+        inv = int(market_inv.get(product, pricing.I0_DEFAULT))
+        dump = 0
+        if count > 0:
+            dump = int(
+                pricing.allowed_sell_qty(
+                    product,
+                    inv,
+                    count,
+                    day,
+                    mode="dump",
+                    wheat_reserve=wheat_feed_need if product == "WHEAT" else 0,
+                    max_sell_per_day=MAX_SELL_PER_DAY,
+                    liquidate_from_day=LIQUIDATE_FROM_DAY,
+                    floor_ratio=PRICE_FLOOR_RATIO,
+                )
+            )
+        dp_rem = 0
+        if schedule_active(day) and product in PREMIUM_PRODUCTS and _schedule:
+            quota = int(_schedule["quota"].get(product, 0))
+            sold = int(_schedule["sold"].get(product, 0))
+            dp_rem = max(0, quota - sold)
+        out[product] = max(dump, dp_rem)
+    return out
+
+
+def disposal_weight(product: str) -> float:
+    above = pricing.MARKET_PARAMS[product].above_target
+    if above >= 3.0:
+        return 2.0
+    if above >= 1.0:
+        return 1.0
+    return 0.5
+
+
+def opp_recent_pressure(product: str) -> float:
+    t = max(1, pricing.MARKET_PARAMS[product].t)
+    return max(_opp_last.get(product, 0.0), _opp_ema.get(product, 0.0)) / float(t)
+
+
+def apply_lead_suppression(step: int, product: str, qty: int) -> int:
+    if not fix_flags.fix_sell_lead():
+        return qty
+    if _lead_suppress.get("due_step") != step:
+        return qty
+    suppress = int(_lead_suppress.get("qty", {}).get(product, 0))
+    return max(0, qty - suppress)
+
+
+def register_lead_suppression(next_step: int, sold: dict[str, int]) -> None:
+    if not sold:
+        return
+    _lead_suppress["due_step"] = next_step
+    merged = dict(_lead_suppress.get("qty") or {})
+    for p, n in sold.items():
+        if n > 0:
+            merged[p] = merged.get(p, 0) + int(n)
+    _lead_suppress["qty"] = merged
+
+
+def remaining_quota(product: str, day: int) -> int:
+    if not schedule_active(day) or not _schedule:
+        return 0
+    q = int(_schedule["quota"].get(product, 0))
+    s = int(_schedule["sold"].get(product, 0))
+    return max(0, q - s)
+
+
+def next_hour_lead_qty(
+    product: str,
+    shed_count: int,
+    *,
+    drip: bool,
+    remaining_quota: int,
+) -> int:
+    del product
+    if shed_count <= 0 or remaining_quota <= 0:
+        return 0
+    if drip:
+        return min(1, remaining_quota, shed_count)
+    return min(remaining_quota, shed_count)
+
+
+def sell_lead_allowed(step: int, product: str) -> bool:
+    if not fix_flags.fix_sell_lead():
+        return False
+    if product in ("WHEAT", "FERTILIZER"):
+        return False
+    tpd = envconfig.turns_per_day()
+    if step % envconfig.shop_interval() == 0:
+        return False
+    nxt = step + 1
+    unlock_period = envconfig.shop_unlock_interval() * tpd
+    if nxt >= tpd * (SEASON_LAST_DAY + 1):
+        return False
+    if nxt % unlock_period == 0:
+        return False
+    return True
+
+
+def premium_lead_at_boundary(
+    day: int,
+    hour: int,
+    step: int,
+    product: str,
+    shed_count: int,
+) -> int:
+    """Lead one unit of tomorrow's DP plan at h23."""
+    if not fix_flags.fix_sell_lead() or hour != 23 or shed_count <= 0:
+        return 0
+    if not _schedule or not schedule_active(day):
+        return 0
+    nq = int((_schedule.get("next_quota") or {}).get(product, 0))
+    if nq <= 0:
+        return 0
+    lead = min(1, nq, shed_count)
+    if lead <= 0:
+        return 0
+    _lead_carry[product] = _lead_carry.get(product, 0) + lead
+    register_lead_suppression(step + 1, {product: lead})
+    return lead

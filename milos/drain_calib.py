@@ -1,8 +1,10 @@
-"""Runtime town-drain calibration (clean-day inventory drops)."""
+"""Runtime town-drain calibration (legacy when KAGGRI_FIX_CALIB=0)."""
 
 from __future__ import annotations
 
 from collections import defaultdict
+
+from milos.fix_flags import fix_calib
 
 FACTOR_MIN = 0.1
 FACTOR_MAX = 1.0
@@ -23,7 +25,15 @@ _TRACK_PRODUCTS = (
 )
 
 
+def reset_episode() -> None:
+    global _factors, _sells_today
+    _factors = {}
+    _sells_today.clear()
+
+
 def note_sells(orders: list) -> None:
+    if fix_calib():
+        return
     for order in orders:
         if not order or order[0] != "SELL" or len(order) < 3:
             continue
@@ -42,6 +52,8 @@ def clear_sells_today() -> None:
 
 
 def update(product: str, observed: float, modelled: float) -> None:
+    if fix_calib():
+        return
     if modelled <= 0 or observed < 0:
         return
     ratio = observed / modelled
@@ -51,9 +63,13 @@ def update(product: str, observed: float, modelled: float) -> None:
 
 
 def factor(product: str) -> float:
+    if fix_calib():
+        return 1.0
     return _factors.get(product, 1.0)
 
 
 def snapshot() -> str:
+    if fix_calib():
+        return "off"
     parts = [f"{p}:{_factors.get(p, 1.0):.2f}" for p in _TRACK_PRODUCTS]
     return ",".join(parts)

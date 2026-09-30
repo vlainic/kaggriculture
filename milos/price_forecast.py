@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from milos import animal_rollouts, drain_calib, envconfig, pricing, rollouts
+from milos import animal_rollouts, drain_calib, envconfig, fix_flags, pricing, rollouts
 from milos.replan_lock import (
     ANIMAL_PROFILE,
     CROP_PROFILE,
@@ -280,8 +280,12 @@ def raw_drain_for_day(unlocked_shops: list[str], abs_day: int) -> dict[str, floa
 
 
 def build_drain_by_day(obs: dict, horizon: int) -> list[dict[str, float]]:
+    from milos import town_drain
+
     day = obs["day"]
     unlocked = list(obs.get("town", {}).get("unlocked_shops", []))
+    if fix_flags.fix_prior():
+        return town_drain.build_drain_horizon(day, unlocked, horizon, use_prior=True)
     rows: list[dict[str, float]] = []
     for rel in range(horizon):
         abs_day = day + rel
@@ -295,10 +299,58 @@ def build_drain_by_day(obs: dict, horizon: int) -> list[dict[str, float]]:
 
 
 _prev_market_inv: dict[str, int] | None = None
+_prev_unlocked_shops: list[str] | None = None
+_pending_d1_forecast: dict[str, int] | None = None
+
+_FC_ERR_PRODUCTS = ("MELON", "STRAWBERRY", "MILK", "WOOL", "TOMATO", "CARROT")
+
+
+def reset_episode() -> None:
+    global _prev_market_inv, _prev_unlocked_shops, _pending_d1_forecast
+    _prev_market_inv = None
+    _prev_unlocked_shops = None
+    _pending_d1_forecast = None
+    drain_calib.reset_episode()
+    from milos import tile_ops
+
+    tile_ops.reset_fert_trace()
+
+
+def store_d1_forecast(
+    obs: dict,
+    tile_queues: dict,
+    tile_state: dict | None = None,
+) -> None:
+    global _pending_d1_forecast
+    day = obs["day"]
+    if day >= rollouts.SEASON_DAYS - 1:
+        _pending_d1_forecast = None
+        return
+    price_of = make_price_forecast(obs, tile_queues, tile_state)
+    _pending_d1_forecast = {
+        p: int(price_of(p, 1)) for p in _FC_ERR_PRODUCTS
+    }
+
+
+def log_fc_err(obs: dict) -> None:
+    global _pending_d1_forecast
+    day = obs["day"]
+    if day <= 0 or not _pending_d1_forecast:
+        return
+    prices = obs.get("market", {}).get("prices", {})
+    parts = []
+    for p in _FC_ERR_PRODUCTS:
+        fc = _pending_d1_forecast.get(p)
+        act = int(prices.get(p, 0) or 0)
+        if fc is None:
+            continue
+        parts.append(f"{p}={fc}/{act}")
+    if parts:
+        print(f"[fc_err] d={day} " + " ".join(parts), flush=True)
 
 
 def observe_drain(obs: dict) -> None:
-    global _prev_market_inv
+    global _prev_market_inv, _prev_unlocked_shops
 
     day = obs["day"]
     inv = obs.get("market", {}).get("inventory", {})
@@ -308,24 +360,60 @@ def observe_drain(obs: dict) -> None:
     }
     unlocked = list(obs.get("town", {}).get("unlocked_shops", []))
 
-    if _prev_market_inv is not None and day > 0:
-        modelled = raw_drain_for_day(unlocked, day - 1)
-        for p in SELL_PRODUCTS:
-            if drain_calib.sells_for_product(p) > 0:
-                continue
-            prev = _prev_market_inv.get(p, pricing.I0_DEFAULT)
-            now = cur.get(p, pricing.I0_DEFAULT)
-            observed = max(0.0, float(prev - now))
-            drain_calib.update(p, observed, modelled.get(p, 0.0))
+    if not fix_flags.fix_calib():
+        if _prev_market_inv is not None and day > 0:
+            shops_yesterday = (
+                _prev_unlocked_shops
+                if _prev_unlocked_shops is not None
+                else unlocked
+            )
+            modelled = raw_drain_for_day(shops_yesterday, day - 1)
+            for p in SELL_PRODUCTS:
+                if drain_calib.sells_for_product(p) > 0:
+                    continue
+                prev = _prev_market_inv.get(p, pricing.I0_DEFAULT)
+                now = cur.get(p, pricing.I0_DEFAULT)
+                observed = max(0.0, float(prev - now))
+                drain_calib.update(p, observed, modelled.get(p, 0.0))
 
     _prev_market_inv = cur
+    _prev_unlocked_shops = list(unlocked)
+    drain_calib.clear_sells_today()
+
+    wool = cur.get("WOOL", pricing.I0_DEFAULT)
+    melon = cur.get("MELON", pricing.I0_DEFAULT)
+    if fix_flags.fix_calib():
+        print(
+            f"[fc] d={day} calib=off wool_now={wool} melon_now={melon}",
+            flush=True,
+        )
+    else:
+        print(
+            f"[fc] d={day} drain={drain_calib.snapshot()} "
+            f"wool_now={wool} melon_now={melon}",
+            flush=True,
+        )
+
+
+def note_dawn_market(obs: dict) -> None:
+    """Update dawn market snapshot when drain calibration is disabled."""
+    global _prev_market_inv, _prev_unlocked_shops
+
+    day = obs["day"]
+    inv = obs.get("market", {}).get("inventory", {})
+    cur = {
+        p: int(inv.get(p, pricing.I0_DEFAULT))
+        for p in SELL_PRODUCTS
+    }
+    unlocked = list(obs.get("town", {}).get("unlocked_shops", []))
+    _prev_market_inv = cur
+    _prev_unlocked_shops = list(unlocked)
     drain_calib.clear_sells_today()
 
     wool = cur.get("WOOL", pricing.I0_DEFAULT)
     melon = cur.get("MELON", pricing.I0_DEFAULT)
     print(
-        f"[fc] d={day} drain={drain_calib.snapshot()} "
-        f"wool_now={wool} melon_now={melon}",
+        f"[fc] d={day} calib=off wool_now={wool} melon_now={melon}",
         flush=True,
     )
 

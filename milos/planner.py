@@ -126,6 +126,9 @@ STARTING_MONEY = 3000
 NUM_ACTIVE_HIRES = NW_HANDS
 BUY_LAND_DAY: int | None = None
 DEAD_HANDS: set[str] = set()
+STUCK_THRESHOLD = 3
+ZONE_SOLVE_STREAK: dict[str, int] = {}
+STAND_DOWN_UNTIL: dict[str, int] = {}
 ACTIVE_NE: list[str] = []
 NE_BOUND_TODAY: set[str] = set()
 NE_DUE_DAY: dict[str, int] = {}
@@ -384,6 +387,8 @@ def _activate_next_sw(
     if not pending:
         return False
     worker = pending[0]
+    if day < STAND_DOWN_UNTIL.get(worker, 0):
+        return False
 
     horizon = NUM_DAYS - day
     if horizon <= 0:
@@ -608,6 +613,8 @@ def _activate_next_ne(
     if not pending:
         return
     worker = pending[0]
+    if day < STAND_DOWN_UNTIL.get(worker, 0):
+        return
     ne_owned = _ne_owned(me)
 
     if not ne_owned:
@@ -777,6 +784,71 @@ def apply_replan(
     return written
 
 
+def _stand_down_workers() -> tuple[str, ...]:
+    return tuple(NE_WORKERS) + tuple(_sw_workers_cap())
+
+
+def _zone_live_empty(me: dict, worker: str, day: int) -> int:
+    n = 0
+    for idx in WORKER_TILES.get(worker, ()):
+        tile = _tile_at(me, idx)
+        if tile is None:
+            n += 1
+            continue
+        if isinstance(tile, dict) and tile.get("kind") == "WEED":
+            n += 1
+    return n
+
+
+def update_zone_streaks(
+    day: int,
+    empty_counts: dict[str, int],
+    zone_outcomes: dict[str, str],
+) -> None:
+    """NE/SW only: N consecutive bad solves with empties → DEAD_HANDS."""
+    global ZONE_SOLVE_STREAK, DEAD_HANDS
+    for worker in _stand_down_workers():
+        outcome = zone_outcomes.get(worker, "ok")
+        empty_n = int(empty_counts.get(worker, 0))
+        if outcome == "ok":
+            if worker in DEAD_HANDS or ZONE_SOLVE_STREAK.get(worker, 0) > 0:
+                print(
+                    f"[planner] zone_streak worker={worker} d={day} "
+                    f"streak=0 status=recovered",
+                    flush=True,
+                )
+            ZONE_SOLVE_STREAK[worker] = 0
+            DEAD_HANDS.discard(worker)
+            continue
+        if empty_n <= 0 or outcome == "empty":
+            continue
+        streak = ZONE_SOLVE_STREAK.get(worker, 0) + 1
+        ZONE_SOLVE_STREAK[worker] = streak
+        if streak >= STUCK_THRESHOLD and worker not in DEAD_HANDS:
+            DEAD_HANDS.add(worker)
+            print(
+                f"[planner] zone_streak worker={worker} d={day} "
+                f"streak={streak} status=stuck",
+                flush=True,
+            )
+
+
+def _apply_stand_downs(
+    day: int,
+    me: dict,
+    tile_queues: dict,
+    tile_state: dict | None,
+) -> None:
+    global STAND_DOWN_UNTIL
+    for worker in list(DEAD_HANDS):
+        if worker in ACTIVE_NE:
+            _rollback_ne_zone(worker, me, day, tile_queues, tile_state)
+            STAND_DOWN_UNTIL[worker] = day + 2
+        elif worker in ACTIVE_SW:
+            _rollback_sw_zone(worker, me, day, tile_queues, tile_state)
+            STAND_DOWN_UNTIL[worker] = day + 2
+
+
 def _replan_active(
     obs: dict,
     tile_queues: dict,
@@ -853,6 +925,13 @@ def _replan_active(
         samples.append(f"t{idx + 1}:{pl}")
     print(f"[planner] replan assign {', '.join(samples)}", flush=True)
     _log_wsp_plan(day, horizon, result, dict(result.assigned))
+
+    empty_counts = {
+        w: sum(1 for t in replan_tiles if t in WORKER_TILES[w]) for w in act
+    }
+    outcomes = getattr(result, "zone_outcomes", None) or {}
+    update_zone_streaks(day, empty_counts, outcomes)
+    _apply_stand_downs(day, me, tile_queues, tile_state)
 
 
 def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None:
@@ -1206,11 +1285,57 @@ def chain_to_queue_items(chain: list, horizon: int = NUM_DAYS) -> list:
     return items
 
 
+def _day0_plan_ok(result: SolveResult) -> bool:
+    big = 0
+    melons = 0
+    for chain in result.assigned.values():
+        if not chain:
+            continue
+        for key, start in chain:
+            label, _ = _parse_profile_key(key)
+            if label in ("COW", "SHEEP") and int(start) <= 1:
+                big += 1
+            if label == "MELON" and int(start) == 0:
+                melons += 1
+    return big >= 4 and melons >= 10
+
+
+def _hardcoded_day0_queues() -> dict[int, list]:
+    nw_tiles = sorted({idx for w in NW_WORKERS for idx in WORKER_TILES[w]})
+    chains: dict[int, list] = {}
+    for i, idx in enumerate(nw_tiles):
+        if i < 10:
+            chains[idx] = [("MELON_no_fert", 0)]
+        elif i in (10, 11):
+            chains[idx] = [("COW_with_care", 0)]
+        elif i in (12, 13):
+            chains[idx] = [("SHEEP_with_care", 0)]
+        else:
+            chains[idx] = [("MELON_no_fert", 0)]
+    print("[planner] day0 hardcoded template", flush=True)
+    return {
+        idx: chain_to_queue_items(ch, NUM_DAYS)
+        for idx, ch in chains.items()
+    }
+
+
 def _build_from_solver() -> dict[int, list]:
+    import time
+
+    t0 = time.monotonic()
     _board, result = build_day0(starting_money=STARTING_MONEY, max_time=20.0)
+    ms = int((time.monotonic() - t0) * 1000)
+    print(
+        f"[planner] day0 live ms={ms} complete={result.complete} "
+        f"solved={','.join(result.solved_workers) or 'none'}",
+        flush=True,
+    )
     if not result.solved_workers:
         active = ",".join(result.solved_workers) or "none"
         raise RuntimeError(f"day-0 {CURRENT_SOLVER} failed: active={active}")
+
+    if ms > 20_000 or not _day0_plan_ok(result):
+        return _hardcoded_day0_queues()
 
     queues = {idx: [] for idx in range(NUM_TILES)}
     for idx, chain in result.assigned.items():

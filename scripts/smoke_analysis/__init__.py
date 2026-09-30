@@ -13,6 +13,9 @@ from smoke_analysis import (
     parse_planner,
     parse_sell_prices,
     parse_snap,
+    parse_fc_err,
+    parse_shed,
+    audit_threeland,
 )
 from smoke_analysis.kpi import compute_kpis
 from smoke_analysis.load import SEASON_DAYS, load_lines, parse_seed
@@ -28,6 +31,7 @@ __all__ = [
     "plot_zone_earnings_vs_cost",
     "plot_us_vs_opp_daily",
     "plot_sell_price_heatmap",
+    "plot_fc_err",
     "summarize_distribution",
     "load_lines",
     "SEASON_DAYS",
@@ -88,6 +92,12 @@ def plot_us_vs_opp_daily(report: dict[str, Any], *, title: str | None = None) ->
 
 def plot_sell_price_heatmap(report: dict[str, Any], *, title: str | None = None) -> None:
     from smoke_analysis.plot import plot_sell_price_heatmap as _plot
+
+    return _plot(report, title=title)
+
+
+def plot_fc_err(report: dict[str, Any], *, title: str | None = None) -> None:
+    from smoke_analysis.plot import plot_fc_err as _plot
 
     return _plot(report, title=title)
 
@@ -172,6 +182,11 @@ def analyze(path: str | Path) -> dict[str, Any]:
         lines, snaps, season_days=SEASON_DAYS
     )
 
+    fc_err = parse_fc_err.parse_fc_err(lines, season_days=SEASON_DAYS)
+    shed_cap = parse_shed.parse_shed_cap(lines, season_days=SEASON_DAYS)
+    disposal = parse_shed.parse_disposal_events(lines)
+    threeland_audit = audit_threeland.audit_threeland(lines, season_days=SEASON_DAYS)
+
     worker_first_day = parse_exec.parse_worker_first_active_day(
         lines,
         workers,
@@ -197,6 +212,10 @@ def analyze(path: str | Path) -> dict[str, Any]:
         "actions": actions,
         "vs_opp": vs_opp,
         "sell_prices": sell_prices,
+        "fc_err": fc_err,
+        "shed_cap": shed_cap,
+        "disposal": disposal,
+        "threeland_audit": threeland_audit,
         "hires": hires,
         "hands": {**hands_dawn, **hands_eod},
         "planner": planner,
@@ -262,6 +281,43 @@ def summarize_distribution(reports: list[dict[str, Any]]) -> str:
         lines.append(
             f"stuck_runs={n_stuck}/{len(reports)} stuck_worker_counts={stuck_worker_counts}"
         )
+    prem_means = [
+        (r.get("fc_err") or {}).get("mean_premium_abs_err_d3_plus")
+        for r in reports
+    ]
+    prem_vals = [v for v in prem_means if v is not None]
+    if prem_vals:
+        lines.append(
+            f"fc_err premium d3+ mean: "
+            f"avg={sum(prem_vals)/len(prem_vals):.2f} values={[round(v, 1) for v in prem_vals]}"
+        )
+    wool_ranges = [
+        (r.get("fc_err") or {}).get("err_range_by_product_d3_plus", {}).get("WOOL")
+        for r in reports
+    ]
+    wool_ranges = [v for v in wool_ranges if v is not None]
+    if wool_ranges:
+        lines.append(
+            f"fc_err WOOL d3+ range: avg={sum(wool_ranges)/len(wool_ranges):.1f} "
+            f"values={[round(v, 1) for v in wool_ranges]}"
+        )
+    streaks = [(r.get("shed_cap") or {}).get("max_cap_streak") for r in reports]
+    streaks = [v for v in streaks if v is not None]
+    if streaks:
+        lines.append(
+            f"shed max_cap_streak: mean={sum(streaks)/len(streaks):.1f} values={streaks}"
+        )
+    room_ev = [((r.get("disposal") or {}).get("room_events")) for r in reports]
+    room_ev = [v for v in room_ev if v is not None]
+    if room_ev:
+        lines.append(f"[room] events mean={sum(room_ev)/len(room_ev):.1f} values={room_ev}")
+    wasted = [
+        (r.get("threeland_audit") or {}).get("wasted_land_events", 0) for r in reports
+    ]
+    if any(wasted):
+        lines.append(
+            f"audit wasted_land: mean={sum(wasted)/len(wasted):.1f} values={wasted}"
+        )
     return "\n".join(lines)
 
 
@@ -305,4 +361,33 @@ def summarize(report: dict[str, Any]) -> str:
         if isinstance(check, dict):
             mark = "OK" if check.get("pass") else "FAIL"
             lines.append(f"  [{mark}] {name}: {check.get('detail', '')}")
+    prem = (report.get("fc_err") or {}).get("mean_premium_abs_err_d3_plus")
+    if prem is not None:
+        lines.append(f"fc_err premium d3+ mean={prem:.2f}")
+    wool_rng = (report.get("fc_err") or {}).get("err_range_by_product_d3_plus", {}).get(
+        "WOOL"
+    )
+    if wool_rng is not None:
+        lines.append(f"fc_err WOOL d3+ range={wool_rng:.1f}")
+    sc = report.get("shed_cap") or {}
+    if sc.get("max_cap_streak") is not None:
+        lines.append(
+            f"shed: days_at_cap={sc.get('days_at_cap')} "
+            f"max_cap_streak={sc.get('max_cap_streak')}"
+        )
+    disp = report.get("disposal") or {}
+    if disp:
+        lines.append(
+            f"disposal: room={disp.get('room_events')} "
+            f"animal_cap={disp.get('animal_cap_events')} "
+            f"sell_lead={disp.get('sell_lead_events')}"
+        )
+    aud = report.get("threeland_audit") or {}
+    if aud:
+        lines.append(
+            f"threeland_audit: wasted_land={aud.get('wasted_land_events')} "
+            f"value_unknown={aud.get('value_unknown_events')} "
+            f"latch_suspects={len(aud.get('low_value_latch_suspects') or [])} "
+            f"cascade_skip={aud.get('cascade_skip_lines')}"
+        )
     return "\n".join(lines)

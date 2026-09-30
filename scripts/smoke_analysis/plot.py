@@ -875,3 +875,68 @@ def plot_sell_price_heatmap(report: dict[str, Any], *, title: str | None = None)
     )
     cbar.set_label("units sold (shared log scale)")
     plt.show()
+
+
+def plot_fc_err(report: dict[str, Any], *, title: str | None = None) -> None:
+    """Forecast error: premiums-only mean (top) and all tracked products (bottom)."""
+    fc = report.get("fc_err") or {}
+    stem = title or report.get("log_stem") or "smoke"
+    err = fc.get("abs_err_by_product_by_day") or {}
+    premium_day = fc.get("premium_abs_err_by_day") or []
+    premium_products = fc.get("premium_fc_products") or [
+        "MELON",
+        "STRAWBERRY",
+        "MILK",
+        "WOOL",
+    ]
+    if not err and not any(v is not None for v in premium_day):
+        fig, ax = plt.subplots(figsize=(8, 2.5))
+        ax.text(0.5, 0.5, "no [fc_err] lines parsed", ha="center", va="center")
+        ax.axis("off")
+        ax.set_title(f"{stem} — forecast error")
+        plt.tight_layout()
+        plt.show()
+        return
+
+    n_days = max(
+        len(premium_day),
+        len(next(iter(err.values()), [])) if err else 0,
+    )
+    days = list(range(n_days))
+    fig, (ax_prem, ax_all) = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
+
+    prem_ys = [v if v is not None else float("nan") for v in premium_day]
+    ax_prem.plot(days, prem_ys, marker="o", markersize=4, color="C0", label="premiums mean")
+    mean_d3 = fc.get("mean_premium_abs_err_d3_plus")
+    if mean_d3 is not None:
+        ax_prem.axhline(
+            mean_d3,
+            color="C0",
+            linestyle=":",
+            alpha=0.7,
+            label=f"d3+ mean={mean_d3:.1f}",
+        )
+    ax_prem.axvline(2.5, color="gray", linestyle="--", linewidth=0.8)
+    ax_prem.set_ylabel("|fc − act| ($)")
+    ax_prem.set_title(f"{stem} — premium forecast error (mean of 4)")
+    ax_prem.legend(loc="upper right", fontsize=8)
+    ax_prem.grid(True, alpha=0.3)
+
+    for p in premium_products:
+        series = err.get(p) or []
+        ys = [v if v is not None else float("nan") for v in series]
+        ax_all.plot(days, ys, marker="o", markersize=3, label=p)
+    for p in sorted(err.keys()):
+        if p in premium_products:
+            continue
+        series = err.get(p) or []
+        ys = [v if v is not None else float("nan") for v in series]
+        ax_all.plot(days, ys, marker=".", markersize=2, alpha=0.7, label=p)
+    ax_all.axvline(2.5, color="gray", linestyle="--", linewidth=0.8, label="d3")
+    ax_all.set_xlabel("day")
+    ax_all.set_ylabel("|forecast − actual| ($)")
+    ax_all.set_title("by product (premiums + staples)")
+    ax_all.legend(loc="upper right", fontsize=7, ncol=2)
+    ax_all.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
