@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from milos import animal_rollouts, rollouts, script, workers
+from milos import animal_rollouts, fix_flags, rollouts, script, workers
 from milos.script import TILE_QUEUES, QueueItem
 
 STRAWBERRY_LAST_AGE = 16
 ONE_TIME_CROPS = frozenset({"WHEAT", "CARROT", "MELON"})
+
+_FERT_TRACE: set[tuple[int, str]] = set()
 
 
 def plant_harvest_transfer(crop: str, yield_units: int) -> tuple[int, int]:
@@ -49,6 +51,38 @@ def zone_has_animal(me: dict, tile_idx: int) -> bool:
     return False
 
 
+def reset_fert_trace() -> None:
+    _FERT_TRACE.clear()
+
+
+def _worker_for_tile(tile_idx: int) -> str | None:
+    for worker, tiles in workers.WORKER_TILES.items():
+        if tile_idx in tiles:
+            return worker
+    return None
+
+
+def _log_fert_once(
+    day: int,
+    worker: str | None,
+    *,
+    profile: str,
+    crop: str,
+    age: int,
+    reason: str,
+) -> None:
+    if not fix_flags.fix_fert() or worker is None:
+        return
+    key = (day, worker)
+    if key in _FERT_TRACE:
+        return
+    _FERT_TRACE.add(key)
+    print(
+        f"[fert] d={day} w={worker} crop={crop} age={age} profile={profile} {reason}",
+        flush=True,
+    )
+
+
 def crop_needs_fertilize_by_age(tile: dict, day: int) -> bool:
     """Check if crop needs fertilization based on age."""
     if tile.get("crop") == "MELON":
@@ -74,14 +108,52 @@ def _may_fertilize_today(
     fert_today: bool,
     zone_ops_remaining: int,
 ) -> bool:
+    return False
+    worker = _worker_for_tile(tile_idx)
+    crop = tile.get("crop", "")
+    age = day - tile.get("planted_day", day)
     if fert_today or zone_ops_remaining <= 0:
+        _log_fert_once(
+            day,
+            worker,
+            profile="",
+            crop=str(crop),
+            age=age,
+            reason="skip=ops_or_fert_today",
+        )
         return False
     inv = _inv_at(private, inv_idx)
     if inv.get("FERTILIZER", 0) <= 0:
+        _log_fert_once(
+            day,
+            worker,
+            profile="",
+            crop=str(crop),
+            age=age,
+            reason="skip=no_inv",
+        )
         return False
     if not zone_has_animal(me, tile_idx):
+        _log_fert_once(
+            day,
+            worker,
+            profile="",
+            crop=str(crop),
+            age=age,
+            reason="skip=no_zone_animal",
+        )
         return False
-    return crop_needs_fertilize_by_age(tile, day)
+    if not crop_needs_fertilize_by_age(tile, day):
+        _log_fert_once(
+            day,
+            worker,
+            profile="",
+            crop=str(crop),
+            age=age,
+            reason="skip=not_fert_age",
+        )
+        return False
+    return True
 
 
 def current_queue_item(idx: int, queue_idx: int) -> QueueItem | None:
@@ -254,6 +326,7 @@ def next_tile_action(
                 item,
                 harvest_only,
                 tile_idx=idx,
+                queue_idx=queue_idx,
                 me=me,
                 private=private,
                 inv_idx=inv_idx,
@@ -310,6 +383,7 @@ def _crop_action(
     harvest_only: bool,
     *,
     tile_idx: int = -1,
+    queue_idx: int = 0,
     me: dict | None = None,
     private: dict | None = None,
     inv_idx: int = 0,
@@ -317,7 +391,9 @@ def _crop_action(
     zone_ops_remaining: int = 999,
 ) -> list | None:
     crop = tile["crop"]
-    profile = item.profile if item.kind == "crop" else script.CROP_PROFILE
+    profile = script.effective_crop_profile(
+        TILE_QUEUES.get(tile_idx, []), queue_idx, crop
+    )
     age = day - tile["planted_day"]
     actions = rollouts.actions_at_age(crop, age, profile)
 
@@ -356,7 +432,13 @@ def _crop_action(
         if act == "PLANT":
             continue
         if act == "FERTILIZE":
-            continue
+            if private is None:
+                continue
+            inv = _inv_at(private, inv_idx)
+            if inv.get("FERTILIZER", 0) <= 0 or tile.get(
+                "fertilized_until_day", -1
+            ) >= day:
+                continue
         if act == "HARVEST" and tile.get("yield_units", 0) <= 0:
             continue
         return [act] + ([crop] if act == "PLANT" else [])

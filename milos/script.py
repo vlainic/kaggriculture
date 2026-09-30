@@ -173,6 +173,106 @@ def next_animal_pickup(
     return None
 
 
+def effective_crop_profile(queue: list[QueueItem], queue_idx: int, crop: str) -> str:
+    if queue_idx < len(queue):
+        item = queue[queue_idx]
+        if item.kind == "crop" and item.label == crop:
+            return item.profile
+    for item in queue:
+        if item.kind == "crop" and item.label == crop and "with_fert" in item.profile:
+            return item.profile
+    for item in queue:
+        if item.kind == "crop" and item.label == crop:
+            return item.profile
+    return CROP_PROFILE
+
+
+def effective_animal_profile(queue: list[QueueItem], queue_idx: int, animal: str) -> str:
+    if queue_idx < len(queue):
+        item = queue[queue_idx]
+        if item.kind == "animal" and item.label == animal:
+            return item.profile
+    for item in queue:
+        if item.kind == "animal" and item.label == animal:
+            return item.profile
+    return ANIMAL_PROFILE
+
+
+def _remaining_fert_ops(
+    crop: str,
+    profile: str,
+    *,
+    planted_day: int,
+    day: int,
+    fert_until: int,
+) -> int:
+    if "with_fert" not in profile:
+        return 0
+    age = day - planted_day
+    count = 0
+    for fa in rollouts.fertilize_ages(crop, profile):
+        if fa < age:
+            continue
+        if fert_until >= planted_day + fa:
+            continue
+        count += 1
+    return count
+
+
+def horizon_fert_shed_need(me: dict, tile_state: dict, day: int) -> int:
+    total = 0
+    for worker in WORKERS:
+        for idx in WORKER_TILES[worker]:
+            st = tile_state.get(idx, {})
+            qi = st.get("queue_idx", 0)
+            queue = TILE_QUEUES.get(idx, [])
+            tile = _tile_at(me, idx)
+            if isinstance(tile, dict) and tile.get("kind") == "PLANT":
+                crop = tile.get("crop")
+                if not crop:
+                    continue
+                profile = effective_crop_profile(queue, qi, crop)
+                total += _remaining_fert_ops(
+                    crop,
+                    profile,
+                    planted_day=int(tile.get("planted_day", day)),
+                    day=day,
+                    fert_until=int(tile.get("fertilized_until_day", -1)),
+                )
+            for item in queue[qi:]:
+                if item.kind == "crop" and "with_fert" in item.profile:
+                    total += rollouts.fert_count(item.label, item.profile)
+    return total
+
+
+def near_term_fert_shed_need(
+    me: dict, tile_state: dict, day: int, *, window_days: int = 2
+) -> int:
+    """Fertilizer uses due on live with_fert tiles in [day, day + window_days)."""
+    end = day + window_days
+    total = 0
+    for worker in WORKERS:
+        for idx in WORKER_TILES[worker]:
+            st = tile_state.get(idx, {})
+            queue = TILE_QUEUES.get(idx, [])
+            qi = st.get("queue_idx", 0)
+            tile = _tile_at(me, idx)
+            if isinstance(tile, dict) and tile.get("kind") == "PLANT":
+                crop = tile.get("crop")
+                if not crop:
+                    continue
+                profile = effective_crop_profile(queue, qi, crop)
+                if "with_fert" not in profile:
+                    continue
+                planted_day = int(tile.get("planted_day", day))
+                fert_until = int(tile.get("fertilized_until_day", -1))
+                for fa in rollouts.fertilize_ages(crop, profile):
+                    due = planted_day + fa
+                    if day <= due < end and fert_until < due:
+                        total += 1
+    return total
+
+
 def zone_fert_pickup_needed(
     me: dict, worker: str, tile_state: dict, inv: dict, *, day: int | None = None
 ) -> int:
@@ -191,7 +291,7 @@ def zone_fert_pickup_needed(
             age = (day if day is not None else 0) - tile.get("planted_day", day or 0)
             qi = st.get("queue_idx", 0)
             queue = TILE_QUEUES.get(idx, [])
-            profile = queue[qi].profile if qi < len(queue) else "no_fert"
+            profile = effective_crop_profile(queue, qi, crop) if crop else CROP_PROFILE
             acts = rollouts.actions_at_age(crop, age, profile) if crop else []
             if "FERTILIZE" in acts:
                 uses += 1
@@ -200,7 +300,7 @@ def zone_fert_pickup_needed(
             age = (day if day is not None else 0) - tile.get("placed_day", day or 0)
             qi = st.get("queue_idx", 0)
             queue = TILE_QUEUES.get(idx, [])
-            profile = queue[qi].profile if qi < len(queue) else "with_care"
+            profile = effective_animal_profile(queue, qi, animal)
             acts = animal_rollouts.actions_at_age(animal, age, profile)
             if "FERTILIZE" in acts:
                 uses += 1

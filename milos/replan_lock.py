@@ -7,6 +7,7 @@ from collections.abc import Callable
 from milos import animal_rollouts, rollouts
 from milos.wsp import data as wsp_data
 from milos.wsp.config import ANIMAL_NAMES, PROFILE_SUFFIXES
+from milos.wsp.mip import harvest_price_for_cash
 from milos.workers import TILE_COORDS
 from milos.zoning import NUM_TILES, WORKERS, worker_for_tile
 
@@ -126,7 +127,7 @@ def _build_cash_and_spend(
             continue
         hday = start_day + (age - min_age)
         if hday < horizon:
-            cash[hday] += yld * price_of(product, hday)
+            cash[hday] += yld * harvest_price_for_cash(product, hday, price_of)
     return cash, spend
 
 
@@ -479,34 +480,43 @@ def build_replan_lock(
     tile_queues: dict,
     st_map: dict,
     price_of: Callable[..., int],
+    *,
+    market_inv: dict[str, int] | None = None,
 ) -> tuple[list[int], dict[str, dict], int]:
     """Return (replan_tile_indices, locked_by_worker, locked_tile_count)."""
-    crops_data = wsp_data.crops()
-    animals_data = wsp_data.animals()
-    replan_tiles: list[int] = []
-    locked_tiles = 0
-    locked_by_worker = {w: empty_locked(horizon) for w in WORKERS}
+    from milos.wsp import mip
 
-    for idx in range(NUM_TILES):
-        tile = _tile_at(me, idx)
-        st = st_map.get(idx, {})
-        worker = worker_for_tile(idx)
-        if replan_eligible(idx, tile, st, tile_queues):
-            replan_tiles.append(idx)
-        else:
-            seg = _stamp_tile_commitment(
-                idx,
-                me,
-                st,
-                tile_queues.get(idx, []),
-                day,
-                horizon,
-                price_of,
-                crops_data,
-                animals_data,
-            )
-            if seg:
-                _aggregate_locked(locked_by_worker, worker, seg, horizon)
-                locked_tiles += 1
+    inv = market_inv if market_inv is not None else {}
+    mip.set_quote_market_inv(inv)
+    try:
+        crops_data = wsp_data.crops()
+        animals_data = wsp_data.animals()
+        replan_tiles: list[int] = []
+        locked_tiles = 0
+        locked_by_worker = {w: empty_locked(horizon) for w in WORKERS}
 
-    return replan_tiles, locked_by_worker, locked_tiles
+        for idx in range(NUM_TILES):
+            tile = _tile_at(me, idx)
+            st = st_map.get(idx, {})
+            worker = worker_for_tile(idx)
+            if replan_eligible(idx, tile, st, tile_queues):
+                replan_tiles.append(idx)
+            else:
+                seg = _stamp_tile_commitment(
+                    idx,
+                    me,
+                    st,
+                    tile_queues.get(idx, []),
+                    day,
+                    horizon,
+                    price_of,
+                    crops_data,
+                    animals_data,
+                )
+                if seg:
+                    _aggregate_locked(locked_by_worker, worker, seg, horizon)
+                    locked_tiles += 1
+
+        return replan_tiles, locked_by_worker, locked_tiles
+    finally:
+        mip.set_quote_market_inv(None)

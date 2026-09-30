@@ -729,7 +729,7 @@ def plot_zone_earnings_vs_cost(
 
 
 def plot_us_vs_opp_daily(report: dict[str, Any], *, title: str | None = None) -> None:
-    """Compare us vs opp: total tile ops/day and dawn net-cash Δ/day."""
+    """Compare us vs opp: tile ops, tiles operated, net cash, workers, efficiency."""
     vs = report.get("vs_opp") or {}
     stem = title or report.get("log_stem") or "smoke"
     if not vs.get("present"):
@@ -747,31 +747,143 @@ def plot_us_vs_opp_daily(report: dict[str, Any], *, title: str | None = None) ->
         plt.show()
         return
 
-    us_ops = vs.get("us_tile_ops_by_day") or [0] * SEASON_DAYS
-    opp_ops = vs.get("opp_tile_ops_by_day") or [0] * SEASON_DAYS
-    us_net = vs.get("us_net_cash_by_day") or [0] * SEASON_DAYS
-    opp_net = vs.get("opp_net_cash_by_day") or [0] * SEASON_DAYS
     days = np.arange(SEASON_DAYS)
     width = 0.4
+    opp_live = vs.get("opp_live_logged", False)
+    opp_live_note = "" if opp_live else " (opp live missing — re-smoke)"
 
-    fig, (ax0, ax1) = plt.subplots(2, 1, figsize=(14, 7), sharex=True)
+    panels: list[tuple[str, str, str, str, bool]] = [
+        (
+            "us_tile_ops_by_day",
+            "opp_tile_ops_by_day",
+            "tile ops",
+            "Total tile ops per day (PICKUP+field acts; MOVE/PASS excluded)",
+            True,
+        ),
+        (
+            "us_tiles_by_day",
+            "opp_tiles_by_day",
+            "tiles",
+            "Tiles operated (dawn): us Σ qtiles; opp owned live tiles",
+            True,
+        ),
+        (
+            "us_net_cash_by_day",
+            "opp_net_cash_by_day",
+            "coins",
+            "Net cash Δ per day (dawn money[d] − dawn money[d−1])",
+            True,
+        ),
+        (
+            "us_workers_by_day",
+            "opp_workers_by_day",
+            "workers",
+            "Workers per day (us: zones with qtiles>0; opp: distinct farmer+handN/day)",
+            True,
+        ),
+        (
+            "us_ops_per_tile_by_day",
+            "opp_ops_per_tile_by_day",
+            "ops/tile",
+            f"Ops per tile{opp_live_note}",
+            opp_live,
+        ),
+        (
+            "us_tiles_per_worker_by_day",
+            "opp_tiles_per_worker_by_day",
+            "tiles/worker",
+            f"Avg tiles per worker{opp_live_note}",
+            opp_live,
+        ),
+        (
+            "us_ops_per_worker_by_day",
+            "opp_ops_per_worker_by_day",
+            "ops/worker",
+            "Avg ops per worker",
+            True,
+        ),
+    ]
 
-    ax0.bar(days - width / 2, us_ops[:SEASON_DAYS], width, color=US_COLOR, alpha=0.85, label="us")
-    ax0.bar(days + width / 2, opp_ops[:SEASON_DAYS], width, color="#c62828", alpha=0.75, label="opp")
-    ax0.set_ylabel("tile ops")
-    ax0.set_title("Total tile ops per day (PICKUP+field acts; MOVE/PASS excluded)")
-    ax0.legend(fontsize=8)
-    ax0.grid(True, axis="y", linestyle="--", alpha=0.35)
+    fig, axes = plt.subplots(7, 1, figsize=(14, 18), sharex=True)
 
-    ax1.bar(days - width / 2, us_net[:SEASON_DAYS], width, color=US_COLOR, alpha=0.85, label="us")
-    ax1.bar(days + width / 2, opp_net[:SEASON_DAYS], width, color="#c62828", alpha=0.75, label="opp")
-    ax1.axhline(0, color="gray", lw=0.8)
-    ax1.set_xlabel("day")
-    ax1.set_ylabel("coins")
-    ax1.set_title("Net cash Δ per day (dawn money[d] − dawn money[d−1])")
-    ax1.legend(fontsize=8)
-    ax1.grid(True, axis="y", linestyle="--", alpha=0.35)
-    ax1.set_xlim(-0.5, SEASON_DAYS - 0.5)
+    us_money_day = vs.get("us_money_by_day") or [None] * SEASON_DAYS
+    opp_money_day = vs.get("opp_money_by_day") or [None] * SEASON_DAYS
+
+    for ax, (us_key, opp_key, ylabel, ptitle, show_opp) in zip(axes, panels):
+        raw_us = vs.get(us_key) or ([0] * SEASON_DAYS)
+        raw_opp = vs.get(opp_key) or ([0] * SEASON_DAYS)
+
+        def _bar_y(vals: list) -> list[float]:
+            ys: list[float] = []
+            for d in range(SEASON_DAYS):
+                v = vals[d] if d < len(vals) else 0
+                ys.append(0.0 if v is None else float(v))
+            return ys
+
+        us_vals = _bar_y(raw_us)
+        opp_vals = _bar_y(raw_opp)
+        if us_key == "us_tiles_by_day" and not opp_live:
+            ptitle = ptitle + opp_live_note
+        ax.bar(
+            days - width / 2,
+            us_vals,
+            width,
+            color=US_COLOR,
+            alpha=0.85,
+            label="us Δ",
+        )
+        if show_opp:
+            ax.bar(
+                days + width / 2,
+                opp_vals,
+                width,
+                color="#c62828",
+                alpha=0.75,
+                label="opp Δ",
+            )
+        if ylabel == "coins":
+            ax.axhline(0, color="gray", lw=0.8)
+            ax_right = ax.twinx()
+            us_m = [
+                float(v) if v is not None else np.nan for v in us_money_day[:SEASON_DAYS]
+            ]
+            opp_m = [
+                float(v) if v is not None else np.nan for v in opp_money_day[:SEASON_DAYS]
+            ]
+            ax_right.plot(
+                days,
+                us_m,
+                color=US_COLOR,
+                linewidth=1.5,
+                marker="o",
+                markersize=3,
+                label="us money",
+            )
+            ax_right.plot(
+                days,
+                opp_m,
+                color="#c62828",
+                linewidth=1.5,
+                marker="o",
+                markersize=3,
+                alpha=0.85,
+                label="opp money",
+            )
+            ax_right.set_ylabel("money (dawn)")
+            h1, l1 = ax.get_legend_handles_labels()
+            h2, l2 = ax_right.get_legend_handles_labels()
+            ax.legend(h1 + h2, l1 + l2, fontsize=7, loc="upper left")
+            ax.set_title(
+                ptitle + " — bars: Δ; right axis: dawn [snap]/[opp_snap] money"
+            )
+        else:
+            ax.legend(fontsize=8)
+            ax.set_title(ptitle)
+        ax.set_ylabel(ylabel)
+        ax.grid(True, axis="y", linestyle="--", alpha=0.35)
+
+    axes[-1].set_xlabel("day")
+    axes[-1].set_xlim(-0.5, SEASON_DAYS - 0.5)
 
     ru, ro, mg = vs.get("reward_us"), vs.get("reward_opp"), vs.get("margin")
     extras = []
@@ -783,6 +895,94 @@ def plot_us_vs_opp_daily(report: dict[str, Any], *, title: str | None = None) ->
         extras.append(f"margin={mg:.0f}")
     suffix = ("  " + " ".join(extras)) if extras else ""
     fig.suptitle(f"{stem} — us vs opp{suffix}", fontsize=11)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_us_vs_opp_money_hours(
+    report: dict[str, Any], *, title: str | None = None
+) -> None:
+    """Us vs opp cash on turn axis (day×24+hour) with vertical day grid."""
+    vs = report.get("vs_opp") or {}
+    stem = title or report.get("log_stem") or "smoke"
+    if not vs.get("present"):
+        fig, ax = plt.subplots(figsize=(10, 2.5))
+        ax.text(
+            0.5,
+            0.5,
+            "no [opp] logs — smoke vs scripts/v55_logged_opponent.py",
+            ha="center",
+            va="center",
+        )
+        ax.axis("off")
+        plt.show()
+        return
+
+    n_turns = SEASON_DAYS * HOURS_PER_DAY
+    us = vs.get("us_money_by_turn") or [None] * n_turns
+    opp = vs.get("opp_money_by_turn") or [None] * n_turns
+
+    def _xy(series: list) -> tuple[list[int], list[float]]:
+        xs: list[int] = []
+        ys: list[float] = []
+        for t in range(min(n_turns, len(series))):
+            m = series[t]
+            if m is None:
+                continue
+            xs.append(t)
+            ys.append(float(m))
+        return xs, ys
+
+    us_x, us_y = _xy(us)
+    opp_x, opp_y = _xy(opp)
+
+    fig, ax = plt.subplots(figsize=(16, 5))
+    if us_x:
+        ax.plot(
+            us_x,
+            us_y,
+            color=US_COLOR,
+            linewidth=1.4,
+            marker=".",
+            markersize=4,
+            label="us",
+        )
+    if opp_x:
+        ax.plot(
+            opp_x,
+            opp_y,
+            color="#c62828",
+            linewidth=1.4,
+            marker=".",
+            markersize=4,
+            alpha=0.85,
+            label="opp",
+        )
+
+    for d in range(1, SEASON_DAYS):
+        ax.axvline(d * HOURS_PER_DAY, color="#bdbdbd", lw=0.8)
+    ax.axvline(0, color="#757575", lw=1.0)
+
+    buy_day = report.get("buy_land_day")
+    if buy_day is not None:
+        ax.axvline(
+            buy_day * HOURS_PER_DAY,
+            color="#2e7d32",
+            ls="--",
+            lw=1.2,
+            label=f"BUY_LAND d={buy_day}",
+        )
+
+    ax.set_xticks([d * HOURS_PER_DAY + HOURS_PER_DAY / 2 for d in range(SEASON_DAYS)])
+    ax.set_xticklabels([str(d) for d in range(SEASON_DAYS)])
+    ax.set_xlim(-0.5, n_turns - 0.5)
+    ax.set_xlabel("day (24 hours per column block)")
+    ax.set_ylabel("money")
+    ax.set_title(
+        f"{stem} — us vs opp money ([snap] / [opp_snap]; dawn-only in current logs)"
+    )
+    ax.legend(fontsize=8, loc="upper left")
+    ax.grid(True, axis="y", linestyle="--", alpha=0.35)
     plt.tight_layout()
     plt.show()
 
@@ -874,4 +1074,69 @@ def plot_sell_price_heatmap(report: dict[str, Any], *, title: str | None = None)
         pad=0.04,
     )
     cbar.set_label("units sold (shared log scale)")
+    plt.show()
+
+
+def plot_fc_err(report: dict[str, Any], *, title: str | None = None) -> None:
+    """Forecast error: premiums-only mean (top) and all tracked products (bottom)."""
+    fc = report.get("fc_err") or {}
+    stem = title or report.get("log_stem") or "smoke"
+    err = fc.get("abs_err_by_product_by_day") or {}
+    premium_day = fc.get("premium_abs_err_by_day") or []
+    premium_products = fc.get("premium_fc_products") or [
+        "MELON",
+        "STRAWBERRY",
+        "MILK",
+        "WOOL",
+    ]
+    if not err and not any(v is not None for v in premium_day):
+        fig, ax = plt.subplots(figsize=(8, 2.5))
+        ax.text(0.5, 0.5, "no [fc_err] lines parsed", ha="center", va="center")
+        ax.axis("off")
+        ax.set_title(f"{stem} — forecast error")
+        plt.tight_layout()
+        plt.show()
+        return
+
+    n_days = max(
+        len(premium_day),
+        len(next(iter(err.values()), [])) if err else 0,
+    )
+    days = list(range(n_days))
+    fig, (ax_prem, ax_all) = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
+
+    prem_ys = [v if v is not None else float("nan") for v in premium_day]
+    ax_prem.plot(days, prem_ys, marker="o", markersize=4, color="C0", label="premiums mean")
+    mean_d3 = fc.get("mean_premium_abs_err_d3_plus")
+    if mean_d3 is not None:
+        ax_prem.axhline(
+            mean_d3,
+            color="C0",
+            linestyle=":",
+            alpha=0.7,
+            label=f"d3+ mean={mean_d3:.1f}",
+        )
+    ax_prem.axvline(2.5, color="gray", linestyle="--", linewidth=0.8)
+    ax_prem.set_ylabel("|fc − act| ($)")
+    ax_prem.set_title(f"{stem} — premium forecast error (mean of 4)")
+    ax_prem.legend(loc="upper right", fontsize=8)
+    ax_prem.grid(True, alpha=0.3)
+
+    for p in premium_products:
+        series = err.get(p) or []
+        ys = [v if v is not None else float("nan") for v in series]
+        ax_all.plot(days, ys, marker="o", markersize=3, label=p)
+    for p in sorted(err.keys()):
+        if p in premium_products:
+            continue
+        series = err.get(p) or []
+        ys = [v if v is not None else float("nan") for v in series]
+        ax_all.plot(days, ys, marker=".", markersize=2, alpha=0.7, label=p)
+    ax_all.axvline(2.5, color="gray", linestyle="--", linewidth=0.8, label="d3")
+    ax_all.set_xlabel("day")
+    ax_all.set_ylabel("|forecast − actual| ($)")
+    ax_all.set_title("by product (premiums + staples)")
+    ax_all.legend(loc="upper right", fontsize=7, ncol=2)
+    ax_all.grid(True, alpha=0.3)
+    plt.tight_layout()
     plt.show()

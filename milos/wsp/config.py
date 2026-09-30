@@ -24,6 +24,16 @@ ANIMAL_PROFILES = ("no_care", "with_care")
 
 GLUT_PRODUCTS: tuple[str, ...] = ("MELON", "STRAWBERRY", "MILK", "WOOL")
 
+CONCAVE_PRODUCTS: tuple[str, ...] = (
+    "MELON",
+    "STRAWBERRY",
+    "MILK",
+    "WOOL",
+    "CARROT",
+    "TOMATO",
+    "WHEAT",
+)
+
 # Crop tile_free_age defaults (fallback if data missing)
 CROP_FREE_AGE = {
     ("WHEAT", "no_fert"): 4,

@@ -79,6 +79,32 @@ def merge_wsp_plan(
     return delta
 
 
+def _wsp_sink_opp(obs: dict, horizon: int) -> tuple[dict[str, int], dict[str, int]]:
+    from milos.price_forecast import wsp_sink_and_opp_units
+
+    return wsp_sink_and_opp_units(obs, horizon)
+
+
+def _wsp_market_inv(obs: dict | None) -> dict[str, int]:
+    if obs is None:
+        return {}
+    inv = obs.get("market", {}).get("inventory") or {}
+    return {str(k): int(v) for k, v in inv.items()}
+
+
+def _wsp_wheat_feed_units(
+    me: dict,
+    tile_state: dict | None,
+    private: dict | None,
+    day: int,
+) -> int:
+    from milos import script
+
+    return script.total_wheat_feed_need(
+        me, tile_state or {}, private or {}, day=day
+    )
+
+
 def build_day0(
     *,
     starting_money: int = 3000,
@@ -95,6 +121,10 @@ def build_day0(
             product
         ]
 
+    from milos.price_forecast import wsp_sink_and_opp_day0
+
+    sink_units, opp_units = wsp_sink_and_opp_day0(NUM_DAYS)
+
     result = solve(
         [],
         horizon=NUM_DAYS,
@@ -105,6 +135,10 @@ def build_day0(
         track_shed=track_shed,
         price_of=price_of,
         workers=NW_WORKERS,
+        sink_units=sink_units,
+        opp_units=opp_units,
+        market_inv={},
+        wheat_feed_units=0,
         **kwargs,
     )
     board = empty_board()
@@ -126,6 +160,9 @@ STARTING_MONEY = 3000
 NUM_ACTIVE_HIRES = NW_HANDS
 BUY_LAND_DAY: int | None = None
 DEAD_HANDS: set[str] = set()
+STUCK_THRESHOLD = 3
+ZONE_SOLVE_STREAK: dict[str, int] = {}
+STAND_DOWN_UNTIL: dict[str, int] = {}
 ACTIVE_NE: list[str] = []
 NE_BOUND_TODAY: set[str] = set()
 NE_DUE_DAY: dict[str, int] = {}
@@ -384,6 +421,8 @@ def _activate_next_sw(
     if not pending:
         return False
     worker = pending[0]
+    if day < STAND_DOWN_UNTIL.get(worker, 0):
+        return False
 
     horizon = NUM_DAYS - day
     if horizon <= 0:
@@ -401,6 +440,8 @@ def _activate_next_sw(
     if not zone_tiles:
         return False
 
+    sink_units, opp_units = _wsp_sink_opp(obs, horizon)
+
     result = solve(
         [],
         horizon=horizon,
@@ -413,6 +454,12 @@ def _activate_next_sw(
         price_of=price_of,
         workers=(worker,),
         charge_hire_daily=True,
+        sink_units=sink_units,
+        opp_units=opp_units,
+        market_inv=_wsp_market_inv(obs),
+        wheat_feed_units=_wsp_wheat_feed_units(
+            me, tile_state, obs.get("private"), day
+        ),
     )
 
     assigned = {k: v for k, v in result.assigned.items() if v}
@@ -608,6 +655,8 @@ def _activate_next_ne(
     if not pending:
         return
     worker = pending[0]
+    if day < STAND_DOWN_UNTIL.get(worker, 0):
+        return
     ne_owned = _ne_owned(me)
 
     if not ne_owned:
@@ -629,6 +678,8 @@ def _activate_next_ne(
     if not zone_tiles:
         return
 
+    sink_units, opp_units = _wsp_sink_opp(obs, horizon)
+
     result = solve(
         [],
         horizon=horizon,
@@ -641,6 +692,12 @@ def _activate_next_ne(
         price_of=price_of,
         workers=(worker,),
         charge_hire_daily=True,
+        sink_units=sink_units,
+        opp_units=opp_units,
+        market_inv=_wsp_market_inv(obs),
+        wheat_feed_units=_wsp_wheat_feed_units(
+            me, tile_state, obs.get("private"), day
+        ),
     )
 
     assigned = {k: v for k, v in result.assigned.items() if v}
@@ -777,6 +834,71 @@ def apply_replan(
     return written
 
 
+def _stand_down_workers() -> tuple[str, ...]:
+    return tuple(NE_WORKERS) + tuple(_sw_workers_cap())
+
+
+def _zone_live_empty(me: dict, worker: str, day: int) -> int:
+    n = 0
+    for idx in WORKER_TILES.get(worker, ()):
+        tile = _tile_at(me, idx)
+        if tile is None:
+            n += 1
+            continue
+        if isinstance(tile, dict) and tile.get("kind") == "WEED":
+            n += 1
+    return n
+
+
+def update_zone_streaks(
+    day: int,
+    empty_counts: dict[str, int],
+    zone_outcomes: dict[str, str],
+) -> None:
+    """NE/SW only: N consecutive bad solves with empties → DEAD_HANDS."""
+    global ZONE_SOLVE_STREAK, DEAD_HANDS
+    for worker in _stand_down_workers():
+        outcome = zone_outcomes.get(worker, "ok")
+        empty_n = int(empty_counts.get(worker, 0))
+        if outcome == "ok":
+            if worker in DEAD_HANDS or ZONE_SOLVE_STREAK.get(worker, 0) > 0:
+                print(
+                    f"[planner] zone_streak worker={worker} d={day} "
+                    f"streak=0 status=recovered",
+                    flush=True,
+                )
+            ZONE_SOLVE_STREAK[worker] = 0
+            DEAD_HANDS.discard(worker)
+            continue
+        if empty_n <= 0 or outcome == "empty":
+            continue
+        streak = ZONE_SOLVE_STREAK.get(worker, 0) + 1
+        ZONE_SOLVE_STREAK[worker] = streak
+        if streak >= STUCK_THRESHOLD and worker not in DEAD_HANDS:
+            DEAD_HANDS.add(worker)
+            print(
+                f"[planner] zone_streak worker={worker} d={day} "
+                f"streak={streak} status=stuck",
+                flush=True,
+            )
+
+
+def _apply_stand_downs(
+    day: int,
+    me: dict,
+    tile_queues: dict,
+    tile_state: dict | None,
+) -> None:
+    global STAND_DOWN_UNTIL
+    for worker in list(DEAD_HANDS):
+        if worker in ACTIVE_NE:
+            _rollback_ne_zone(worker, me, day, tile_queues, tile_state)
+            STAND_DOWN_UNTIL[worker] = day + 2
+        elif worker in ACTIVE_SW:
+            _rollback_sw_zone(worker, me, day, tile_queues, tile_state)
+            STAND_DOWN_UNTIL[worker] = day + 2
+
+
 def _replan_active(
     obs: dict,
     tile_queues: dict,
@@ -797,7 +919,8 @@ def _replan_active(
         return
 
     replan_tiles, locked_by_worker, locked_tiles = build_replan_lock(
-        me, day, horizon, tile_queues, st_map, price_of
+        me, day, horizon, tile_queues, st_map, price_of,
+        market_inv=_wsp_market_inv(obs),
     )
     replan_tiles = [t for t in replan_tiles if t in act_tile_set]
 
@@ -814,6 +937,8 @@ def _replan_active(
         flush=True,
     )
 
+    sink_units, opp_units = _wsp_sink_opp(obs, horizon)
+
     result = solve(
         [],
         horizon=horizon,
@@ -828,6 +953,12 @@ def _replan_active(
         min_balance=0,
         price_of=price_of,
         workers=act,
+        sink_units=sink_units,
+        opp_units=opp_units,
+        market_inv=_wsp_market_inv(obs),
+        wheat_feed_units=_wsp_wheat_feed_units(
+            me, st_map, obs.get("private"), day
+        ),
     )
 
     if not result.solved_workers:
@@ -853,6 +984,13 @@ def _replan_active(
         samples.append(f"t{idx + 1}:{pl}")
     print(f"[planner] replan assign {', '.join(samples)}", flush=True)
     _log_wsp_plan(day, horizon, result, dict(result.assigned))
+
+    empty_counts = {
+        w: sum(1 for t in replan_tiles if t in WORKER_TILES[w]) for w in act
+    }
+    outcomes = getattr(result, "zone_outcomes", None) or {}
+    update_zone_streaks(day, empty_counts, outcomes)
+    _apply_stand_downs(day, me, tile_queues, tile_state)
 
 
 def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None:
@@ -926,7 +1064,8 @@ def replan_after_buy_sw(
     sw_tile_set = {idx for w in sw_cap for idx in WORKER_TILES[w]}
 
     replan_tiles, locked_by_worker, locked_tiles = build_replan_lock(
-        me, day, horizon, tile_queues, st_map, price_of
+        me, day, horizon, tile_queues, st_map, price_of,
+        market_inv=_wsp_market_inv(obs),
     )
     sw_replan = [t for t in replan_tiles if t in sw_tile_set]
     sw_empty = len(sw_replan)
@@ -957,6 +1096,8 @@ def replan_after_buy_sw(
         )
         return
 
+    sink_units, opp_units = _wsp_sink_opp(obs, horizon)
+
     result = solve(
         [],
         horizon=horizon,
@@ -972,6 +1113,12 @@ def replan_after_buy_sw(
         price_of=price_of,
         workers=land_w,
         charge_hire_daily=True,
+        sink_units=sink_units,
+        opp_units=opp_units,
+        market_inv=_wsp_market_inv(obs),
+        wheat_feed_units=_wsp_wheat_feed_units(
+            me, st_map, obs.get("private"), day
+        ),
     )
 
     overage_after = obs.get("remainingOverageTime")
@@ -1047,7 +1194,8 @@ def replan_after_buy(
     ne_tile_set = {idx for w in NE_WORKERS for idx in WORKER_TILES[w]}
 
     replan_tiles, locked_by_worker, locked_tiles = build_replan_lock(
-        me, day, horizon, tile_queues, st_map, price_of
+        me, day, horizon, tile_queues, st_map, price_of,
+        market_inv=_wsp_market_inv(obs),
     )
     nw_empty = sum(1 for t in replan_tiles if t in nw_tile_set)
     ne_replan = [t for t in replan_tiles if t in ne_tile_set]
@@ -1078,6 +1226,8 @@ def replan_after_buy(
         )
         return
 
+    sink_units, opp_units = _wsp_sink_opp(obs, horizon)
+
     result = solve(
         [],
         horizon=horizon,
@@ -1093,6 +1243,12 @@ def replan_after_buy(
         price_of=price_of,
         workers=land_w,
         charge_hire_daily=True,
+        sink_units=sink_units,
+        opp_units=opp_units,
+        market_inv=_wsp_market_inv(obs),
+        wheat_feed_units=_wsp_wheat_feed_units(
+            me, st_map, obs.get("private"), day
+        ),
     )
 
     overage_after = obs.get("remainingOverageTime")
@@ -1206,11 +1362,57 @@ def chain_to_queue_items(chain: list, horizon: int = NUM_DAYS) -> list:
     return items
 
 
+def _day0_plan_ok(result: SolveResult) -> bool:
+    big = 0
+    melons = 0
+    for chain in result.assigned.values():
+        if not chain:
+            continue
+        for key, start in chain:
+            label, _ = _parse_profile_key(key)
+            if label in ("COW", "SHEEP") and int(start) <= 1:
+                big += 1
+            if label == "MELON" and int(start) == 0:
+                melons += 1
+    return big >= 4 and melons >= 10
+
+
+def _hardcoded_day0_queues() -> dict[int, list]:
+    nw_tiles = sorted({idx for w in NW_WORKERS for idx in WORKER_TILES[w]})
+    chains: dict[int, list] = {}
+    for i, idx in enumerate(nw_tiles):
+        if i < 10:
+            chains[idx] = [("MELON_no_fert", 0)]
+        elif i in (10, 11):
+            chains[idx] = [("COW_with_care", 0)]
+        elif i in (12, 13):
+            chains[idx] = [("SHEEP_with_care", 0)]
+        else:
+            chains[idx] = [("WHEAT_no_fert", 0), ("WHEAT_no_fert", 5)]
+    print("[planner] day0 hardcoded template", flush=True)
+    return {
+        idx: chain_to_queue_items(ch, NUM_DAYS)
+        for idx, ch in chains.items()
+    }
+
+
 def _build_from_solver() -> dict[int, list]:
+    import time
+
+    t0 = time.monotonic()
     _board, result = build_day0(starting_money=STARTING_MONEY, max_time=20.0)
+    ms = int((time.monotonic() - t0) * 1000)
+    print(
+        f"[planner] day0 live ms={ms} complete={result.complete} "
+        f"solved={','.join(result.solved_workers) or 'none'}",
+        flush=True,
+    )
     if not result.solved_workers:
         active = ",".join(result.solved_workers) or "none"
         raise RuntimeError(f"day-0 {CURRENT_SOLVER} failed: active={active}")
+
+    if ms > 20_000 or not _day0_plan_ok(result):
+        return _hardcoded_day0_queues()
 
     queues = {idx: [] for idx in range(NUM_TILES)}
     for idx, chain in result.assigned.items():

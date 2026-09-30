@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from milos import animal_rollouts, drain_calib, envconfig, pricing, rollouts
+from milos import animal_rollouts, drain_calib, envconfig, fix_flags, pricing, rollouts
 from milos.replan_lock import (
     ANIMAL_PROFILE,
     CROP_PROFILE,
@@ -280,8 +280,12 @@ def raw_drain_for_day(unlocked_shops: list[str], abs_day: int) -> dict[str, floa
 
 
 def build_drain_by_day(obs: dict, horizon: int) -> list[dict[str, float]]:
+    from milos import town_drain
+
     day = obs["day"]
     unlocked = list(obs.get("town", {}).get("unlocked_shops", []))
+    if fix_flags.fix_prior():
+        return town_drain.build_drain_horizon(day, unlocked, horizon, use_prior=True)
     rows: list[dict[str, float]] = []
     for rel in range(horizon):
         abs_day = day + rel
@@ -295,10 +299,58 @@ def build_drain_by_day(obs: dict, horizon: int) -> list[dict[str, float]]:
 
 
 _prev_market_inv: dict[str, int] | None = None
+_prev_unlocked_shops: list[str] | None = None
+_pending_d1_forecast: dict[str, int] | None = None
+
+_FC_ERR_PRODUCTS = ("MELON", "STRAWBERRY", "MILK", "WOOL", "TOMATO", "CARROT")
+
+
+def reset_episode() -> None:
+    global _prev_market_inv, _prev_unlocked_shops, _pending_d1_forecast
+    _prev_market_inv = None
+    _prev_unlocked_shops = None
+    _pending_d1_forecast = None
+    drain_calib.reset_episode()
+    from milos import tile_ops
+
+    tile_ops.reset_fert_trace()
+
+
+def store_d1_forecast(
+    obs: dict,
+    tile_queues: dict,
+    tile_state: dict | None = None,
+) -> None:
+    global _pending_d1_forecast
+    day = obs["day"]
+    if day >= rollouts.SEASON_DAYS - 1:
+        _pending_d1_forecast = None
+        return
+    price_of = make_price_forecast(obs, tile_queues, tile_state)
+    _pending_d1_forecast = {
+        p: int(price_of(p, 1)) for p in _FC_ERR_PRODUCTS
+    }
+
+
+def log_fc_err(obs: dict) -> None:
+    global _pending_d1_forecast
+    day = obs["day"]
+    if day <= 0 or not _pending_d1_forecast:
+        return
+    prices = obs.get("market", {}).get("prices", {})
+    parts = []
+    for p in _FC_ERR_PRODUCTS:
+        fc = _pending_d1_forecast.get(p)
+        act = int(prices.get(p, 0) or 0)
+        if fc is None:
+            continue
+        parts.append(f"{p}={fc}/{act}")
+    if parts:
+        print(f"[fc_err] d={day} " + " ".join(parts), flush=True)
 
 
 def observe_drain(obs: dict) -> None:
-    global _prev_market_inv
+    global _prev_market_inv, _prev_unlocked_shops
 
     day = obs["day"]
     inv = obs.get("market", {}).get("inventory", {})
@@ -308,24 +360,60 @@ def observe_drain(obs: dict) -> None:
     }
     unlocked = list(obs.get("town", {}).get("unlocked_shops", []))
 
-    if _prev_market_inv is not None and day > 0:
-        modelled = raw_drain_for_day(unlocked, day - 1)
-        for p in SELL_PRODUCTS:
-            if drain_calib.sells_for_product(p) > 0:
-                continue
-            prev = _prev_market_inv.get(p, pricing.I0_DEFAULT)
-            now = cur.get(p, pricing.I0_DEFAULT)
-            observed = max(0.0, float(prev - now))
-            drain_calib.update(p, observed, modelled.get(p, 0.0))
+    if not fix_flags.fix_calib():
+        if _prev_market_inv is not None and day > 0:
+            shops_yesterday = (
+                _prev_unlocked_shops
+                if _prev_unlocked_shops is not None
+                else unlocked
+            )
+            modelled = raw_drain_for_day(shops_yesterday, day - 1)
+            for p in SELL_PRODUCTS:
+                if drain_calib.sells_for_product(p) > 0:
+                    continue
+                prev = _prev_market_inv.get(p, pricing.I0_DEFAULT)
+                now = cur.get(p, pricing.I0_DEFAULT)
+                observed = max(0.0, float(prev - now))
+                drain_calib.update(p, observed, modelled.get(p, 0.0))
 
     _prev_market_inv = cur
+    _prev_unlocked_shops = list(unlocked)
+    drain_calib.clear_sells_today()
+
+    wool = cur.get("WOOL", pricing.I0_DEFAULT)
+    melon = cur.get("MELON", pricing.I0_DEFAULT)
+    if fix_flags.fix_calib():
+        print(
+            f"[fc] d={day} calib=off wool_now={wool} melon_now={melon}",
+            flush=True,
+        )
+    else:
+        print(
+            f"[fc] d={day} drain={drain_calib.snapshot()} "
+            f"wool_now={wool} melon_now={melon}",
+            flush=True,
+        )
+
+
+def note_dawn_market(obs: dict) -> None:
+    """Update dawn market snapshot when drain calibration is disabled."""
+    global _prev_market_inv, _prev_unlocked_shops
+
+    day = obs["day"]
+    inv = obs.get("market", {}).get("inventory", {})
+    cur = {
+        p: int(inv.get(p, pricing.I0_DEFAULT))
+        for p in SELL_PRODUCTS
+    }
+    unlocked = list(obs.get("town", {}).get("unlocked_shops", []))
+    _prev_market_inv = cur
+    _prev_unlocked_shops = list(unlocked)
     drain_calib.clear_sells_today()
 
     wool = cur.get("WOOL", pricing.I0_DEFAULT)
     melon = cur.get("MELON", pricing.I0_DEFAULT)
     print(
-        f"[fc] d={day} drain={drain_calib.snapshot()} "
-        f"wool_now={wool} melon_now={melon}",
+        f"[fc] d={day} calib=off wool_now={wool} melon_now={melon}",
         flush=True,
     )
 
@@ -351,6 +439,67 @@ def build_supply(
     _collect_opponent_supply(opp, day, horizon, supply, crops_data, animals_data)
     _add_shed_day0(obs, supply)
     return supply
+
+
+def opponent_supply_totals(obs: dict, horizon: int) -> dict[str, int]:
+    from milos.wsp import data as wsp_data
+    from milos.wsp.config import CONCAVE_PRODUCTS
+
+    day = obs["day"]
+    player = obs["player"]
+    opp = obs["farms"][1 - player]
+    crops_data = wsp_data.crops()
+    animals_data = wsp_data.animals()
+    supply = _empty_supply(horizon)
+    _collect_opponent_supply(opp, day, horizon, supply, crops_data, animals_data)
+    return {
+        p: sum(int(supply.get(p, [0] * horizon)[d]) for d in range(horizon))
+        for p in CONCAVE_PRODUCTS
+    }
+
+
+def wsp_sink_and_opp_units(
+    obs: dict, horizon: int
+) -> tuple[dict[str, int], dict[str, int]]:
+    from milos import sell_dp
+    from milos.wsp.config import CONCAVE_PRODUCTS
+
+    drain_rows = build_drain_by_day(obs, horizon)
+    sink: dict[str, int] = {}
+    for p in CONCAVE_PRODUCTS:
+        total = sum(float(drain_rows[rel].get(p, 0.0)) for rel in range(horizon))
+        sink[p] = max(0, int(round(total)))
+    field = opponent_supply_totals(obs, horizon)
+    ema_rows = sell_dp.opponent_sell_per_day(horizon)
+    contested = frozenset({"STRAWBERRY", "WOOL", "MILK"})
+    opp: dict[str, int] = {}
+    for p in CONCAVE_PRODUCTS:
+        ema_total = sum(float(r.get(p, 0.0)) for r in ema_rows)
+        o = max(int(field.get(p, 0)), int(round(ema_total)))
+        if o <= 0 and p in contested and sink.get(p, 0) > 0:
+            o = int(0.5 * sink[p])
+        opp[p] = o
+    return sink, opp
+
+
+def wsp_sink_and_opp_day0(horizon: int = 30) -> tuple[dict[str, int], dict[str, int]]:
+    from milos import town_drain
+    from milos.wsp.config import CONCAVE_PRODUCTS
+
+    rows = town_drain.build_drain_horizon(0, [], horizon, use_prior=True)
+    sink = {
+        p: max(
+            0,
+            int(round(sum(float(r.get(p, 0.0)) for r in rows))),
+        )
+        for p in CONCAVE_PRODUCTS
+    }
+    contested = frozenset({"STRAWBERRY", "WOOL", "MILK"})
+    opp = {
+        p: (int(0.5 * sink[p]) if p in contested and sink[p] > 0 else 0)
+        for p in CONCAVE_PRODUCTS
+    }
+    return sink, opp
 
 
 def make_price_forecast(
@@ -386,11 +535,22 @@ def make_price_forecast(
         if rel_day >= len(table):
             rel_day = len(table) - 1
         if extra_units <= 0:
-            return table[rel_day].get(product, _fallback_quote(product))
-        base_inv = inv_table[rel_day].get(product)
-        if base_inv is None:
-            return table[rel_day].get(product, _fallback_quote(product))
-        return pricing.quoted(product, base_inv + int(extra_units))
+            forecast = table[rel_day].get(product, _fallback_quote(product))
+        else:
+            base_inv = inv_table[rel_day].get(product)
+            if base_inv is None:
+                forecast = table[rel_day].get(product, _fallback_quote(product))
+            else:
+                forecast = pricing.quoted(
+                    product, base_inv + int(extra_units)
+                )
+        if product == "STRAWBERRY":
+            current_quote = pricing.quoted(
+                product,
+                int(market_inv.get(product, pricing.I0_DEFAULT)),
+            )
+            forecast = max(forecast, int(0.9 * current_quote))
+        return forecast
 
     return price_of
 
