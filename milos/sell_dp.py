@@ -149,9 +149,11 @@ def greedy_premium_sells(
         room = total > target
         best_p: str | None = None
         best_m = -1
-        products = list(PREMIUM_PRODUCTS)
+        products = list(PREMIUM_PRODUCTS) + ["EGG"]
         if room:
-            products.extend(_greedy_room_products(hour))
+            for p in _greedy_room_products(hour):
+                if p not in products:
+                    products.append(p)
         seen: set[str] = set()
         for product in products:
             if product in seen:
@@ -172,7 +174,7 @@ def greedy_premium_sells(
             base = pricing.base_price(product)
             theta_p = GREEDY_THETA_BY_PRODUCT.get(product, theta)
             good_price = marginal >= theta_p * base
-            if product in PREMIUM_PRODUCTS:
+            if product in PREMIUM_PRODUCTS or product == "EGG":
                 if not good_price and not room:
                     continue
             elif not room:

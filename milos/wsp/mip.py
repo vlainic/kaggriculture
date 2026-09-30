@@ -134,14 +134,24 @@ def build_revenue_curves(
     opp_units: dict[str, int] | None,
     carried: dict[str, int] | None,
     wheat_feed_units: int = 0,
+    calendar_day: int | None = None,
+    committed_units: dict[str, int] | None = None,
 ) -> tuple[list[tuple[int, int]], dict[str, int]]:
     locked = int((locked_counts or {}).get(product, 0))
     carried_p = int((carried or {}).get(product, 0))
+    committed_p = int((committed_units or {}).get(product, 0))
     d_total = int((sink_units or {}).get(product, 0))
     opp_p = int((opp_units or {}).get(product, 0))
     if opp_p <= 0 and product in _CONTESTED_SINK and d_total > 0:
-        opp_p = max(opp_p, int(0.5 * d_total))
-    d_remaining = max(0, d_total - carried_p - opp_p)
+        if (
+            product == "STRAWBERRY"
+            and calendar_day is not None
+            and 6 <= calendar_day <= 8
+        ):
+            opp_p = max(opp_p, int(0.25 * d_total))
+        else:
+            opp_p = max(opp_p, int(0.5 * d_total))
+    d_remaining = max(0, d_total - committed_p - carried_p - opp_p)
 
     rel_ref = _mean_harvest_rel_day(patterns, product, horizon)
     floor = pricing.price_floor(product, PRICE_FLOOR_RATIO)
@@ -153,6 +163,7 @@ def build_revenue_curves(
         return [], {
             "D": d_total,
             "carried": carried_p,
+            "committed": committed_p,
             "opp": opp_p,
             "D_remaining": d_remaining,
             "m0": 0,
@@ -161,33 +172,34 @@ def build_revenue_curves(
 
     segments: list[tuple[int, int]] = []
     prev_m = 10**9
-    sold_virtual = 0
     quote0 = quote_at(product, market_inv, 0)
 
     if feed_reserve > 0:
         m_feed = max(floor, quote0)
         segments.append((feed_reserve, m_feed))
         prev_m = m_feed
-        sold_virtual = feed_reserve
 
-    if d_remaining > 0:
-        flat_cap = min(d_remaining, max_u - sold_virtual)
+    sell_cap = max(0, max_u - feed_reserve)
+    sink_sold = 0
+
+    if d_remaining > 0 and sell_cap > 0:
+        flat_cap = min(d_remaining, sell_cap - sink_sold)
         if flat_cap > 0:
             m0 = max(floor, min(quote0, prev_m))
             segments.append((flat_cap, m0))
             prev_m = m0
-            sold_virtual += flat_cap
+            sink_sold += flat_cap
 
-    while sold_virtual < max_u:
-        block = min(CONCAVE_BLOCK, max_u - sold_virtual)
-        extra = sold_virtual
-        m = quote_at(product, market_inv, extra + block - 1)
+    while sink_sold < sell_cap:
+        block = min(CONCAVE_BLOCK, sell_cap - sink_sold)
+        extra = feed_reserve + sink_sold + block - 1
+        m = quote_at(product, market_inv, extra)
         m = max(floor, min(m, prev_m))
-        if m <= floor and sold_virtual > d_remaining + feed_reserve:
+        if m <= floor and sink_sold > d_remaining:
             break
         segments.append((block, m))
         prev_m = m
-        sold_virtual += block
+        sink_sold += block
         if m <= floor:
             break
 
@@ -198,6 +210,7 @@ def build_revenue_curves(
     return segments, {
         "D": d_total,
         "carried": carried_p,
+        "committed": committed_p,
         "opp": opp_p,
         "D_remaining": d_remaining,
         "m0": segments[0][1],
@@ -229,7 +242,7 @@ def _fert_credit_day(day: int) -> float:
 
 def _animal_valuation_bonus(pat, price_of: Callable[..., int]) -> int:
     key = pat.get("profile_key", "")
-    if not any(a in key for a in ("COW", "SHEEP")):
+    if not any(a in key for a in ("COW", "SHEEP", "GOOSE")):
         return 0
     horizon = len(pat.get("daily_feed") or [])
     bonus = 0
@@ -374,8 +387,6 @@ def build_patterns(
 
     if crops_allowlist is None:
         for animal_name, animal_spec in animals_data["animals"].items():
-            if animal_name == "GOOSE":
-                continue
             for profile_name in ANIMAL_PROFILES:
                 if profile_name not in animal_spec:
                     continue
@@ -440,6 +451,18 @@ def decode_wsp_assignment(
     return assigned
 
 
+def _locked_day_has_work(locked: dict, day: int, horizon: int) -> bool:
+    if locked["daily_tile_ops"][day] > 0:
+        return True
+    if locked["daily_feed"][day] > 0 or locked["daily_fert"][day] > 0:
+        return True
+    locked_place = locked.get("daily_place") or {}
+    for an in ANIMAL_NAMES:
+        if locked_place.get(an, [0] * horizon)[day]:
+            return True
+    return False
+
+
 def solve_zone(
     patterns: list,
     *,
@@ -462,6 +485,9 @@ def solve_zone(
     opp_units: dict[str, int] | None = None,
     market_inv: dict[str, int] | None = None,
     wheat_feed_units: int = 0,
+    hire_rel_days: frozenset[int] | None = None,
+    calendar_day: int | None = None,
+    committed_units: dict[str, int] | None = None,
 ):
     zone_empty = list(empty_tiles)
     zsize = len(zone_empty)
@@ -614,9 +640,27 @@ def solve_zone(
             spend_terms.append(-WHEAT_PRICE * buy_w[d])
             spend_terms.append(-FERT_PRICE * buy_f[d])
         hire = HAND_DAILY_COST.get(worker, 0)
-        if charge_hire_daily and worker in HAND_WORKERS:
-            day_terms.append(-hire)
-            spend_terms.append(-hire)
+        if charge_hire_daily and worker in HAND_WORKERS and hire:
+            if hire_rel_days is not None:
+                if d in hire_rel_days:
+                    day_terms.append(-hire)
+                    spend_terms.append(-hire)
+            elif _locked_day_has_work(locked, d, horizon):
+                day_terms.append(-hire)
+                spend_terms.append(-hire)
+            else:
+                pat_terms = []
+                for pi, pat in enumerate(patterns):
+                    if pat["daily_tile_ops"][d] > 0:
+                        for tile in zone_empty:
+                            pat_terms.append(x[pi, tile])
+                if pat_terms:
+                    work_d = model.NewBoolVar(f"hire_work_{worker}_{d}")
+                    for term in pat_terms:
+                        model.Add(work_d >= term)
+                    model.Add(work_d <= sum(pat_terms))
+                    day_terms.append(-hire * work_d)
+                    spend_terms.append(-hire * work_d)
 
         if worker in HAND_WORKERS:
             prev = (
@@ -679,11 +723,14 @@ def solve_zone(
                 opp_units=opp_units,
                 carried=carried,
                 wheat_feed_units=wheat_feed_units if product == "WHEAT" else 0,
+                calendar_day=calendar_day,
+                committed_units=committed_units,
             )
             if not segments:
                 continue
             concave_log_parts.append(
-                f"{product} D={meta['D']} carried={meta['carried']} "
+                f"{product} D={meta['D']} committed={meta['committed']} "
+                f"carried={meta['carried']} "
                 f"opp={meta['opp']} D_rem={meta['D_remaining']} "
                 f"m0={meta['m0']} mlast={meta['mlast']}"
             )

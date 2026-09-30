@@ -65,6 +65,52 @@ def empty_by_worker_by_day(
     return out
 
 
+def us_farm_dawn_by_day(
+    snaps: list[dict[str, Any]], *, season_days: int = 30
+) -> tuple[list[int | None], list[int | None]]:
+    """Dawn live PLANT/COOP/PASTURE count and workers (hands + farmer) from [snap]."""
+    live: list[int | None] = [None] * season_days
+    workers: list[int | None] = [None] * season_days
+    for s in dawn_snaps(snaps):
+        day = int(s["day"])
+        if not (0 <= day < season_days):
+            continue
+        if "live" in s:
+            live[day] = int(s["live"])
+        if "hands" in s:
+            workers[day] = int(s["hands"]) + 1
+    return live, workers
+
+
+def combine_us_daily_farm_metrics(
+    us_tiles: list[int],
+    us_workers: list[int],
+    snaps: list[dict[str, Any]],
+    exec_workers: list[int],
+    *,
+    season_days: int = 30,
+) -> tuple[list[int], list[int]]:
+    """Merge qtiles, dawn [snap] live=/hands+, and per-day [exec] actor counts."""
+    live, snap_wk = us_farm_dawn_by_day(snaps, season_days=season_days)
+    tiles = list(us_tiles)
+    workers = list(us_workers)
+    for d in range(season_days):
+        q_t = int(tiles[d]) if d < len(tiles) else 0
+        q_w = int(workers[d]) if d < len(workers) else 0
+        lv = live[d]
+        sw = snap_wk[d]
+        ew = int(exec_workers[d]) if d < len(exec_workers) else 0
+        if lv is not None:
+            tiles[d] = max(q_t, int(lv))
+        else:
+            tiles[d] = q_t
+        merged = max(q_w, ew, int(sw or 0))
+        if merged <= 0 and (tiles[d] > 0 or ew > 0):
+            merged = max(ew, 1)
+        workers[d] = merged
+    return tiles, workers
+
+
 def money_by_day(
     snaps: list[dict[str, Any]], *, season_days: int = 30
 ) -> list[float | None]:

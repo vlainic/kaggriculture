@@ -109,6 +109,8 @@ def parse_worker_actions(
         worker, rest = parsed
         if worker not in worker_idx:
             continue
+        if rest.startswith("opener "):
+            rest = rest[len("opener ") :]
         parts = rest.split()
         if not parts:
             continue

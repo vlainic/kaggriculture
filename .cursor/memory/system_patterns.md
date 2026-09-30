@@ -4,43 +4,36 @@
 
 **Sept02 overhaul patterns are REJECTED.** Do not copy Wave 2–8 “safety rails” (`cons≥0`, WSP `track_shed=True`, formula `net_tile_ops`, fert dawn pipeline) into live agent. Pre-overhaul WSP: **`track_shed=False`**, **`min_balance=0`**, **unbounded `conservative`**, hand-calibrated `NET_TILE_OPS`. See `progress.md` FAILURE banner.
 
-## Current: milos THREELAND15 (Sep 29)
+## Current: milos THREELAND12 (Sep 30)
 
 ```
 import:
-  milos/zoning.py MILOS_THREELAND15 (KAGGRI_LAYOUT default)
-  NW / NE / SW workers; NUM_ACTIVE_HIRES=NW_HANDS (4); KAGGRI_SW=1
+  milos/zoning.py threeland12 (KAGGRI_LAYOUT default)
+  NW / NE / SW; NUM_ACTIVE_HIRES=NW_HANDS (3); KAGGRI_SW=1; KAGGRI_V55_OPENER=1
+  fix_flags abl_* default on
   envconfig.ingest(config) from main.agent(obs, config)
-  price_forecast + drain_calib + wsp/mip (locked_counts, product_caps, zone_objectives)
+  price_forecast + drain_calib + wsp/mip (committed, product_caps, zone_objectives)
 
 obs → milos.executor.step
-  ├─ h23: schedule_ne_buy_at_dusk; schedule_sw_buy_at_dusk (NE full + cash/overage)
-  ├─ hour0: observe_drain; dawn handoffs; planner.replan
-  │         Walk1 active; Walk2 next NE; Walk3 next SW (if NE not just expanded)
-  │         sell_dp; market BUY_LAND first on buy day; HIRE×NW_HANDS + bound land hires
-  ├─ hour1: replan_after_buy (NE) / replan_after_buy_sw (SW); recompute _empty_at_dawn
-  ├─ hours 1–23: snakes; owned-shed PICKUP; tile_ops
-  └─ day ≥ 29: endgame harvest
-```
-
-### Zone value activation gate
-
-- **When:** buy-day NE/SW activation loops + `_activate_next_ne` / `_activate_next_sw`.
-- **Rule:** `obj − _zone_plan_cost(assigned, horizon, worker) >= min_net` (ship `min_net=0`).
-  - `obj` = CP-SAT harvest revenue only (`SolveResult.zone_objectives`).
-  - `cost` = full-horizon seed/animal spend + `HAND_DAILY_COST[worker] * D`.
-- **Missing obj:** fail open (`value_unknown`); busy/cash/`solved_workers` still gate.
-- **Buy-day:** break on first reject (same-day prefix). **Do not latch** — Walk 2/3 retries.
-- **SW diagnostic:** `wasted_land` if buy-day `n_active < 2`.
-- Env (local): `KAGGRI_ZONE_MIN_NET`, `KAGGRI_ZONE_MARGIN_RATIO`.
-
-**TWOLAND12 / OneLand 6-man** — prior layouts; still valid reference for shed/wheat patterns.
-
-```
-obs → milos.executor.step (6-man snapshot)
-  ├─ hour0: replan → market HIRE×5 + room + WHEAT → ANIMAL → SEED; fert dump
+  ├─ v55 tape d0–5 when opener on
+  ├─ h23: schedule_ne_buy_at_dusk; schedule_sw_buy_at_dusk
+  ├─ hour0: replan (Walk1/2/3); sell_dp; market (abl hourly land d6+)
+  ├─ hour1: replan_after_buy / replan_after_buy_sw
   └─ …
 ```
+
+### Zone value activation gate (Sep 30 evening)
+
+- **Affordability:** `_zone_plan_cost` = spend rel days **0–1** + **1** hire day.
+- **Gate:** `obj − hire_cost` only (setup already in obj); `abl_cash` → 1 hire day in gate.
+- Missing `obj` → fail open. Env: `KAGGRI_ZONE_MIN_NET`, `KAGGRI_ZONE_MARGIN_RATIO`.
+- Walk 3 runs every dawn (`SW_BUY_DAY != day` only); buy-day break on first reject.
+
+### Concave revenue
+
+- `D_rem = D − committed − carried − opp`; `committed` from `replan_lock.committed_harvest_units`.
+- Wheat feed segment at quote; `sell_cap = max_u − feed_reserve` for town units.
+- EGG in `CONCAVE_PRODUCTS`; GOOSE in `build_patterns` + market buys.
 
 **Day-0 / replan queues:** write from `result.assigned` / `replan_set` — never gate on `WORKER_TILES[solved_worker]` when layout ≠ prestart worker map.
 

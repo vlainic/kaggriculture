@@ -19,21 +19,30 @@
 
 ---
 
-## Strategic status (Sep 30 — live = milos **THREELAND15** + zone value gate)
+## Strategic status (Sep 30 — live = milos **THREELAND12** + V55 opener + abl defaults on)
 
 | Track | Status |
 | --- | --- |
-| **Live submission** | **`milos/`** — `CURRENT = MILOS_THREELAND15` (NW 5 + NE 5 + SW 5; `KAGGRI_LAYOUT` / `KAGGRI_SW=1`) |
-| **Zone value gate** | Shipped — activate iff `obj − _zone_plan_cost >= 0`; buy-day break; Walk 2/3 retry; fail-open on missing obj |
-| **Price forecast** | Config via `envconfig`; inventory walk; MIP caps; `drain_calib` |
-| **`agent/` TwoLand** | Legacy; not live |
-| **Dawn market** | NW HIRE×`NW_HANDS`; room sells; wheat → animals → seeds; fert dump; buy-day h0–h2 |
-| **Wheat / shed** | Global buffer on buy; raw pickup; cap 100 + FERT dump |
-| **Day-0 / replan** | `assigned` / `replan_set` writes; NE/SW buy-replans + Walk 2/3 |
-| **Smoke analysis** | Us-vs-opp 7-panel daily (+ money right-axis, tiles operated); money-hours; zone earnings vs cost |
+| **Live submission** | **`milos/`** — `threeland12` (4 per land); `KAGGRI_V55_OPENER` default on; `KAGGRI_ABL_*` default **on** (land/catalog/cash) |
+| **Zone activation** | Near-term `money < cost` (d0–1 spend + 1 hire); gate **`obj − hire`** only; cascade balance handoff +1 harvest day |
+| **Concave sink** | `D_rem = D − committed − carried − opp`; `committed` from locked tile `harvest_units` (`replan_lock`) |
+| **Selling** | EGG in greedy hourly seller + concave; GOOSE back in MIP + market |
+| **Smoke** | `scripts/smoke_test.sh`; opener wheat whitelist step&lt;144; optional `SMOKE_SEEDS=pinned` |
 | **Competition submit** | User-only unless explicit ask |
 
-**Plan chain:** NE dusk/buy-replan → SW expansion (`sw_land_expansion`) → 5-man three lands (`5-man_three_lands`) → **zone value gate** (`zone_value_activation_gate`). Details: `.cursor/memory/ne_expansion_and_forecast.md`.
+## Sep 30 (evening) — ablation, cash gates, goose, committed melon (KEEP)
+
+| Change | Result |
+| --- | --- |
+| `KAGGRI_ABL_*` + `[abl]` log | Hourly land d6+, full catalog activations, full-bank cascade when cash flag on |
+| MIP cash loosening | B1 near-term cost; B2 hire-only gate; G1 balance handoff; G4 walk3 every dawn |
+| GOOSE + EGG concave + fert bonus | `wsp_plan` / exec can BUY/PLACE goose; egg revenue curve in solve |
+| Wheat `sell_cap` vs feed segment | Feed at quote; town `D_rem` not consumed by feed virtual sold |
+| Strawberry d6–8 | Opp haircut 0.25×D when EMA opp zero |
+| `committed_harvest_units` | Dawn replan sees prior locked melon (etc.) in `[concave] committed=` |
+| `greedy_premium_sells` + EGG | Eggs sell when price good, not only shed-room branch |
+
+Plans (reference only): `d6-11_ablation_flags`, `mip_cash_loosening`, `goose_wheat_strawberry`, `v55_opener_tape`.
 
 ## Sep 30 — smoke us-vs-opp dashboard (KEEP)
 
@@ -91,7 +100,8 @@ CARE requires `fed_today`; theo/act parser; mid-season replan `track_shed=False`
 | Issue | Notes |
 | --- | --- |
 | **Shed cap 100** | Silent buy reject — watch `shed_total` |
-| **Fib hire on SW** | Late zones (hire13/14) often fail value gate — intentional |
+| **Single-smoke reward vs V55** | Shop draw swings opp gross ~±40k — use pinned seeds only for deltas, not one-off margin |
+| **Melon over-plant** | Mitigated by `committed` in `D_rem`; verify `[concave] committed=` grows on replan days |
 | **Buy-day cash starve** | Early `low_value` / busy fail is temporary; Walk 2/3 retries |
 | **`milos_zoning.md` ops** | May lag code +1 on NW — heuristics doc, not ops source of truth |
 | **Sept02 overhaul** | FAILURE — do not resume |

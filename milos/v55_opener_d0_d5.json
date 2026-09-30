@@ -1,0 +1,3387 @@
+[
+{
+"farmer": [
+"PASS"
+],
+"hands": [],
+"market": [
+[
+"BUY_PRODUCT",
+"WHEAT",
+13
+],
+[
+"BUY_PRODUCT",
+"WHEAT",
+30
+],
+[
+"SELL",
+"WHEAT",
+30
+]
+]
+},
+{
+"farmer": [
+"NORTH"
+],
+"hands": [],
+"market": [
+[
+"SELL",
+"WHEAT",
+13
+],
+[
+"BUY_PRODUCT",
+"WHEAT",
+5
+],
+[
+"HIRE"
+],
+[
+"HIRE"
+],
+[
+"HIRE"
+],
+[
+"HIRE"
+],
+[
+"HIRE"
+],
+[
+"BUY_ANIMAL",
+"COW",
+2
+],
+[
+"BUY_ANIMAL",
+"SHEEP",
+2
+]
+]
+},
+{
+"farmer": [
+"SOUTH"
+],
+"hands": [
+[
+"PICKUP",
+"COW"
+],
+[
+"PASS"
+],
+[
+"NORTH"
+],
+[
+"NORTH"
+],
+[
+"PICKUP",
+"COW"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PICKUP",
+"SHEEP"
+],
+"hands": [
+[
+"NORTH"
+],
+[
+"PASS"
+],
+[
+"NORTH"
+],
+[
+"NORTH"
+],
+[
+"BUILD_PASTURE"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PICKUP",
+"WHEAT"
+],
+"hands": [
+[
+"BUILD_PASTURE"
+],
+[
+"PASS"
+],
+[
+"NORTH"
+],
+[
+"NORTH"
+],
+[
+"PLACE",
+"COW"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"NORTH"
+],
+"hands": [
+[
+"PLACE",
+"COW"
+],
+[
+"PASS"
+],
+[
+"NORTH"
+],
+[
+"WEST"
+],
+[
+"CARE"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"WEST"
+],
+"hands": [
+[
+"NORTH"
+],
+[
+"PASS"
+],
+[
+"NORTH"
+],
+[
+"WEST"
+],
+[
+"PICKUP",
+"SHEEP"
+]
+],
+"market": [
+[
+"BUY_SEED",
+"MELON",
+2
+]
+]
+},
+{
+"farmer": [
+"BUILD_PASTURE"
+],
+"hands": [
+[
+"NORTH"
+],
+[
+"PASS"
+],
+[
+"PLANT",
+"MELON"
+],
+[
+"PLANT",
+"MELON"
+],
+[
+"PICKUP",
+"WHEAT"
+]
+],
+"market": [
+[
+"BUY_SEED",
+"MELON",
+1
+]
+]
+},
+{
+"farmer": [
+"PLACE",
+"SHEEP"
+],
+"hands": [
+[
+"PLANT",
+"MELON"
+],
+[
+"PASS"
+],
+[
+"WATER"
+],
+[
+"WATER"
+],
+[
+"WEST"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"FEED"
+],
+"hands": [
+[
+"WATER"
+],
+[
+"PASS"
+],
+[
+"WEST"
+],
+[
+"NORTH"
+],
+[
+"BUILD_PASTURE"
+]
+],
+"market": [
+[
+"BUY_SEED",
+"MELON",
+1
+]
+]
+},
+{
+"farmer": [
+"CARE"
+],
+"hands": [
+[
+"WEST"
+],
+[
+"PASS"
+],
+[
+"PLANT",
+"MELON"
+],
+[
+"WEST"
+],
+[
+"PLACE",
+"SHEEP"
+]
+],
+"market": [
+[
+"BUY_SEED",
+"MELON",
+2
+]
+]
+},
+{
+"farmer": [
+"WEST"
+],
+"hands": [
+[
+"PLANT",
+"MELON"
+],
+[
+"PASS"
+],
+[
+"WATER"
+],
+[
+"PLANT",
+"MELON"
+],
+[
+"FEED"
+]
+],
+"market": [
+[
+"BUY_SEED",
+"MELON",
+1
+]
+]
+},
+{
+"farmer": [
+"PLANT",
+"MELON"
+],
+"hands": [
+[
+"WATER"
+],
+[
+"PASS"
+],
+[
+"WEST"
+],
+[
+"WATER"
+],
+[
+"CARE"
+]
+],
+"market": [
+[
+"BUY_SEED",
+"WHEAT",
+1
+]
+]
+},
+{
+"farmer": [
+"WATER"
+],
+"hands": [
+[
+"SOUTH"
+],
+[
+"PASS"
+],
+[
+"PLANT",
+"WHEAT"
+],
+[
+"WEST"
+],
+[
+"WEST"
+]
+],
+"market": [
+[
+"BUY_SEED",
+"WHEAT",
+1
+]
+]
+},
+{
+"farmer": [
+"WEST"
+],
+"hands": [
+[
+"WEST"
+],
+[
+"PASS"
+],
+[
+"WATER"
+],
+[
+"PLANT",
+"WHEAT"
+],
+[
+"WEST"
+]
+],
+"market": [
+[
+"BUY_SEED",
+"MELON",
+3
+]
+]
+},
+{
+"farmer": [
+"PLANT",
+"MELON"
+],
+"hands": [
+[
+"PLANT",
+"MELON"
+],
+[
+"PASS"
+],
+[
+"WEST"
+],
+[
+"WATER"
+],
+[
+"PLANT",
+"MELON"
+]
+],
+"market": [
+[
+"BUY_SEED",
+"WHEAT",
+1
+]
+]
+},
+{
+"farmer": [
+"WATER"
+],
+"hands": [
+[
+"WATER"
+],
+[
+"PASS"
+],
+[
+"PLANT",
+"WHEAT"
+],
+[
+"WEST"
+],
+[
+"WATER"
+]
+],
+"market": [
+[
+"BUY_SEED",
+"WHEAT",
+1
+]
+]
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"WEST"
+],
+[
+"PASS"
+],
+[
+"WATER"
+],
+[
+"PLANT",
+"WHEAT"
+],
+[
+"WEST"
+]
+],
+"market": [
+[
+"BUY_SEED",
+"MELON",
+2
+]
+]
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"PLANT",
+"MELON"
+],
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"WATER"
+],
+[
+"PLANT",
+"MELON"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"WATER"
+],
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"NORTH"
+],
+[
+"WATER"
+]
+],
+"market": [
+[
+"BUY_SEED",
+"WHEAT",
+1
+]
+]
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"WEST"
+],
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"PLANT",
+"WHEAT"
+],
+[
+"NORTH"
+]
+],
+"market": [
+[
+"BUY_SEED",
+"WHEAT",
+2
+]
+]
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"PLANT",
+"WHEAT"
+],
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"WATER"
+],
+[
+"PLANT",
+"WHEAT"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"WATER"
+],
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"WATER"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"PASS"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PICKUP",
+"WHEAT"
+],
+"hands": [],
+"market": [
+[
+"HIRE"
+],
+[
+"HIRE"
+],
+[
+"HIRE"
+]
+]
+},
+{
+"farmer": [
+"NORTH"
+],
+"hands": [
+[
+"WEST"
+],
+[
+"NORTH"
+],
+[
+"NORTH"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"WEST"
+],
+"hands": [
+[
+"PICKUP",
+"WHEAT"
+],
+[
+"PICKUP",
+"WHEAT"
+],
+[
+"WEST"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"FEED"
+],
+"hands": [
+[
+"NORTH"
+],
+[
+"FEED"
+],
+[
+"WEST"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"CARE"
+],
+"hands": [
+[
+"FEED"
+],
+[
+"CARE"
+],
+[
+"WEST"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"COLLECT_FERTILIZER"
+],
+"hands": [
+[
+"CARE"
+],
+[
+"COLLECT_FERTILIZER"
+],
+[
+"BUILD_PASTURE"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"SOUTH"
+],
+"hands": [
+[
+"COLLECT_FERTILIZER"
+],
+[
+"PLACE",
+"FERTILIZER"
+],
+[
+"NORTH"
+]
+],
+"market": [
+[
+"SELL",
+"FERTILIZER",
+1
+],
+[
+"BUY_PRODUCT",
+"WHEAT",
+3
+]
+]
+},
+{
+"farmer": [
+"EAST"
+],
+"hands": [
+[
+"SOUTH"
+],
+[
+"NORTH"
+],
+[
+"WEST"
+]
+],
+"market": [
+[
+"BUY_PRODUCT",
+"WHEAT",
+1
+]
+]
+},
+{
+"farmer": [
+"PLACE",
+"FERTILIZER"
+],
+"hands": [
+[
+"PLACE",
+"FERTILIZER"
+],
+[
+"NORTH"
+],
+[
+"WEST"
+]
+],
+"market": [
+[
+"SELL",
+"FERTILIZER",
+2
+]
+]
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"BUILD_PASTURE"
+],
+[
+"WATER"
+]
+],
+"market": [
+[
+"BUY_PRODUCT",
+"WHEAT",
+1
+]
+]
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"SOUTH"
+],
+[
+"NORTH"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"SOUTH"
+],
+[
+"WATER"
+]
+],
+"market": [
+[
+"BUY_PRODUCT",
+"WHEAT",
+1
+]
+]
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"PICKUP",
+"WHEAT"
+],
+[
+"NORTH"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"WEST"
+],
+[
+"EAST"
+]
+],
+"market": [
+[
+"BUY_PRODUCT",
+"WHEAT",
+1
+]
+]
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"FEED"
+],
+[
+"WATER"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"COLLECT_FERTILIZER"
+],
+[
+"WEST"
+]
+],
+"market": [
+[
+"BUY_PRODUCT",
+"WHEAT",
+1
+]
+]
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"CARE"
+],
+[
+"WATER"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"NORTH"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"WATER"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"EAST"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"WATER"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"EAST"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"WATER"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"PASS"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PICKUP",
+"WHEAT",
+4
+],
+"hands": [],
+"market": [
+[
+"SELL",
+"FERTILIZER",
+1
+],
+[
+"HIRE"
+],
+[
+"HIRE"
+],
+[
+"HIRE"
+],
+[
+"HIRE"
+]
+]
+},
+{
+"farmer": [
+"FEED"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"NORTH"
+],
+[
+"NORTH"
+],
+[
+"NORTH"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"CARE"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"WEST"
+],
+[
+"NORTH"
+],
+[
+"NORTH"
+]
+],
+"market": [
+[
+"SELL",
+"WHEAT",
+2
+]
+]
+},
+{
+"farmer": [
+"COLLECT_FERTILIZER"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"WEST"
+],
+[
+"NORTH"
+],
+[
+"WEST"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"NORTH"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"WEST"
+],
+[
+"NORTH"
+],
+[
+"WATER"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"FEED"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"WEST"
+],
+[
+"WEST"
+],
+[
+"NORTH"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"CARE"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"WATER"
+],
+[
+"WATER"
+],
+[
+"WATER"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"COLLECT_FERTILIZER"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"EAST"
+],
+[
+"NORTH"
+],
+[
+"WEST"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"WEST"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"WATER"
+],
+[
+"WATER"
+],
+[
+"WATER"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"FEED"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"NORTH"
+],
+[
+"WEST"
+],
+[
+"WEST"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"CARE"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"WATER"
+],
+[
+"WATER"
+],
+[
+"WEST"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"COLLECT_FERTILIZER"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"NORTH"
+],
+[
+"WEST"
+],
+[
+"WATER"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"SOUTH"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"WATER"
+],
+[
+"WEST"
+],
+[
+"HARVEST"
+]
+],
+"market": [
+[
+"BUY_SEED",
+"WHEAT",
+1
+]
+]
+},
+{
+"farmer": [
+"FEED"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"EAST"
+],
+[
+"WATER"
+],
+[
+"PLANT",
+"WHEAT"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"CARE"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"WATER"
+],
+[
+"HARVEST"
+],
+[
+"WATER"
+]
+],
+"market": [
+[
+"BUY_SEED",
+"WHEAT",
+1
+]
+]
+},
+{
+"farmer": [
+"COLLECT_FERTILIZER"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"SOUTH"
+],
+[
+"PLANT",
+"WHEAT"
+],
+[
+"NORTH"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"EAST"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"WATER"
+],
+[
+"WATER"
+],
+[
+"WATER"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PLACE",
+"FERTILIZER",
+4
+],
+"hands": [
+[
+"PASS"
+],
+[
+"WEST"
+],
+[
+"EAST"
+],
+[
+"HARVEST"
+]
+],
+"market": [
+[
+"SELL",
+"FERTILIZER",
+4
+],
+[
+"BUY_ANIMAL",
+"COW",
+1
+],
+[
+"BUY_SEED",
+"WHEAT",
+1
+]
+]
+},
+{
+"farmer": [
+"PICKUP",
+"COW"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"WEST"
+],
+[
+"WATER"
+],
+[
+"PLANT",
+"WHEAT"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"NORTH"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"WATER"
+],
+[
+"PASS"
+],
+[
+"WATER"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"NORTH"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"NORTH"
+],
+[
+"PASS"
+],
+[
+"SOUTH"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PLACE",
+"COW"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"WATER"
+],
+[
+"PASS"
+],
+[
+"EAST"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"CARE"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"WATER"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"PASS"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PICKUP",
+"WHEAT",
+3
+],
+"hands": [],
+"market": [
+[
+"HIRE"
+],
+[
+"HIRE"
+],
+[
+"HIRE"
+],
+[
+"HIRE"
+],
+[
+"HIRE"
+]
+]
+},
+{
+"farmer": [
+"WEST"
+],
+"hands": [
+[
+"NORTH"
+],
+[
+"NORTH"
+],
+[
+"NORTH"
+],
+[
+"NORTH"
+],
+[
+"NORTH"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"FEED"
+],
+"hands": [
+[
+"WEST"
+],
+[
+"NORTH"
+],
+[
+"NORTH"
+],
+[
+"WEST"
+],
+[
+"NORTH"
+]
+],
+"market": [
+[
+"SELL",
+"WHEAT",
+1
+]
+]
+},
+{
+"farmer": [
+"CARE"
+],
+"hands": [
+[
+"WEST"
+],
+[
+"NORTH"
+],
+[
+"NORTH"
+],
+[
+"WEST"
+],
+[
+"NORTH"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"COLLECT_FERTILIZER"
+],
+"hands": [
+[
+"WEST"
+],
+[
+"NORTH"
+],
+[
+"NORTH"
+],
+[
+"WEST"
+],
+[
+"NORTH"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"NORTH"
+],
+"hands": [
+[
+"WATER"
+],
+[
+"WEST"
+],
+[
+"WEST"
+],
+[
+"WEST"
+],
+[
+"WEST"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"FEED"
+],
+"hands": [
+[
+"WEST"
+],
+[
+"WEST"
+],
+[
+"WATER"
+],
+[
+"WATER"
+],
+[
+"WEST"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"CARE"
+],
+"hands": [
+[
+"WATER"
+],
+[
+"WEST"
+],
+[
+"NORTH"
+],
+[
+"HARVEST"
+],
+[
+"WEST"
+]
+],
+"market": [
+[
+"BUY_SEED",
+"WHEAT",
+1
+]
+]
+},
+{
+"farmer": [
+"COLLECT_FERTILIZER"
+],
+"hands": [
+[
+"SOUTH"
+],
+[
+"WATER"
+],
+[
+"WATER"
+],
+[
+"PLANT",
+"WHEAT"
+],
+[
+"WATER"
+]
+],
+"market": [
+[
+"SELL",
+"WHEAT",
+3
+]
+]
+},
+{
+"farmer": [
+"NORTH"
+],
+"hands": [
+[
+"WATER"
+],
+[
+"HARVEST"
+],
+[
+"WEST"
+],
+[
+"WATER"
+],
+[
+"HARVEST"
+]
+],
+"market": [
+[
+"BUY_SEED",
+"WHEAT",
+2
+]
+]
+},
+{
+"farmer": [
+"EAST"
+],
+"hands": [
+[
+"WEST"
+],
+[
+"PLANT",
+"WHEAT"
+],
+[
+"WATER"
+],
+[
+"NORTH"
+],
+[
+"PLANT",
+"WHEAT"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"FEED"
+],
+"hands": [
+[
+"WATER"
+],
+[
+"WATER"
+],
+[
+"SOUTH"
+],
+[
+"WATER"
+],
+[
+"WATER"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"CARE"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"NORTH"
+],
+[
+"WATER"
+],
+[
+"HARVEST"
+],
+[
+"SOUTH"
+]
+],
+"market": [
+[
+"BUY_SEED",
+"WHEAT",
+1
+]
+]
+},
+{
+"farmer": [
+"COLLECT_FERTILIZER"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"WATER"
+],
+[
+"SOUTH"
+],
+[
+"PLANT",
+"WHEAT"
+],
+[
+"WATER"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"SOUTH"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"SOUTH"
+],
+[
+"WATER"
+],
+[
+"WATER"
+],
+[
+"SOUTH"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"SOUTH"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"SOUTH"
+],
+[
+"SOUTH"
+],
+[
+"NORTH"
+],
+[
+"WATER"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PLACE",
+"FERTILIZER",
+3
+],
+"hands": [
+[
+"PASS"
+],
+[
+"SOUTH"
+],
+[
+"SOUTH"
+],
+[
+"WATER"
+],
+[
+"WEST"
+]
+],
+"market": [
+[
+"SELL",
+"FERTILIZER",
+3
+],
+[
+"BUY_ANIMAL",
+"COW",
+1
+]
+]
+},
+{
+"farmer": [
+"COLLECT_FERTILIZER"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"SOUTH"
+],
+[
+"EAST"
+],
+[
+"NORTH"
+],
+[
+"WATER"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PLACE",
+"FERTILIZER"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"EAST"
+],
+[
+"CARE"
+],
+[
+"WATER"
+],
+[
+"PASS"
+]
+],
+"market": [
+[
+"SELL",
+"FERTILIZER",
+1
+]
+]
+},
+{
+"farmer": [
+"CARE"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"EAST"
+],
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"PASS"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"NORTH"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"EAST"
+],
+[
+"PICKUP",
+"COW"
+],
+[
+"PASS"
+],
+[
+"PASS"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"COLLECT_FERTILIZER"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"PLACE",
+"WHEAT"
+],
+[
+"WEST"
+],
+[
+"PASS"
+],
+[
+"PASS"
+]
+],
+"market": [
+[
+"SELL",
+"WHEAT",
+1
+]
+]
+},
+{
+"farmer": [
+"CARE"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"WEST"
+],
+[
+"PASS"
+],
+[
+"PASS"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"PLACE",
+"COW"
+],
+[
+"PASS"
+],
+[
+"PASS"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PICKUP",
+"WHEAT",
+5
+],
+"hands": [],
+"market": [
+[
+"HIRE"
+],
+[
+"HIRE"
+],
+[
+"HIRE"
+],
+[
+"HIRE"
+],
+[
+"SELL",
+"FERTILIZER",
+1
+]
+]
+},
+{
+"farmer": [
+"FEED"
+],
+"hands": [
+[
+"NORTH"
+],
+[
+"NORTH"
+],
+[
+"NORTH"
+],
+[
+"NORTH"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"CARE"
+],
+"hands": [
+[
+"WEST"
+],
+[
+"NORTH"
+],
+[
+"NORTH"
+],
+[
+"NORTH"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"COLLECT_FERTILIZER"
+],
+"hands": [
+[
+"WEST"
+],
+[
+"NORTH"
+],
+[
+"NORTH"
+],
+[
+"NORTH"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"NORTH"
+],
+"hands": [
+[
+"CARE"
+],
+[
+"NORTH"
+],
+[
+"WEST"
+],
+[
+"WEST"
+]
+],
+"market": [
+[
+"SELL",
+"WHEAT",
+2
+]
+]
+},
+{
+"farmer": [
+"FEED"
+],
+"hands": [
+[
+"SOUTH"
+],
+[
+"NORTH"
+],
+[
+"WEST"
+],
+[
+"WEST"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"CARE"
+],
+"hands": [
+[
+"CARE"
+],
+[
+"WEST"
+],
+[
+"WATER"
+],
+[
+"WEST"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"COLLECT_FERTILIZER"
+],
+"hands": [
+[
+"NORTH"
+],
+[
+"WEST"
+],
+[
+"NORTH"
+],
+[
+"WEST"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"WEST"
+],
+"hands": [
+[
+"NORTH"
+],
+[
+"WEST"
+],
+[
+"EAST"
+],
+[
+"WATER"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"FEED"
+],
+"hands": [
+[
+"EAST"
+],
+[
+"WATER"
+],
+[
+"WATER"
+],
+[
+"HARVEST"
+]
+],
+"market": [
+[
+"BUY_SEED",
+"WHEAT",
+1
+]
+]
+},
+{
+"farmer": [
+"COLLECT_FERTILIZER"
+],
+"hands": [
+[
+"CARE"
+],
+[
+"HARVEST"
+],
+[
+"SOUTH"
+],
+[
+"PLANT",
+"WHEAT"
+]
+],
+"market": [
+[
+"BUY_SEED",
+"WHEAT",
+1
+]
+]
+},
+{
+"farmer": [
+"COLLECT_FERTILIZER"
+],
+"hands": [
+[
+"SOUTH"
+],
+[
+"PLANT",
+"WHEAT"
+],
+[
+"COLLECT_FERTILIZER"
+],
+[
+"WATER"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"SOUTH"
+],
+"hands": [
+[
+"SOUTH"
+],
+[
+"WATER"
+],
+[
+"SOUTH"
+],
+[
+"NORTH"
+]
+],
+"market": [
+[
+"BUY_PRODUCT",
+"WHEAT",
+1
+]
+]
+},
+{
+"farmer": [
+"FEED"
+],
+"hands": [
+[
+"WEST"
+],
+[
+"EAST"
+],
+[
+"SOUTH"
+],
+[
+"WATER"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"COLLECT_FERTILIZER"
+],
+"hands": [
+[
+"WEST"
+],
+[
+"WATER"
+],
+[
+"PASS"
+],
+[
+"HARVEST"
+]
+],
+"market": [
+[
+"BUY_PRODUCT",
+"WHEAT",
+1
+],
+[
+"BUY_SEED",
+"WHEAT",
+1
+]
+]
+},
+{
+"farmer": [
+"COLLECT_FERTILIZER"
+],
+"hands": [
+[
+"CARE"
+],
+[
+"SOUTH"
+],
+[
+"PLACE",
+"FERTILIZER"
+],
+[
+"PLANT",
+"WHEAT"
+]
+],
+"market": [
+[
+"SELL",
+"FERTILIZER",
+1
+]
+]
+},
+{
+"farmer": [
+"WEST"
+],
+"hands": [
+[
+"COLLECT_FERTILIZER"
+],
+[
+"SOUTH"
+],
+[
+"PASS"
+],
+[
+"WATER"
+]
+],
+"market": [
+[
+"BUY_PRODUCT",
+"WHEAT",
+1
+]
+]
+},
+{
+"farmer": [
+"FEED"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"SOUTH"
+],
+[
+"PASS"
+],
+[
+"SOUTH"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"SOUTH"
+],
+[
+"PASS"
+],
+[
+"SOUTH"
+]
+],
+"market": [
+[
+"BUY_PRODUCT",
+"WHEAT",
+1
+]
+]
+},
+{
+"farmer": [
+"COLLECT_FERTILIZER"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"EAST"
+],
+[
+"PASS"
+],
+[
+"SOUTH"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"EAST"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"EAST"
+],
+[
+"PASS"
+],
+[
+"WATER"
+]
+],
+"market": [
+[
+"BUY_PRODUCT",
+"WHEAT",
+1
+]
+]
+},
+{
+"farmer": [
+"EAST"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"DROP"
+],
+[
+"PASS"
+],
+[
+"PASS"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PLACE",
+"FERTILIZER",
+5
+],
+"hands": [
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"PASS"
+]
+],
+"market": [
+[
+"SELL",
+"FERTILIZER",
+4
+],
+[
+"BUY_PRODUCT",
+"WHEAT",
+1
+]
+]
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"PASS"
+]
+],
+"market": [
+[
+"SELL",
+"FERTILIZER",
+1
+]
+]
+},
+{
+"farmer": [
+"WEST"
+],
+"hands": [],
+"market": [
+[
+"HIRE"
+],
+[
+"HIRE"
+],
+[
+"HIRE"
+],
+[
+"SELL",
+"FERTILIZER",
+1
+]
+]
+},
+{
+"farmer": [
+"EAST"
+],
+"hands": [
+[
+"PICKUP",
+"WHEAT",
+2
+],
+[
+"PASS"
+],
+[
+"NORTH"
+]
+],
+"market": [
+[
+"HIRE"
+],
+[]
+]
+},
+{
+"farmer": [
+"PICKUP",
+"WHEAT",
+2
+],
+"hands": [
+[
+"FEED"
+],
+[
+"WEST"
+],
+[
+"CARE"
+],
+[
+"NORTH"
+]
+],
+"market": [
+[
+"SELL",
+"WHEAT",
+2
+]
+]
+},
+{
+"farmer": [
+"WEST"
+],
+"hands": [
+[
+"CARE"
+],
+[
+"PICKUP",
+"WHEAT",
+2
+],
+[
+"COLLECT_FERTILIZER"
+],
+[
+"NORTH"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"FEED"
+],
+"hands": [
+[
+"WEST"
+],
+[
+"NORTH"
+],
+[
+"WEST"
+],
+[
+"NORTH"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"CARE"
+],
+"hands": [
+[
+"WEST"
+],
+[
+"FEED"
+],
+[
+"WEST"
+],
+[
+"NORTH"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"COLLECT_FERTILIZER"
+],
+"hands": [
+[
+"FEED"
+],
+[
+"CARE"
+],
+[
+"WEST"
+],
+[
+"WATER"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"WEST"
+],
+"hands": [
+[
+"CARE"
+],
+[
+"NORTH"
+],
+[
+"WATER"
+],
+[
+"WEST"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"COLLECT_FERTILIZER"
+],
+"hands": [
+[
+"EAST"
+],
+[
+"FEED"
+],
+[
+"WEST"
+],
+[
+"WATER"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"NORTH"
+],
+"hands": [
+[
+"EAST"
+],
+[
+"CARE"
+],
+[
+"WATER"
+],
+[
+"PASS"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"WATER"
+],
+"hands": [
+[
+"NORTH"
+],
+[
+"COLLECT_FERTILIZER"
+],
+[
+"NORTH"
+],
+[
+"PASS"
+]
+],
+"market": [
+[
+"BUY_SEED",
+"STRAWBERRY",
+2
+]
+]
+},
+{
+"farmer": [
+"NORTH"
+],
+"hands": [
+[
+"COLLECT_FERTILIZER"
+],
+[
+"NORTH"
+],
+[
+"WATER"
+],
+[
+"PASS"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"WATER"
+],
+"hands": [
+[
+"EAST"
+],
+[
+"NORTH"
+],
+[
+"HARVEST"
+],
+[
+"WATER"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"EAST"
+],
+"hands": [
+[
+"SOUTH"
+],
+[
+"WATER"
+],
+[
+"PLANT",
+"STRAWBERRY"
+],
+[
+"WEST"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"WATER"
+],
+"hands": [
+[
+"DROP"
+],
+[
+"WEST"
+],
+[
+"WATER"
+],
+[
+"WATER"
+]
+],
+"market": [
+[
+"SELL",
+"FERTILIZER",
+1
+]
+]
+},
+{
+"farmer": [
+"SOUTH"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"WATER"
+],
+[
+"EAST"
+],
+[
+"WEST"
+]
+],
+"market": [
+[
+"BUY_SEED",
+"STRAWBERRY",
+1
+]
+]
+},
+{
+"farmer": [
+"FEED"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"WEST"
+],
+[
+"WATER"
+],
+[
+"WATER"
+]
+],
+"market": [
+[
+"BUY_SEED",
+"STRAWBERRY",
+1
+]
+]
+},
+{
+"farmer": [
+"CARE"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"WATER"
+],
+[
+"NORTH"
+],
+[
+"HARVEST"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"COLLECT_FERTILIZER"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"PASS"
+],
+[
+"WATER"
+],
+[
+"PLANT",
+"STRAWBERRY"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"EAST"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"HARVEST"
+],
+[
+"WEST"
+],
+[
+"WATER"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"SOUTH"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"PLANT",
+"STRAWBERRY"
+],
+[
+"WATER"
+],
+[
+"WEST"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"DROP"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"WATER"
+],
+[
+"HARVEST"
+],
+[
+"WATER"
+]
+],
+"market": [
+[
+"SELL",
+"FERTILIZER",
+3
+]
+]
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"WEST"
+],
+[
+"PLANT",
+"STRAWBERRY"
+],
+[
+"NORTH"
+]
+],
+"market": []
+},
+{
+"farmer": [
+"PASS"
+],
+"hands": [
+[
+"PASS"
+],
+[
+"WATER"
+],
+[
+"WATER"
+],
+[
+"WATER"
+]
+],
+"market": []
+}
+]

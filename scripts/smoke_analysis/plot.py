@@ -764,7 +764,7 @@ def plot_us_vs_opp_daily(report: dict[str, Any], *, title: str | None = None) ->
             "us_tiles_by_day",
             "opp_tiles_by_day",
             "tiles",
-            "Tiles operated (dawn): us Σ qtiles; opp owned live tiles",
+            "Tiles operated (dawn): us max(qtiles, [snap] live=); opp [opp_snap] live=",
             True,
         ),
         (
@@ -778,7 +778,7 @@ def plot_us_vs_opp_daily(report: dict[str, Any], *, title: str | None = None) ->
             "us_workers_by_day",
             "opp_workers_by_day",
             "workers",
-            "Workers per day (us: zones with qtiles>0; opp: distinct farmer+handN/day)",
+            "Workers per day (us: max(qtiles zones, [exec] actors, [snap] hands+1); opp: [exec] actors)",
             True,
         ),
         (

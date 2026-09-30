@@ -16,6 +16,27 @@ from milos.zoning import HAND_WORKERS, NET_TILE_OPS, NUM_TILES, WORKERS, WORKER_
 STAPLE_CROPS = frozenset({"WHEAT", "CARROT"})
 
 
+def _shifted_balance_handoff(
+    balance: list[int],
+    picked: list,
+    horizon: int,
+) -> list[int]:
+    """Cascade opening: solver balances with harvest income credited on day+1."""
+    harvest = [0] * horizon
+    for pick in picked:
+        pat = pick["pattern"]
+        cash_by = pat.get("cash_by_day") or []
+        for d in range(min(horizon, len(cash_by))):
+            c = cash_by[d]
+            if c > 0:
+                harvest[d] += c
+    out: list[int] = []
+    for d in range(horizon):
+        prev_h = harvest[d - 1] if d > 0 else 0
+        out.append(int(balance[d]) - harvest[d] + prev_h)
+    return out
+
+
 def _locked_conservative_handoff(
     opening: list[int],
     locked: dict,
@@ -23,6 +44,7 @@ def _locked_conservative_handoff(
     worker: str,
     *,
     charge_hire_daily: bool,
+    hire_rel_days: frozenset[int] | None = None,
 ) -> list[int]:
     from milos.zoning import HAND_DAILY_COST
 
@@ -37,8 +59,12 @@ def _locked_conservative_handoff(
         else:
             start_d = opening[d] + (conservative[d - 1] - opening[0])
         spend_d = locked_spend[d]
-        if charge_hire_daily and worker in HAND_WORKERS:
-            spend_d -= hire
+        if charge_hire_daily and worker in HAND_WORKERS and hire:
+            if hire_rel_days is not None:
+                if d in hire_rel_days:
+                    spend_d -= hire
+            elif mip._locked_day_has_work(locked, d, horizon):
+                spend_d -= hire
         conservative.append(start_d + spend_d)
     return conservative
 
@@ -112,11 +138,20 @@ def solve(
     market_inv: dict[str, int] | None = None,
     wheat_feed_units: int = 0,
     crops_allowlist: frozenset[str] | None = None,
+    calendar_day: int | None = None,
+    new_zone_activation: bool = False,
+    committed_units: dict[str, int] | None = None,
     **kwargs,
 ) -> SolveResult:
     del chains, kwargs
+    from milos import fix_flags
+    from milos.replan_lock import _stamp_chain
+    from milos.zoning import HAND_DAILY_COST
+
     worker_list = workers if workers is not None else WORKERS
     counts = empty_counts or {w: 0 for w in worker_list}
+    abl_cash = fix_flags.abl_cash_enabled()
+    bank = starting_money
 
     if price_of is None:
         base = rollouts.i0_base_prices()
@@ -168,6 +203,9 @@ def solve(
                 f"MELON={caps.get('MELON', 0)} STRAWBERRY={caps.get('STRAWBERRY', 0)}",
                 flush=True,
             )
+            if abl_cash:
+                opening = [bank] * horizon
+            avail = int(opening[0]) if opening else bank
             res = mip.solve_zone(
                 patterns,
                 horizon=horizon,
@@ -184,25 +222,36 @@ def solve(
                 worker=worker,
                 net_tile_ops=NET_TILE_OPS.get(worker, 18),
                 charge_hire_daily=charge_hire_daily,
+                hire_rel_days=None,
                 product_caps=caps,
                 sink_units=sink_units,
                 opp_units=opp_units,
                 market_inv=inv_for_quote,
                 wheat_feed_units=wheat_feed_units,
+                calendar_day=calendar_day,
+                committed_units=committed_units,
             )
+            spend_plan = 0
             if res is None:
                 zone_outcomes[worker] = "infeasible"
                 print(
                     f"[milos/wsp] twoland skip zone={worker} INFEASIBLE keep cascade",
                     flush=True,
                 )
-                opening = _locked_conservative_handoff(
-                    opening,
-                    locked,
-                    horizon,
-                    worker,
-                    charge_hire_daily=charge_hire_daily,
-                )
+                if not abl_cash:
+                    opening = _locked_conservative_handoff(
+                        opening,
+                        locked,
+                        horizon,
+                        worker,
+                        charge_hire_daily=charge_hire_daily,
+                    )
+                if calendar_day is not None and 6 <= calendar_day <= 11:
+                    print(
+                        f"[cash] d={calendar_day} zone={worker} avail={avail} "
+                        f"spend_plan={spend_plan}",
+                        flush=True,
+                    )
                 continue
 
             picked = res["picked"]
@@ -211,17 +260,51 @@ def solve(
                 zone_outcomes[worker] = "picks0"
             else:
                 zone_outcomes[worker] = "ok"
-            assigned.update(
-                mip.decode_wsp_assignment(
-                    empty_set,
-                    picked,
-                    tile_order=tuple(WORKER_TILES[worker]),
-                )
+            zone_assigned = mip.decode_wsp_assignment(
+                empty_set,
+                picked,
+                tile_order=tuple(WORKER_TILES[worker]),
             )
+            assigned.update(zone_assigned)
+            if picked:
+                from milos.wsp import data as wsp_data
+
+                crops_data = wsp_data.crops()
+                animals_data = wsp_data.animals()
+                for chain in zone_assigned.values():
+                    if not chain:
+                        continue
+                    seg = _stamp_chain(
+                        chain, horizon, price_of, crops_data, animals_data
+                    )
+                    spend_plan -= sum(seg.get("spend_by_day", []))
+                if charge_hire_daily and worker in HAND_WORKERS:
+                    hire_days = set()
+                    for pick in picked:
+                        pat = pick["pattern"]
+                        hire_days.update(pat.get("occupied_days") or ())
+                    if not hire_days and worker in HAND_WORKERS:
+                        hire_days.add(0)
+                    spend_plan += HAND_DAILY_COST.get(worker, 0) * len(hire_days)
+                if abl_cash:
+                    bank = max(0, bank - spend_plan)
+            if calendar_day is not None and 6 <= calendar_day <= 11:
+                print(
+                    f"[cash] d={calendar_day} zone={worker} avail={avail} "
+                    f"spend_plan={spend_plan}",
+                    flush=True,
+                )
             for pick in picked:
                 for prod, units in pick["pattern"]["harvest_units"].items():
                     locked_harvest[prod] = locked_harvest.get(prod, 0) + units
-            opening = res["conservative"]
+            shifted = _shifted_balance_handoff(
+                res["balance"], picked, horizon
+            )
+            if abl_cash:
+                bank = int(shifted[0]) if shifted else bank
+                opening = [bank] * horizon
+            else:
+                opening = shifted
             solved_workers.append(worker)
 
     finally:

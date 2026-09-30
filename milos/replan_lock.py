@@ -67,7 +67,21 @@ def empty_locked(horizon: int) -> dict:
         "cash_by_day": [0] * horizon,
         "spend_by_day": [0] * horizon,
         "daily_place": _empty_daily_place(horizon),
+        "harvest_units": {},
     }
+
+
+def _merge_harvest_units(dst: dict[str, int], src: dict[str, int] | None) -> None:
+    for product, units in (src or {}).items():
+        dst[product] = dst.get(product, 0) + int(units)
+
+
+def committed_harvest_units(locked_by_worker: dict[str, dict]) -> dict[str, int]:
+    """Remaining harvest units on locked tiles (farm-wide), per product."""
+    totals: dict[str, int] = {}
+    for locked in locked_by_worker.values():
+        _merge_harvest_units(totals, locked.get("harvest_units"))
+    return totals
 
 
 def _rollout_spec(label: str, profile_name: str, crops_data: dict, animals_data: dict):
@@ -201,11 +215,19 @@ def _stamp_profile_segment(
         min_age=min_age,
         charge_setup=charge_setup,
     )
+    harvest_units: dict[str, int] = {}
+    for age, yld in zip(profile["harvest_ages"], profile["yield_per_harvest"]):
+        if age < min_age:
+            continue
+        hday = rel_start + (age - min_age)
+        if hday < horizon:
+            harvest_units[product] = harvest_units.get(product, 0) + int(yld)
     return {
         "weight": sum(cash_by_day),
         "cash_by_day": cash_by_day,
         "spend_by_day": spend_by_day,
         "daily_place": daily_place,
+        "harvest_units": harvest_units,
         **out,
     }
 
@@ -243,6 +265,7 @@ def _stamp_chain(
     daily_place = _empty_daily_place(horizon)
     cash_by_day = [0] * horizon
     spend_by_day = [0] * horizon
+    harvest_units: dict[str, int] = {}
     for profile_key, start_day in chain:
         seg = _stamp_placement(
             profile_key, start_day, horizon, price_of, crops_data, animals_data
@@ -254,11 +277,13 @@ def _stamp_chain(
         _merge_daily_place(daily_place, seg.get("daily_place", {}), horizon)
         _add_daily(cash_by_day, seg["cash_by_day"], horizon)
         _add_daily(spend_by_day, seg["spend_by_day"], horizon)
+        _merge_harvest_units(harvest_units, seg.get("harvest_units"))
     return {
         "weight": sum(cash_by_day),
         "cash_by_day": cash_by_day,
         "spend_by_day": spend_by_day,
         "daily_place": daily_place,
+        "harvest_units": harvest_units,
         **out,
     }
 
@@ -352,6 +377,7 @@ def _stamp_locked_tile(
                 "weight": 0,
                 "cash_by_day": [0] * horizon,
                 "spend_by_day": [0] * horizon,
+                "harvest_units": {},
                 **empty,
             }
         current_age = day - tile["placed_day"]
@@ -371,6 +397,7 @@ def _stamp_locked_tile(
         "weight": 0,
         "cash_by_day": [0] * horizon,
         "spend_by_day": [0] * horizon,
+        "harvest_units": {},
         **empty,
     }
 
@@ -405,6 +432,7 @@ def _stamp_tile_commitment(
     daily_place = _empty_daily_place(horizon)
     cash_by_day = [0] * horizon
     spend_by_day = [0] * horizon
+    harvest_units: dict[str, int] = {}
 
     if _tile_occupied_for_lock(tile):
         seg = _stamp_locked_tile(tile, day, horizon, price_of, crops_data, animals_data)
@@ -414,6 +442,7 @@ def _stamp_tile_commitment(
             _merge_daily_place(daily_place, seg.get("daily_place", {}), horizon)
             _add_daily(cash_by_day, seg["cash_by_day"], horizon)
             _add_daily(spend_by_day, seg["spend_by_day"], horizon)
+            _merge_harvest_units(harvest_units, seg.get("harvest_units"))
 
     raw = _queue_suffix_to_chain(queue, qi, lag, gap, day, horizon, me, idx)
     if raw:
@@ -423,6 +452,7 @@ def _stamp_tile_commitment(
         _merge_daily_place(daily_place, suffix_seg.get("daily_place", {}), horizon)
         _add_daily(cash_by_day, suffix_seg["cash_by_day"], horizon)
         _add_daily(spend_by_day, suffix_seg["spend_by_day"], horizon)
+        _merge_harvest_units(harvest_units, suffix_seg.get("harvest_units"))
 
     if not any(cash_by_day) and not any(sum(out[k]) for k in LOCKED_DAILY_KEYS):
         return None
@@ -431,6 +461,7 @@ def _stamp_tile_commitment(
         "cash_by_day": cash_by_day,
         "spend_by_day": spend_by_day,
         "daily_place": daily_place,
+        "harvest_units": harvest_units,
         **out,
     }
 
@@ -450,6 +481,9 @@ def _aggregate_locked(
     )
     _add_daily(locked_by_worker[worker]["cash_by_day"], seg["cash_by_day"], horizon)
     _add_daily(locked_by_worker[worker]["spend_by_day"], seg["spend_by_day"], horizon)
+    if "harvest_units" not in locked_by_worker[worker]:
+        locked_by_worker[worker]["harvest_units"] = {}
+    _merge_harvest_units(locked_by_worker[worker]["harvest_units"], seg.get("harvest_units"))
 
 
 def _tile_empty_for_replan(tile) -> bool:

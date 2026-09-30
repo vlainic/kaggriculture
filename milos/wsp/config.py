@@ -32,6 +32,7 @@ CONCAVE_PRODUCTS: tuple[str, ...] = (
     "CARROT",
     "TOMATO",
     "WHEAT",
+    "EGG",
 )
 
 # Crop tile_free_age defaults (fallback if data missing)

@@ -167,6 +167,28 @@ def _safe_ratio(num: float, den: float | int | None) -> float:
     return float(num) / float(den)
 
 
+def us_workers_by_day_from_exec(
+    lines: list[str], *, season_days: int = 30
+) -> list[int]:
+    """Distinct farmer + handN with at least one [exec] farmer/hand line that day."""
+    workers = [0] * season_days
+    for d in range(season_days):
+        actors: set[str] = set()
+        for line in lines:
+            if "[exec]" not in line or " market " in line:
+                continue
+            m = re.search(r"\[exec\] d=(\d+) h=(\d+)", line)
+            if not m or int(m.group(1)) != d:
+                continue
+            if " farmer " in line:
+                actors.add("farmer")
+            hm = re.search(r" hand(\d+)", line)
+            if hm:
+                actors.add(f"hand{hm.group(1)}")
+        workers[d] = len(actors) if actors else 0
+    return workers
+
+
 def us_workers_and_tiles_by_day(
     qtiles_by_worker: dict[str, list[int | None]] | None,
     *,

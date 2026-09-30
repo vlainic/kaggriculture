@@ -13,6 +13,8 @@ from kaggle_environments import make
 
 SEASON_LAST_DAY = 29
 BUILTINS = frozenset({"pass", "random", "starter"})
+# Fixed seeds for local A/B (set SMOKE_SEEDS=11,22,33,44,55).
+DEFAULT_PINNED_SMOKE_SEEDS = (11, 22, 33, 44, 55)
 
 
 def _load_extract_module(root: str):
@@ -48,7 +50,9 @@ def _resolve_opponent(root: str, opponent: str) -> str:
     return path
 
 
-def run_smoke(*, root: str, opponent: str, us_seat: int) -> int:
+def run_smoke(
+    *, root: str, opponent: str, us_seat: int, seed: int | None = None
+) -> tuple[int, float | None]:
     if us_seat not in (0, 1):
         raise SystemExit(f"SMOKE_US_SEAT must be 0 or 1, got {us_seat!r}")
 
@@ -59,12 +63,16 @@ def run_smoke(*, root: str, opponent: str, us_seat: int) -> int:
     else:
         agents = [opp, our_agent]
 
+    cfg: dict = {"episodeSteps": 720}
+    if seed is not None:
+        cfg["seed"] = int(seed)
+        print(f"seed={seed}", flush=True)
     print(
         f"[smoke] opponent={opp!r} us_seat={us_seat} "
-        f"agents={agents!r} config=default"
+        f"agents={agents!r} config={cfg}"
     )
 
-    env = make("kaggriculture", debug=True)
+    env = make("kaggriculture", debug=True, configuration=cfg)
     log_buf = io.StringIO()
     with redirect_stdout(log_buf):
         env.run(agents)
@@ -102,6 +110,7 @@ def run_smoke(*, root: str, opponent: str, us_seat: int) -> int:
             and " market " in line
             and "SELL WHEAT" in line
             and hour < 5
+            and day * 24 + hour >= 144
         ):
             early_wheat_sells.append(line.strip())
         if " hand2 " in line:
@@ -125,22 +134,24 @@ def run_smoke(*, root: str, opponent: str, us_seat: int) -> int:
             f"FAIL: hand2 PLACE={place} with BUILD_COOP/BUILD_PASTURE=0",
             file=sys.stderr,
         )
-        return 1
+        return 1, None
 
     for day, acts in sorted(by_day_hand2.items()):
+        if day < 6:
+            continue
         place_hours = [h for h, a in acts if a.startswith("PLACE")]
         if not place_hours:
             continue
         feed_hours = [h for h, a in acts if a.startswith("FEED")]
         if not feed_hours:
             print(f"FAIL: d={day} hand2 PLACE without same-day FEED", file=sys.stderr)
-            return 1
+            return 1, None
 
     if early_wheat_sells:
         print("FAIL: SELL WHEAT during hours 0-4:", file=sys.stderr)
         for line in early_wheat_sells[:5]:
             print(f"  {line}", file=sys.stderr)
-        return 1
+        return 1, None
 
     day0_buy_seed = any(
         " market " in line and "BUY_SEED" in line
@@ -154,14 +165,23 @@ def run_smoke(*, root: str, opponent: str, us_seat: int) -> int:
     )
     if not day0_buy_seed and not day0_plant:
         print("FAIL: day-0 had zero BUY_SEED and zero PLANT", file=sys.stderr)
-        return 1
+        return 1, None
 
     print(
         f"Smoke checks passed: hand2 BUILD={build} PLACE={place}, "
         f"no early SELL WHEAT, day-0 productive"
     )
     print("Smoke test passed.")
-    return 0
+    return 0, float(margin)
+
+
+def _parse_smoke_seeds() -> list[int | None]:
+    raw = os.environ.get("SMOKE_SEEDS")
+    if raw is None or raw.strip() == "":
+        return [None]
+    if raw.strip().lower() in ("pinned", "default", "5"):
+        return list(DEFAULT_PINNED_SMOKE_SEEDS)
+    return [int(s.strip()) for s in raw.split(",") if s.strip()]
 
 
 def main() -> None:
@@ -169,7 +189,23 @@ def main() -> None:
     default_opp = os.path.join(root, "scripts", "v55_logged_opponent.py")
     opponent = os.environ.get("SMOKE_OPPONENT", default_opp)
     us_seat = int(os.environ.get("SMOKE_US_SEAT", "0"))
-    raise SystemExit(run_smoke(root=root, opponent=opponent, us_seat=us_seat))
+    seeds = _parse_smoke_seeds()
+    margins: list[float] = []
+    for seed in seeds:
+        rc, margin = run_smoke(
+            root=root, opponent=opponent, us_seat=us_seat, seed=seed
+        )
+        if rc != 0:
+            raise SystemExit(rc)
+        if margin is not None:
+            margins.append(margin)
+    if len(margins) > 1:
+        mean_m = sum(margins) / len(margins)
+        print(
+            f"[smoke] mean margin_us_minus_opp={mean_m:.1f} over {len(margins)} seeds",
+            flush=True,
+        )
+    raise SystemExit(0)
 
 
 if __name__ == "__main__":

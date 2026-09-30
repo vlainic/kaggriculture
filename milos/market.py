@@ -300,7 +300,7 @@ def needed_buys(
             seeds[crop.label] += 1
 
         animal = _needs_animal_today(idx, day, me, qi, lag, gap)
-        if animal and animal.label != "GOOSE":
+        if animal:
             animals[animal.label] += 1
 
     return seeds, animals
@@ -494,6 +494,26 @@ def build_orders(
             flush=True,
         )
     orders.extend(sells)
+    if fix_flags.abl_land_enabled() and 6 <= day <= script.SEASON_LAST_DAY:
+        quads = me.get("unlocked_quadrants", [])
+        sell_cash = sum(
+            int(prices.get(o[1], 0) or 0) * int(o[2])
+            for o in sells
+            if len(o) >= 3 and o[0] == "SELL"
+        )
+        proj_money = int(me["money"]) + sell_cash
+        if "NE" not in quads and proj_money >= 1300:
+            orders.append(["BUY_LAND"])
+        elif (
+            "NE" in quads
+            and "SW" not in quads
+            and proj_money >= 2300
+            and day >= planner.SW_BUY_FIRST_DAY
+            and day <= planner.SW_BUY_LAST_DAY
+            and float(obs.get("remainingOverageTime") or 0)
+            >= planner._sw_min_overage()
+        ):
+            orders.append(["BUY_LAND"])
     final = orders[:MAX_ORDERS]
     if len(final) > MAX_ORDERS:
         raise RuntimeError(

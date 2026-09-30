@@ -78,3 +78,45 @@ def fix_sell_lead() -> bool:
 
 def fix_opp_dump() -> bool:
     return _disposal_flag("OPP_DUMP")
+
+
+_ABL_CACHE: dict[str, bool] = {}
+
+
+def abl_enabled(name: str) -> bool:
+    """d6–11 ablation arms; default on unless env explicitly off."""
+    key = f"KAGGRI_ABL_{name.upper()}"
+    if key in _ABL_CACHE:
+        return _ABL_CACHE[key]
+    raw = os.environ.get(key)
+    if raw is None:
+        val = True
+    else:
+        val = raw.strip().lower() not in ("0", "false", "no", "off")
+    _ABL_CACHE[key] = val
+    return val
+
+
+def abl_land_enabled() -> bool:
+    return abl_enabled("LAND")
+
+
+def abl_catalog_enabled() -> bool:
+    return abl_enabled("CATALOG")
+
+
+def abl_cash_enabled() -> bool:
+    return abl_enabled("CASH")
+
+
+def log_abl_flags_once(step: int) -> None:
+    if step != 0:
+        return
+    if getattr(log_abl_flags_once, "_done", False):
+        return
+    log_abl_flags_once._done = True  # type: ignore[attr-defined]
+    print(
+        f"[abl] land={int(abl_land_enabled())} catalog={int(abl_catalog_enabled())} "
+        f"cash={int(abl_cash_enabled())}",
+        flush=True,
+    )

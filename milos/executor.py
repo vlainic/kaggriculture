@@ -19,6 +19,7 @@ from milos import (
     workers,
     zoning,
 )
+from milos import v55_opener
 from milos.zoning import NET_TILE_OPS, is_threeland12
 
 _DEBUG = True
@@ -114,6 +115,21 @@ def _manhattan(fx: int, fy: int, tx: int, ty: int) -> int:
     return abs(fx - tx) + abs(fy - ty)
 
 
+def _live_tile_count(me: dict) -> int:
+    live = 0
+    for row in me.get("tiles") or []:
+        if not isinstance(row, (list, tuple)):
+            continue
+        for tile in row:
+            if isinstance(tile, dict) and tile.get("kind") in (
+                "PLANT",
+                "COOP",
+                "PASTURE",
+            ):
+                live += 1
+    return live
+
+
 def _inv_nonempty(private: dict, inv_idx: int) -> bool:
     inv = (
         private["inventories"][inv_idx]
@@ -137,6 +153,7 @@ class Executor:
         self._sw_slot_base: int | None = None
         self._day = 0
         self._hour = 0
+        self._opener_adopted = False
         self._tile_ops_today = {w: 0 for w in workers.WORKERS}
         for idx in range(workers.NUM_TILES):
             queue = script.TILE_QUEUES.get(idx, [])
@@ -157,7 +174,17 @@ class Executor:
         private = obs["private"]
         day = obs["day"]
         hour = obs["hour"]
+        step_idx = int(obs.get("step", day * 24 + hour))
         self._day, self._hour = day, hour
+
+        if v55_opener.v55_opener_enabled():
+            if step_idx == 0:
+                self._opener_adopted = False
+            if step_idx >= v55_opener.opener_step_limit() and not self._opener_adopted:
+                v55_opener.adopt_board_from_farm(me, self._tile_state, day)
+                self._opener_adopted = True
+            if step_idx < v55_opener.opener_step_limit():
+                return self._play_opener_tape(obs, me, step_idx, day, hour)
 
         if hour == 23 and day < script.SEASON_LAST_DAY:
             try:
@@ -334,6 +361,62 @@ class Executor:
             )
 
         return {"farmer": farmer, "hands": hands, "market": orders}
+
+    def _play_opener_tape(
+        self, obs: dict, me: dict, step_idx: int, day: int, hour: int
+    ) -> dict:
+        if hour == 0:
+            for w in workers.WORKERS:
+                self._tile_ops_today[w] = 0
+            self._log_snap(obs, me, day, hour)
+        tape = v55_opener.load_tape()
+        act = tape[step_idx]
+        farmer = list(act.get("farmer") or ["PASS"])
+        hands_raw = act.get("hands") or []
+        market = [list(o) for o in (act.get("market") or [])]
+        n_hands = len(me.get("hands", []))
+        hands: list[list] = []
+        for i in range(n_hands):
+            if i < len(hands_raw):
+                hands.append(list(hands_raw[i]))
+            else:
+                hands.append(["PASS"])
+        v55_opener.check_opener_action(
+            step=step_idx,
+            day=day,
+            hour=hour,
+            me=me,
+            actor="farmer",
+            slot=None,
+            action=farmer,
+            tile_ops_today=self._tile_ops_today,
+        )
+        v55_opener.bump_opener_tile_ops(
+            farmer, me, "farmer", None, self._tile_ops_today
+        )
+        for i, hand_act in enumerate(hands):
+            v55_opener.check_opener_action(
+                step=step_idx,
+                day=day,
+                hour=hour,
+                me=me,
+                actor="hand",
+                slot=i,
+                action=hand_act,
+                tile_ops_today=self._tile_ops_today,
+            )
+            v55_opener.bump_opener_tile_ops(
+                hand_act, me, "hand", i, self._tile_ops_today
+            )
+        if market:
+            _log(f"[exec] d={day} h={hour} market {' '.join(_fmt(o) for o in market)}")
+        _log(f"[exec] d={day} h={hour} farmer {_fmt(farmer)} opener-tape")
+        for i, hand_act in enumerate(hands):
+            pos = tuple(me["hands"][i]) if i < len(me["hands"]) else None
+            _log(
+                f"[exec] d={day} h={hour} hand{i} {_fmt(hand_act)} pos={pos} opener-tape"
+            )
+        return {"farmer": farmer, "hands": hands, "market": market}
 
     def _on_new_day(self, me: dict, day: int) -> None:
         self._route_idx = {w: 0 for w in workers.WORKERS}
@@ -642,9 +725,11 @@ class Executor:
         price_s = " ".join(f"{k}={int(prices.get(k, 0) or 0)}" for k in sorted(prices))
         shed = obs.get("private", {}).get("shed", {})
         shed_total = sum(int(v) for v in shed.values())
+        n_hands = len(me.get("hands", []))
         _log(
             f"[snap] d={day} h={hour} money={int(me['money'])} shed_total={shed_total} "
-            f"{parts} shops={len(shops)} {demand_s} {price_s}"
+            f"{parts} shops={len(shops)} hands={n_hands} live={_live_tile_count(me)} "
+            f"{demand_s} {price_s}"
         )
 
     def _claim_worker(

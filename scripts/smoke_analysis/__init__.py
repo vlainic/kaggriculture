@@ -180,6 +180,16 @@ def analyze(path: str | Path) -> dict[str, Any]:
         hands_dawn.get("qtiles_by_worker_by_day"),
         season_days=SEASON_DAYS,
     )
+    us_exec_workers = parse_opp.us_workers_by_day_from_exec(
+        lines, season_days=SEASON_DAYS
+    )
+    us_tiles, us_workers = parse_snap.combine_us_daily_farm_metrics(
+        us_tiles,
+        us_workers,
+        snaps,
+        us_exec_workers,
+        season_days=SEASON_DAYS,
+    )
     opp_workers = opp.get("workers_by_day") or [None] * SEASON_DAYS
     opp_tiles = opp.get("live_tiles_by_day") or [None] * SEASON_DAYS
     opp_ops = opp["tile_ops_by_day"]

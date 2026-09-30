@@ -10,6 +10,7 @@ from milos.wsp.twoland import STAPLE_CROPS, solve
 from milos.wsp.log import WspPlan
 from milos.wsp.types import SolveResult
 from milos.wsp.config import ANIMAL_NAMES, NUM_DAYS, PROFILE_SUFFIXES
+from milos import fix_flags
 from milos.zoning import (
     FARMER,
     HAND_DAILY_COST,
@@ -26,6 +27,18 @@ from milos.zoning import (
 )
 
 PlanBoard = dict[int, list]
+
+
+def _activation_crops_allowlist() -> frozenset[str] | None:
+    if is_threeland12() and not fix_flags.abl_catalog_enabled():
+        return STAPLE_CROPS
+    return None
+
+
+def _ne_accept_staple_flag() -> int:
+    if is_threeland12() and not fix_flags.abl_catalog_enabled():
+        return 1
+    return 0
 
 
 def empty_board() -> PlanBoard:
@@ -458,7 +471,9 @@ def _try_activate_sw(
         wheat_feed_units=_wsp_wheat_feed_units(
             me, tile_state, obs.get("private"), day
         ),
-        crops_allowlist=STAPLE_CROPS if is_threeland12() else None,
+        crops_allowlist=_activation_crops_allowlist(),
+        calendar_day=day,
+        new_zone_activation=True,
     )
 
     assigned = {k: v for k, v in result.assigned.items() if v}
@@ -474,7 +489,7 @@ def _try_activate_sw(
         return False, money
 
     if not _zone_activation_value_check(
-        "sw", day, worker, result.zone_objectives.get(worker), cost
+        "sw", day, worker, result.zone_objectives.get(worker), horizon
     ):
         return False, money
 
@@ -570,6 +585,8 @@ def _zone_plan_cost(
     horizon: int,
     worker: str,
     price_of: Callable[..., int],
+    *,
+    hire_days: int | None = None,
 ) -> int:
     from milos.replan_lock import _stamp_chain
 
@@ -580,9 +597,17 @@ def _zone_plan_cost(
         if not chain:
             continue
         seg = _stamp_chain(chain, horizon, price_of, crops_data, animals_data)
-        total_spend -= sum(seg.get("spend_by_day", []))
-    hire = HAND_DAILY_COST.get(worker, 0) * horizon
+        spend_by_day = seg.get("spend_by_day", [])
+        for d in range(min(2, len(spend_by_day))):
+            total_spend -= spend_by_day[d]
+    hd = hire_days if hire_days is not None else 1
+    hire = HAND_DAILY_COST.get(worker, 0) * hd
     return total_spend + hire
+
+
+def _zone_gate_hire_cost(worker: str, horizon: int) -> int:
+    hd = 1 if fix_flags.abl_cash_enabled() else horizon
+    return HAND_DAILY_COST.get(worker, 0) * hd
 
 
 def _zone_value_min_net() -> int:
@@ -599,15 +624,15 @@ def _zone_value_margin_ratio() -> float:
         return 0.0
 
 
-def _zone_value_ok(obj: int | float | None, cost: int) -> tuple[bool, str]:
-    """Fail open when obj is missing; otherwise require obj - cost >= min_net."""
+def _zone_value_ok(obj: int | float | None, hire_cost: int) -> tuple[bool, str]:
+    """Fail open when obj is missing; obj already nets setup — gate on hire only."""
     if obj is None:
         return True, "value_unknown"
-    net = float(obj) - float(cost)
+    net = float(obj) - float(hire_cost)
     min_net = _zone_value_min_net()
     ratio = _zone_value_margin_ratio()
-    if ratio > 0 and cost > 0:
-        if float(obj) < (1.0 + ratio) * float(cost):
+    if ratio > 0 and hire_cost > 0:
+        if float(obj) < (1.0 + ratio) * float(hire_cost):
             return False, "low_value"
     if net < min_net:
         return False, "low_value"
@@ -615,20 +640,25 @@ def _zone_value_ok(obj: int | float | None, cost: int) -> tuple[bool, str]:
 
 
 def _zone_activation_value_check(
-    tag: str, day: int, worker: str, obj: int | float | None, cost: int
+    tag: str,
+    day: int,
+    worker: str,
+    obj: int | float | None,
+    horizon: int,
 ) -> bool:
-    ok, reason = _zone_value_ok(obj, cost)
+    hire_cost = _zone_gate_hire_cost(worker, horizon)
+    ok, reason = _zone_value_ok(obj, hire_cost)
     if reason == "value_unknown":
         print(
-            f"[{tag}] d={day} zone={worker} value_unknown cost={cost}",
+            f"[{tag}] d={day} zone={worker} value_unknown hire={hire_cost}",
             flush=True,
         )
         return True
     if not ok:
-        net = int(float(obj) - float(cost))
+        net = int(float(obj) - float(hire_cost))
         print(
             f"[{tag}] reject d={day} zone={worker} reason=low_value "
-            f"obj={int(obj)} cost={cost} net={net}",
+            f"obj={int(obj)} hire={hire_cost} net={net}",
             flush=True,
         )
         return False
@@ -716,7 +746,9 @@ def _try_activate_ne_staple(
         wheat_feed_units=_wsp_wheat_feed_units(
             me, tile_state, obs.get("private"), day
         ),
-        crops_allowlist=STAPLE_CROPS if is_threeland12() else None,
+        crops_allowlist=_activation_crops_allowlist(),
+        calendar_day=day,
+        new_zone_activation=True,
     )
 
     assigned = {k: v for k, v in result.assigned.items() if v}
@@ -732,7 +764,7 @@ def _try_activate_ne_staple(
         return False, money
 
     if not _zone_activation_value_check(
-        "ne", day, worker, result.zone_objectives.get(worker), cost
+        "ne", day, worker, result.zone_objectives.get(worker), horizon
     ):
         return False, money
 
@@ -742,7 +774,7 @@ def _try_activate_ne_staple(
         STAPLE_BOOTSTRAP_WORKERS.add(worker)
     print(
         f"[ne] accept d={day} zone={worker} busy_any={busy_any} "
-        f"cost={cost} money={money} staple={int(is_threeland12())}",
+        f"cost={cost} money={money} staple={_ne_accept_staple_flag()}",
         flush=True,
     )
     return True, money - cost
@@ -999,6 +1031,9 @@ def _replan_active(
     )
 
     sink_units, opp_units = _wsp_sink_opp(obs, horizon)
+    from milos.replan_lock import committed_harvest_units
+
+    committed = committed_harvest_units(locked_by_worker)
 
     result = solve(
         [],
@@ -1020,6 +1055,8 @@ def _replan_active(
         wheat_feed_units=_wsp_wheat_feed_units(
             me, st_map, obs.get("private"), day
         ),
+        calendar_day=day,
+        committed_units=committed,
     )
 
     if not result.solved_workers:
@@ -1083,16 +1120,11 @@ def replan(obs: dict, tile_queues: dict, tile_state: dict | None = None) -> None
         print(f"[planner] walk1 failed d={day}: {exc}", flush=True)
     if BUY_LAND_DAY == day and not _ne_owned(me):
         return
-    n_ne = len(ACTIVE_NE)
     try:
         _activate_next_ne(obs, tile_queues, st_map, price_of)
     except Exception as exc:
         print(f"[planner] walk2 failed d={day}: {exc}", flush=True)
-    if (
-        SW_ENABLED
-        and len(ACTIVE_NE) == n_ne
-        and SW_BUY_DAY != day
-    ):
+    if SW_ENABLED and SW_BUY_DAY != day:
         try:
             _activate_next_sw(obs, tile_queues, st_map, price_of)
         except Exception as exc:
@@ -1124,7 +1156,7 @@ def replan_after_buy_sw(
     if horizon <= 0:
         return
 
-    from milos.replan_lock import build_replan_lock, empty_locked
+    from milos.replan_lock import build_replan_lock, committed_harvest_units, empty_locked
 
     price_of = _safe_price_of(obs, tile_queues, st_map, day)
     sw_cap = _sw_workers_cap()
@@ -1164,6 +1196,7 @@ def replan_after_buy_sw(
         return
 
     sink_units, opp_units = _wsp_sink_opp(obs, horizon)
+    committed = committed_harvest_units(locked_by_worker)
 
     result = solve(
         [],
@@ -1180,13 +1213,15 @@ def replan_after_buy_sw(
         price_of=price_of,
         workers=land_w,
         charge_hire_daily=True,
+        committed_units=committed,
         sink_units=sink_units,
         opp_units=opp_units,
         market_inv=_wsp_market_inv(obs),
         wheat_feed_units=_wsp_wheat_feed_units(
             me, st_map, obs.get("private"), day
         ),
-        crops_allowlist=STAPLE_CROPS if is_threeland12() else None,
+        crops_allowlist=_activation_crops_allowlist(),
+        calendar_day=day,
     )
 
     overage_after = obs.get("remainingOverageTime")
@@ -1205,9 +1240,8 @@ def replan_after_buy_sw(
         if busy_any < 1 or worker not in result.solved_workers:
             deferred.append(worker)
             break
-        zone_cost = _zone_plan_cost(zone_assigned, horizon, worker, price_of)
         if not _zone_activation_value_check(
-            "sw", day, worker, result.zone_objectives.get(worker), zone_cost
+            "sw", day, worker, result.zone_objectives.get(worker), horizon
         ):
             deferred.append(worker)
             break
@@ -1257,7 +1291,7 @@ def replan_after_buy(
     if horizon <= 0:
         return
 
-    from milos.replan_lock import build_replan_lock, empty_locked
+    from milos.replan_lock import build_replan_lock, committed_harvest_units, empty_locked
 
     price_of = _safe_price_of(obs, tile_queues, st_map, day)
     nw_tile_set = {idx for w in NW_WORKERS for idx in WORKER_TILES[w]}
@@ -1297,6 +1331,7 @@ def replan_after_buy(
         return
 
     sink_units, opp_units = _wsp_sink_opp(obs, horizon)
+    committed = committed_harvest_units(locked_by_worker)
 
     result = solve(
         [],
@@ -1313,12 +1348,14 @@ def replan_after_buy(
         price_of=price_of,
         workers=land_w,
         charge_hire_daily=True,
+        committed_units=committed,
         sink_units=sink_units,
         opp_units=opp_units,
         market_inv=_wsp_market_inv(obs),
         wheat_feed_units=_wsp_wheat_feed_units(
             me, st_map, obs.get("private"), day
         ),
+        calendar_day=day,
     )
 
     overage_after = obs.get("remainingOverageTime")
@@ -1337,9 +1374,8 @@ def replan_after_buy(
         if busy_any < 1 or worker not in result.solved_workers:
             deferred.append(worker)
             break
-        zone_cost = _zone_plan_cost(zone_assigned, horizon, worker, price_of)
         if not _zone_activation_value_check(
-            "ne", day, worker, result.zone_objectives.get(worker), zone_cost
+            "ne", day, worker, result.zone_objectives.get(worker), horizon
         ):
             deferred.append(worker)
             break
@@ -1469,7 +1505,16 @@ def _hardcoded_day0_queues() -> dict[int, list]:
 def _build_threeland12_day0() -> dict[int, list]:
     from pathlib import Path
 
+    from milos.v55_opener import v55_opener_enabled
+
     global BUY_LAND_DAY
+
+    if v55_opener_enabled():
+        print(
+            "[planner] day0 v55 opener tape (empty queues until d6 adopt)",
+            flush=True,
+        )
+        return {idx: [] for idx in range(NUM_TILES)}
 
     BUY_LAND_DAY = 0
     path = Path(__file__).resolve().parent / "wsp" / "wsp4_prestart.json"
