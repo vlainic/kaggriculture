@@ -109,20 +109,19 @@ Rest of products -> just sell as they come in.
 Day 30: try to make just harvest-only route, so they return to tile 1 - (4,4) coords - so workers drop thing to SHED!!!
 - and then just SELL all in shed what is sellable -> like ALL!!!
 
-# CHANGES
+# CHANGES (applied — baked into PLAN above)
 
-I have to make them due to low money and animals die!!!
+Made for early cash crunch / animals dying. Mirrored in `agent/script.py` `_build_four_tile_queues`.
 
 ## Farmer
 
-Tiles 1,2,3 -> have first CARROTS, then 5xWHEAT
+- Tiles 1–3: first **CARROT**, then **5×WHEAT** (was wheat-heavy early).
 
 ## Top/Left zone
 
-Tiles 11 and 17 respectively: delay second sheep by insertin carrot!
-
-Tile 12,13 & 18,19: break between harvest and plant is 3 days instead of 1
+- Tiles **11** and **17**: delay second sheep by inserting **1 carrot** after starter wheat.
+- Tiles **12,13** and **18,19**: melon **replant_gap=3** (3-day break between harvest and plant; was 1).
 
 ## Corner
 
-Tiles 23: instead of 1 day lag insert wheat for productive 5 day lag of second cow
+- Tile **23**: **2×wheat** then cow (~5-day productive lag vs tile 22) instead of a short start lag.

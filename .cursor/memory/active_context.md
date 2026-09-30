@@ -1,6 +1,6 @@
 # Active Context
 
-## Current focus (Sep 29, 2026)
+## Current focus (Sep 30, 2026)
 
 **Live submission = `milos/` ThreeLand 15-hand layout** — `main.py` → `agent(obs, config=None)` → `milos.executor.step`. Layout: **`MILOS_THREELAND15`** via `KAGGRI_LAYOUT` default `threeland15` (`CURRENT` in `milos/zoning.py`):
 
@@ -43,9 +43,13 @@ Plan: `.cursor/plans/zone_value_activation_gate_21c21131.plan.md`.
 2. **Shed capacity 100** — silent buy reject; FERT dump + dawn make-room sells.
 3. **Wheat:** global buffer on buy only; pickup = raw zone need.
 
-### Smoke analysis
+### Smoke analysis (Sep 30)
 
-- `experiments/smoke_analysis.ipynb` + `scripts/smoke_analysis/` — layout-aware; **`plot_zone_earnings_vs_cost`** (per-zone harvest proxy vs hire cost from first active day).
+- Layout-aware `scripts/smoke_analysis/` + `experiments/smoke_analysis.ipynb`.
+- **`plot_us_vs_opp_daily`**: 7 panels vs `v55_logged_opponent` — tile ops; **tiles operated** (us Σ dawn `qtiles`, opp `[opp_snap] live=`); net cash Δ with **dawn money on right y-axis**; workers (us zones with qtiles>0, opp distinct farmer+handN); ops/tile; tiles/worker; ops/worker.
+- Opp workers: count actors from `[opp]` lines (not `hands=` from empty `me["hands"]`). Opp live needs `live=N` on `[opp_snap]` (`v55_logged_opponent`).
+- Optional: `plot_us_vs_opp_money_hours` (turn axis; dawn-only snaps → one point per day column).
+- Also: `plot_zone_earnings_vs_cost`.
 
 ### Immediate next steps
 

@@ -19,7 +19,7 @@
 
 ---
 
-## Strategic status (Sep 29 — live = milos **THREELAND15** + zone value gate)
+## Strategic status (Sep 30 — live = milos **THREELAND15** + zone value gate)
 
 | Track | Status |
 | --- | --- |
@@ -30,10 +30,19 @@
 | **Dawn market** | NW HIRE×`NW_HANDS`; room sells; wheat → animals → seeds; fert dump; buy-day h0–h2 |
 | **Wheat / shed** | Global buffer on buy; raw pickup; cap 100 + FERT dump |
 | **Day-0 / replan** | `assigned` / `replan_set` writes; NE/SW buy-replans + Walk 2/3 |
-| **Smoke analysis** | Layout-aware + `plot_zone_earnings_vs_cost` |
+| **Smoke analysis** | Us-vs-opp 7-panel daily (+ money right-axis, tiles operated); money-hours; zone earnings vs cost |
 | **Competition submit** | User-only unless explicit ask |
 
 **Plan chain:** NE dusk/buy-replan → SW expansion (`sw_land_expansion`) → 5-man three lands (`5-man_three_lands`) → **zone value gate** (`zone_value_activation_gate`). Details: `.cursor/memory/ne_expansion_and_forecast.md`.
+
+## Sep 30 — smoke us-vs-opp dashboard (KEEP)
+
+| Change | Result |
+| --- | --- |
+| `parse_opp` / `parse_exec` / `parse_snap` | Opp workers from distinct `[opp]` actors; `live=` tiles; us qtiles workers/tiles; money-by-turn |
+| `v55_logged_opponent` | `[opp_snap] … live=N`; `hands=` from action hands |
+| `plot_us_vs_opp_daily` | 7 panels: ops → **tiles operated** → cash Δ + dawn money twin axis → workers → efficiency |
+| Notebook md | Documents 7 panels + right-axis money |
 
 ## Sep 29 — zone value activation gate (KEEP)
 
