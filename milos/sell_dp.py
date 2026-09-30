@@ -59,6 +59,7 @@ _lead_carry: dict[str, int] = {p: 0 for p in PREMIUM_PRODUCTS}
 _dawn_quote: dict[str, int] = {}
 GREEDY_THETA = 0.85
 GREEDY_THETA_LIQ = 0.3
+GREEDY_THETA_BY_PRODUCT: dict[str, float] = {"MELON": 0.65}
 GREEDY_TARGET_LO = 40
 GREEDY_TARGET_HI = 70
 GREEDY_TARGET_MARGIN = 10
@@ -128,6 +129,7 @@ def greedy_premium_sells(
     hour: int = 0,
     hand_inv_units: int = 0,
     fert_reserve: int = 10,
+    wheat_reserve: int = 0,
 ) -> dict[str, int]:
     """Water-fill sells for this hour; mutates shed. One batch per product."""
     target, theta = _greedy_shed_target(
@@ -158,6 +160,8 @@ def greedy_premium_sells(
             cnt = int(working.get(product, 0))
             if product == "FERTILIZER":
                 cnt = max(0, cnt - fert_reserve)
+            elif product == "WHEAT":
+                cnt = max(0, cnt - wheat_reserve)
             if cnt <= 0:
                 continue
             inv = virtual_inv.get(product, pricing.I0_DEFAULT)
@@ -166,7 +170,8 @@ def greedy_premium_sells(
             if marginal < floor:
                 continue
             base = pricing.base_price(product)
-            good_price = marginal >= theta * base
+            theta_p = GREEDY_THETA_BY_PRODUCT.get(product, theta)
+            good_price = marginal >= theta_p * base
             if product in PREMIUM_PRODUCTS:
                 if not good_price and not room:
                     continue

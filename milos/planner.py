@@ -79,6 +79,32 @@ def merge_wsp_plan(
     return delta
 
 
+def _wsp_sink_opp(obs: dict, horizon: int) -> tuple[dict[str, int], dict[str, int]]:
+    from milos.price_forecast import wsp_sink_and_opp_units
+
+    return wsp_sink_and_opp_units(obs, horizon)
+
+
+def _wsp_market_inv(obs: dict | None) -> dict[str, int]:
+    if obs is None:
+        return {}
+    inv = obs.get("market", {}).get("inventory") or {}
+    return {str(k): int(v) for k, v in inv.items()}
+
+
+def _wsp_wheat_feed_units(
+    me: dict,
+    tile_state: dict | None,
+    private: dict | None,
+    day: int,
+) -> int:
+    from milos import script
+
+    return script.total_wheat_feed_need(
+        me, tile_state or {}, private or {}, day=day
+    )
+
+
 def build_day0(
     *,
     starting_money: int = 3000,
@@ -95,6 +121,10 @@ def build_day0(
             product
         ]
 
+    from milos.price_forecast import wsp_sink_and_opp_day0
+
+    sink_units, opp_units = wsp_sink_and_opp_day0(NUM_DAYS)
+
     result = solve(
         [],
         horizon=NUM_DAYS,
@@ -105,6 +135,10 @@ def build_day0(
         track_shed=track_shed,
         price_of=price_of,
         workers=NW_WORKERS,
+        sink_units=sink_units,
+        opp_units=opp_units,
+        market_inv={},
+        wheat_feed_units=0,
         **kwargs,
     )
     board = empty_board()
@@ -406,6 +440,8 @@ def _activate_next_sw(
     if not zone_tiles:
         return False
 
+    sink_units, opp_units = _wsp_sink_opp(obs, horizon)
+
     result = solve(
         [],
         horizon=horizon,
@@ -418,6 +454,12 @@ def _activate_next_sw(
         price_of=price_of,
         workers=(worker,),
         charge_hire_daily=True,
+        sink_units=sink_units,
+        opp_units=opp_units,
+        market_inv=_wsp_market_inv(obs),
+        wheat_feed_units=_wsp_wheat_feed_units(
+            me, tile_state, obs.get("private"), day
+        ),
     )
 
     assigned = {k: v for k, v in result.assigned.items() if v}
@@ -636,6 +678,8 @@ def _activate_next_ne(
     if not zone_tiles:
         return
 
+    sink_units, opp_units = _wsp_sink_opp(obs, horizon)
+
     result = solve(
         [],
         horizon=horizon,
@@ -648,6 +692,12 @@ def _activate_next_ne(
         price_of=price_of,
         workers=(worker,),
         charge_hire_daily=True,
+        sink_units=sink_units,
+        opp_units=opp_units,
+        market_inv=_wsp_market_inv(obs),
+        wheat_feed_units=_wsp_wheat_feed_units(
+            me, tile_state, obs.get("private"), day
+        ),
     )
 
     assigned = {k: v for k, v in result.assigned.items() if v}
@@ -869,7 +919,8 @@ def _replan_active(
         return
 
     replan_tiles, locked_by_worker, locked_tiles = build_replan_lock(
-        me, day, horizon, tile_queues, st_map, price_of
+        me, day, horizon, tile_queues, st_map, price_of,
+        market_inv=_wsp_market_inv(obs),
     )
     replan_tiles = [t for t in replan_tiles if t in act_tile_set]
 
@@ -886,6 +937,8 @@ def _replan_active(
         flush=True,
     )
 
+    sink_units, opp_units = _wsp_sink_opp(obs, horizon)
+
     result = solve(
         [],
         horizon=horizon,
@@ -900,6 +953,12 @@ def _replan_active(
         min_balance=0,
         price_of=price_of,
         workers=act,
+        sink_units=sink_units,
+        opp_units=opp_units,
+        market_inv=_wsp_market_inv(obs),
+        wheat_feed_units=_wsp_wheat_feed_units(
+            me, st_map, obs.get("private"), day
+        ),
     )
 
     if not result.solved_workers:
@@ -1005,7 +1064,8 @@ def replan_after_buy_sw(
     sw_tile_set = {idx for w in sw_cap for idx in WORKER_TILES[w]}
 
     replan_tiles, locked_by_worker, locked_tiles = build_replan_lock(
-        me, day, horizon, tile_queues, st_map, price_of
+        me, day, horizon, tile_queues, st_map, price_of,
+        market_inv=_wsp_market_inv(obs),
     )
     sw_replan = [t for t in replan_tiles if t in sw_tile_set]
     sw_empty = len(sw_replan)
@@ -1036,6 +1096,8 @@ def replan_after_buy_sw(
         )
         return
 
+    sink_units, opp_units = _wsp_sink_opp(obs, horizon)
+
     result = solve(
         [],
         horizon=horizon,
@@ -1051,6 +1113,12 @@ def replan_after_buy_sw(
         price_of=price_of,
         workers=land_w,
         charge_hire_daily=True,
+        sink_units=sink_units,
+        opp_units=opp_units,
+        market_inv=_wsp_market_inv(obs),
+        wheat_feed_units=_wsp_wheat_feed_units(
+            me, st_map, obs.get("private"), day
+        ),
     )
 
     overage_after = obs.get("remainingOverageTime")
@@ -1126,7 +1194,8 @@ def replan_after_buy(
     ne_tile_set = {idx for w in NE_WORKERS for idx in WORKER_TILES[w]}
 
     replan_tiles, locked_by_worker, locked_tiles = build_replan_lock(
-        me, day, horizon, tile_queues, st_map, price_of
+        me, day, horizon, tile_queues, st_map, price_of,
+        market_inv=_wsp_market_inv(obs),
     )
     nw_empty = sum(1 for t in replan_tiles if t in nw_tile_set)
     ne_replan = [t for t in replan_tiles if t in ne_tile_set]
@@ -1157,6 +1226,8 @@ def replan_after_buy(
         )
         return
 
+    sink_units, opp_units = _wsp_sink_opp(obs, horizon)
+
     result = solve(
         [],
         horizon=horizon,
@@ -1172,6 +1243,12 @@ def replan_after_buy(
         price_of=price_of,
         workers=land_w,
         charge_hire_daily=True,
+        sink_units=sink_units,
+        opp_units=opp_units,
+        market_inv=_wsp_market_inv(obs),
+        wheat_feed_units=_wsp_wheat_feed_units(
+            me, st_map, obs.get("private"), day
+        ),
     )
 
     overage_after = obs.get("remainingOverageTime")
@@ -1311,7 +1388,7 @@ def _hardcoded_day0_queues() -> dict[int, list]:
         elif i in (12, 13):
             chains[idx] = [("SHEEP_with_care", 0)]
         else:
-            chains[idx] = [("MELON_no_fert", 0)]
+            chains[idx] = [("WHEAT_no_fert", 0), ("WHEAT_no_fert", 5)]
     print("[planner] day0 hardcoded template", flush=True)
     return {
         idx: chain_to_queue_items(ch, NUM_DAYS)

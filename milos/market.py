@@ -80,9 +80,8 @@ def _fert_reserve(
         need += script.zone_fert_pickup_needed(
             me, w, tile_state, hand_inv, day=day
         )
-    if fix_flags.fix_fert():
-        need = max(need, script.horizon_fert_shed_need(me, tile_state, day))
-    return max(FERT_SHED_CAP, need)
+    need = max(need, script.near_term_fert_shed_need(me, tile_state, day, window_days=2))
+    return min(10, max(FERT_SHED_CAP, need))
 
 
 def _fert_dump_orders(shed: dict, reserve: int) -> list[list]:
@@ -180,6 +179,8 @@ def _shed_overflow_sells(
             break
         if product == "FERTILIZER":
             stock = max(0, int(shed.get(product, 0)) - fert_reserve)
+        elif product == "WHEAT":
+            stock = max(0, int(shed.get(product, 0)) - wheat_feed_need)
         else:
             stock = int(shed.get(product, 0))
         if stock <= 0:
@@ -563,7 +564,7 @@ def _premium_sell_orders(
     market_inv: dict | None = None,
     fert_reserve: int = 10,
 ) -> list[list]:
-    del step, use_dp, prices, wheat_feed_need
+    del step, use_dp, prices
     shed = private["shed"]
     inv = market_inv if market_inv is not None else {}
 
@@ -579,6 +580,7 @@ def _premium_sell_orders(
         hour=hour,
         hand_inv_units=_hand_inventory_units(private),
         fert_reserve=fert_reserve,
+        wheat_reserve=wheat_feed_need,
     )
     sells: list[list] = []
     for product in sorted(sold_map.keys()):

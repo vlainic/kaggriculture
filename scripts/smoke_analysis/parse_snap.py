@@ -71,3 +71,21 @@ def money_by_day(
     dawn = dawn_snaps(snaps)
     by_day = {int(s["day"]): float(s["money"]) for s in dawn}
     return [by_day.get(d) for d in range(season_days)]
+
+
+def money_by_turn(
+    snaps: list[dict[str, Any]],
+    *,
+    season_days: int = 30,
+    hours_per_day: int = 24,
+) -> list[float | None]:
+    """Money at each logged [snap] turn (day×24+hour); None where unlogged."""
+    n = season_days * hours_per_day
+    out: list[float | None] = [None] * n
+    for s in snaps:
+        day = int(s["day"])
+        hour = int(s.get("hour", 0))
+        if not (0 <= day < season_days and 0 <= hour < hours_per_day):
+            continue
+        out[day * hours_per_day + hour] = float(s["money"])
+    return out

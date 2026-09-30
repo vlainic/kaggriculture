@@ -19,10 +19,20 @@ FERT_PRICE = 100
 MAX_BUY = 50 * NUM_DAYS
 OBJ_EARLY_STOP = 5_000
 
-CROP_PROFILES = ("no_fert",)
+CROP_PROFILES = ("no_fert", "with_fert")
 ANIMAL_PROFILES = ("no_care", "with_care")
 
 GLUT_PRODUCTS: tuple[str, ...] = ("MELON", "STRAWBERRY", "MILK", "WOOL")
+
+CONCAVE_PRODUCTS: tuple[str, ...] = (
+    "MELON",
+    "STRAWBERRY",
+    "MILK",
+    "WOOL",
+    "CARROT",
+    "TOMATO",
+    "WHEAT",
+)
 
 # Crop tile_free_age defaults (fallback if data missing)
 CROP_FREE_AGE = {

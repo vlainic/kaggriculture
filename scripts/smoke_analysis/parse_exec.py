@@ -158,6 +158,7 @@ def parse_hands_dawn(lines: list[str], *, season_days: int = 30) -> dict[str, An
     est_ops: dict[str, list[float | None]] = {}
     animal: dict[str, list[int | None]] = {}
     crop: dict[str, list[int | None]] = {}
+    qtiles: dict[str, list[int | None]] = {}
     # worker -> day -> {tile_num: [verbs]}
     theo_by_tile: dict[str, list[dict[int, list[str]] | None]] = {}
     theo_extra: dict[str, list[list[str] | None]] = {}
@@ -171,9 +172,11 @@ def parse_hands_dawn(lines: list[str], *, season_days: int = 30) -> dict[str, An
             est_ops.setdefault(worker, [None] * season_days)
             animal.setdefault(worker, [None] * season_days)
             crop.setdefault(worker, [None] * season_days)
+            qtiles.setdefault(worker, [None] * season_days)
             est_ops[worker][day] = float(m.group(6))
             animal[worker][day] = int(m.group(4))
             crop[worker][day] = int(m.group(5))
+            qtiles[worker][day] = int(m.group(3))
             continue
         ex = THEO_EXTRA_RE.search(line)
         if ex:
@@ -206,6 +209,7 @@ def parse_hands_dawn(lines: list[str], *, season_days: int = 30) -> dict[str, An
         theo_by_tile[worker][day] = by_t
     return {
         "est_ops_by_worker_by_day": est_ops,
+        "qtiles_by_worker_by_day": qtiles,
         "theo_by_tile_by_worker_by_day": theo_by_tile,
         "theo_extra_by_worker_by_day": theo_extra,
         "animal_by_worker_by_day": animal,

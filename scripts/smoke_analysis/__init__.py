@@ -30,6 +30,7 @@ __all__ = [
     "plot_zone_capacity",
     "plot_zone_earnings_vs_cost",
     "plot_us_vs_opp_daily",
+    "plot_us_vs_opp_money_hours",
     "plot_sell_price_heatmap",
     "plot_fc_err",
     "summarize_distribution",
@@ -86,6 +87,14 @@ def plot_zone_earnings_vs_cost(
 
 def plot_us_vs_opp_daily(report: dict[str, Any], *, title: str | None = None) -> None:
     from smoke_analysis.plot import plot_us_vs_opp_daily as _plot
+
+    return _plot(report, title=title)
+
+
+def plot_us_vs_opp_money_hours(
+    report: dict[str, Any], *, title: str | None = None
+) -> None:
+    from smoke_analysis.plot import plot_us_vs_opp_money_hours as _plot
 
     return _plot(report, title=title)
 
@@ -166,16 +175,49 @@ def analyze(path: str | Path) -> dict[str, Any]:
     )
 
     opp = parse_opp.parse_opp(lines, season_days=SEASON_DAYS)
+    us_tile_ops = parse_opp.us_tile_ops_by_day(actions, season_days=SEASON_DAYS)
+    us_workers, us_tiles = parse_opp.us_workers_and_tiles_by_day(
+        hands_dawn.get("qtiles_by_worker_by_day"),
+        season_days=SEASON_DAYS,
+    )
+    opp_workers = opp.get("workers_by_day") or [None] * SEASON_DAYS
+    opp_tiles = opp.get("live_tiles_by_day") or [None] * SEASON_DAYS
+    opp_ops = opp["tile_ops_by_day"]
+    us_ops_pt, us_tpw, us_opw = parse_opp.derived_efficiency_series(
+        tile_ops=us_tile_ops,
+        workers=us_workers,
+        tiles=us_tiles,
+        season_days=SEASON_DAYS,
+    )
+    opp_ops_pt, opp_tpw, opp_opw = parse_opp.derived_efficiency_series(
+        tile_ops=opp_ops,
+        workers=opp_workers,
+        tiles=opp_tiles,
+        season_days=SEASON_DAYS,
+    )
     vs_opp = {
         **opp,
-        "us_tile_ops_by_day": parse_opp.us_tile_ops_by_day(
-            actions, season_days=SEASON_DAYS
-        ),
-        "opp_tile_ops_by_day": opp["tile_ops_by_day"],
+        "us_tile_ops_by_day": us_tile_ops,
+        "opp_tile_ops_by_day": opp_ops,
         "us_net_cash_by_day": earnings.get("net_cash_by_day") or [0.0] * SEASON_DAYS,
         "opp_net_cash_by_day": opp["net_cash_by_day"],
         "us_money_by_day": parse_snap.money_by_day(snaps, season_days=SEASON_DAYS),
         "opp_money_by_day": opp["money_by_day"],
+        "us_workers_by_day": us_workers,
+        "us_tiles_by_day": us_tiles,
+        "opp_workers_by_day": opp_workers,
+        "opp_tiles_by_day": opp_tiles,
+        "opp_live_logged": parse_opp.opp_live_series_present(opp_tiles),
+        "us_ops_per_tile_by_day": us_ops_pt,
+        "opp_ops_per_tile_by_day": opp_ops_pt,
+        "us_tiles_per_worker_by_day": us_tpw,
+        "opp_tiles_per_worker_by_day": opp_tpw,
+        "us_ops_per_worker_by_day": us_opw,
+        "opp_ops_per_worker_by_day": opp_opw,
+        "us_money_by_turn": parse_snap.money_by_turn(snaps, season_days=SEASON_DAYS),
+        "opp_money_by_turn": parse_opp.opp_money_by_turn(
+            lines, season_days=SEASON_DAYS
+        ),
     }
 
     sell_prices = parse_sell_prices.parse_sell_price_heatmap(

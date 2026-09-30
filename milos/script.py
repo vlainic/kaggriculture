@@ -245,6 +245,34 @@ def horizon_fert_shed_need(me: dict, tile_state: dict, day: int) -> int:
     return total
 
 
+def near_term_fert_shed_need(
+    me: dict, tile_state: dict, day: int, *, window_days: int = 2
+) -> int:
+    """Fertilizer uses due on live with_fert tiles in [day, day + window_days)."""
+    end = day + window_days
+    total = 0
+    for worker in WORKERS:
+        for idx in WORKER_TILES[worker]:
+            st = tile_state.get(idx, {})
+            queue = TILE_QUEUES.get(idx, [])
+            qi = st.get("queue_idx", 0)
+            tile = _tile_at(me, idx)
+            if isinstance(tile, dict) and tile.get("kind") == "PLANT":
+                crop = tile.get("crop")
+                if not crop:
+                    continue
+                profile = effective_crop_profile(queue, qi, crop)
+                if "with_fert" not in profile:
+                    continue
+                planted_day = int(tile.get("planted_day", day))
+                fert_until = int(tile.get("fertilized_until_day", -1))
+                for fa in rollouts.fertilize_ages(crop, profile):
+                    due = planted_day + fa
+                    if day <= due < end and fert_until < due:
+                        total += 1
+    return total
+
+
 def zone_fert_pickup_needed(
     me: dict, worker: str, tile_state: dict, inv: dict, *, day: int | None = None
 ) -> int:

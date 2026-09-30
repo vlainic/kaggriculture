@@ -97,6 +97,22 @@ def _fmt_join(orders: list) -> str:
     return " ".join(_fmt(o) for o in orders)
 
 
+def _live_tile_count(me: dict) -> int:
+    tiles = me.get("tiles") or []
+    live = 0
+    for row in tiles:
+        if not isinstance(row, (list, tuple)):
+            continue
+        for tile in row:
+            if isinstance(tile, dict) and tile.get("kind") in (
+                "PLANT",
+                "COOP",
+                "PASTURE",
+            ):
+                live += 1
+    return live
+
+
 def agent(observation, configuration=None):
     """KE entry — must stay the last callable in this module."""
     global _PREV_DAWN_MONEY, _SUMMARY_DONE
@@ -144,9 +160,13 @@ def agent(observation, configuration=None):
             delta = ""
         else:
             delta = f" d_money={money - _PREV_DAWN_MONEY}"
+        n_hired = len(hands)
+        if n_hired <= 0 and hand_pos:
+            n_hired = len(hand_pos)
         _log(
             f"[opp_snap] d={day} h={hour} money={money} shed_total={shed_total}"
-            f"{delta} hands={len(hand_pos)} quads={me.get('unlocked_quadrants')}"
+            f"{delta} hands={n_hired} quads={me.get('unlocked_quadrants')}"
+            f" live={_live_tile_count(me)}"
         )
         _PREV_DAWN_MONEY = money
 

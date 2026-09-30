@@ -441,6 +441,67 @@ def build_supply(
     return supply
 
 
+def opponent_supply_totals(obs: dict, horizon: int) -> dict[str, int]:
+    from milos.wsp import data as wsp_data
+    from milos.wsp.config import CONCAVE_PRODUCTS
+
+    day = obs["day"]
+    player = obs["player"]
+    opp = obs["farms"][1 - player]
+    crops_data = wsp_data.crops()
+    animals_data = wsp_data.animals()
+    supply = _empty_supply(horizon)
+    _collect_opponent_supply(opp, day, horizon, supply, crops_data, animals_data)
+    return {
+        p: sum(int(supply.get(p, [0] * horizon)[d]) for d in range(horizon))
+        for p in CONCAVE_PRODUCTS
+    }
+
+
+def wsp_sink_and_opp_units(
+    obs: dict, horizon: int
+) -> tuple[dict[str, int], dict[str, int]]:
+    from milos import sell_dp
+    from milos.wsp.config import CONCAVE_PRODUCTS
+
+    drain_rows = build_drain_by_day(obs, horizon)
+    sink: dict[str, int] = {}
+    for p in CONCAVE_PRODUCTS:
+        total = sum(float(drain_rows[rel].get(p, 0.0)) for rel in range(horizon))
+        sink[p] = max(0, int(round(total)))
+    field = opponent_supply_totals(obs, horizon)
+    ema_rows = sell_dp.opponent_sell_per_day(horizon)
+    contested = frozenset({"STRAWBERRY", "WOOL", "MILK"})
+    opp: dict[str, int] = {}
+    for p in CONCAVE_PRODUCTS:
+        ema_total = sum(float(r.get(p, 0.0)) for r in ema_rows)
+        o = max(int(field.get(p, 0)), int(round(ema_total)))
+        if o <= 0 and p in contested and sink.get(p, 0) > 0:
+            o = int(0.5 * sink[p])
+        opp[p] = o
+    return sink, opp
+
+
+def wsp_sink_and_opp_day0(horizon: int = 30) -> tuple[dict[str, int], dict[str, int]]:
+    from milos import town_drain
+    from milos.wsp.config import CONCAVE_PRODUCTS
+
+    rows = town_drain.build_drain_horizon(0, [], horizon, use_prior=True)
+    sink = {
+        p: max(
+            0,
+            int(round(sum(float(r.get(p, 0.0)) for r in rows))),
+        )
+        for p in CONCAVE_PRODUCTS
+    }
+    contested = frozenset({"STRAWBERRY", "WOOL", "MILK"})
+    opp = {
+        p: (int(0.5 * sink[p]) if p in contested and sink[p] > 0 else 0)
+        for p in CONCAVE_PRODUCTS
+    }
+    return sink, opp
+
+
 def make_price_forecast(
     obs: dict,
     tile_queues: dict,
@@ -474,11 +535,22 @@ def make_price_forecast(
         if rel_day >= len(table):
             rel_day = len(table) - 1
         if extra_units <= 0:
-            return table[rel_day].get(product, _fallback_quote(product))
-        base_inv = inv_table[rel_day].get(product)
-        if base_inv is None:
-            return table[rel_day].get(product, _fallback_quote(product))
-        return pricing.quoted(product, base_inv + int(extra_units))
+            forecast = table[rel_day].get(product, _fallback_quote(product))
+        else:
+            base_inv = inv_table[rel_day].get(product)
+            if base_inv is None:
+                forecast = table[rel_day].get(product, _fallback_quote(product))
+            else:
+                forecast = pricing.quoted(
+                    product, base_inv + int(extra_units)
+                )
+        if product == "STRAWBERRY":
+            current_quote = pricing.quoted(
+                product,
+                int(market_inv.get(product, pricing.I0_DEFAULT)),
+            )
+            forecast = max(forecast, int(0.9 * current_quote))
+        return forecast
 
     return price_of
 

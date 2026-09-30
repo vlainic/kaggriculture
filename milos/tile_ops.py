@@ -432,7 +432,13 @@ def _crop_action(
         if act == "PLANT":
             continue
         if act == "FERTILIZE":
-            continue
+            if private is None:
+                continue
+            inv = _inv_at(private, inv_idx)
+            if inv.get("FERTILIZER", 0) <= 0 or tile.get(
+                "fertilized_until_day", -1
+            ) >= day:
+                continue
         if act == "HARVEST" and tile.get("yield_units", 0) <= 0:
             continue
         return [act] + ([crop] if act == "PLANT" else [])

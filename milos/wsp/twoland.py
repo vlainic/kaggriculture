@@ -105,6 +105,10 @@ def solve(
     price_of: Callable[..., int] | None = None,
     charge_hire_daily: bool = True,
     workers: tuple[str, ...] | None = None,
+    sink_units: dict[str, int] | None = None,
+    opp_units: dict[str, int] | None = None,
+    market_inv: dict[str, int] | None = None,
+    wheat_feed_units: int = 0,
     **kwargs,
 ) -> SolveResult:
     del chains, kwargs
@@ -125,90 +129,100 @@ def solve(
     zone_outcomes: dict[str, str] = {}
     zone_objectives: dict[str, int] = {}
     locked_harvest: dict[str, int] = {}
+    inv_for_quote = market_inv if market_inv is not None else {}
+    mip.set_quote_market_inv(inv_for_quote)
     patterns = mip.build_patterns(horizon, price_of)
     locks = locked_by_worker or {}
 
-    for worker in worker_list:
-        n_empty = counts.get(worker, 0)
-        locked = locks.get(worker) or _empty_locked(horizon)
-        if n_empty == 0:
-            zone_outcomes[worker] = "empty"
-            opening = _locked_conservative_handoff(
-                opening,
-                locked,
-                horizon,
-                worker,
-                charge_hire_daily=charge_hire_daily,
-            )
-            solved_workers.append(worker)
-            continue
+    try:
+        for worker in worker_list:
+            n_empty = counts.get(worker, 0)
+            locked = locks.get(worker) or _empty_locked(horizon)
+            if n_empty == 0:
+                zone_outcomes[worker] = "empty"
+                opening = _locked_conservative_handoff(
+                    opening,
+                    locked,
+                    horizon,
+                    worker,
+                    charge_hire_daily=charge_hire_daily,
+                )
+                solved_workers.append(worker)
+                continue
 
-        zone_empty = [idx for idx in WORKER_TILES[worker] if idx in empty_set]
-        if worker == worker_list[0] and track_shed:
-            w_open = w_open0
-            f_open = f_open0
-        else:
-            w_open = 0
-            f_open = 0
+            zone_empty = [idx for idx in WORKER_TILES[worker] if idx in empty_set]
+            if worker == worker_list[0] and track_shed:
+                w_open = w_open0
+                f_open = f_open0
+            else:
+                w_open = 0
+                f_open = 0
 
-        caps = _product_caps(price_of, horizon, locked_harvest)
-        print(
-            f"[fc] caps zone={worker} "
-            f"WOOL={caps.get('WOOL', 0)} MILK={caps.get('MILK', 0)} "
-            f"MELON={caps.get('MELON', 0)} STRAWBERRY={caps.get('STRAWBERRY', 0)}",
-            flush=True,
-        )
-        res = mip.solve_zone(
-            patterns,
-            horizon=horizon,
-            empty_tiles=zone_empty,
-            locked=locked,
-            locked_counts=locked_harvest,
-            opening_balances=opening,
-            w_open=w_open,
-            f_open=f_open,
-            max_time=per_zone_time,
-            track_shed=track_shed and worker == worker_list[0],
-            min_balance=min_balance,
-            price_of=price_of,
-            worker=worker,
-            net_tile_ops=NET_TILE_OPS.get(worker, 18),
-            charge_hire_daily=charge_hire_daily,
-            product_caps=caps,
-        )
-        if res is None:
-            zone_outcomes[worker] = "infeasible"
+            caps = _product_caps(price_of, horizon, locked_harvest)
             print(
-                f"[milos/wsp] twoland skip zone={worker} INFEASIBLE keep cascade",
+                f"[fc] caps zone={worker} "
+                f"WOOL={caps.get('WOOL', 0)} MILK={caps.get('MILK', 0)} "
+                f"MELON={caps.get('MELON', 0)} STRAWBERRY={caps.get('STRAWBERRY', 0)}",
                 flush=True,
             )
-            opening = _locked_conservative_handoff(
-                opening,
-                locked,
-                horizon,
-                worker,
+            res = mip.solve_zone(
+                patterns,
+                horizon=horizon,
+                empty_tiles=zone_empty,
+                locked=locked,
+                locked_counts=locked_harvest,
+                opening_balances=opening,
+                w_open=w_open,
+                f_open=f_open,
+                max_time=per_zone_time,
+                track_shed=track_shed and worker == worker_list[0],
+                min_balance=min_balance,
+                price_of=price_of,
+                worker=worker,
+                net_tile_ops=NET_TILE_OPS.get(worker, 18),
                 charge_hire_daily=charge_hire_daily,
+                product_caps=caps,
+                sink_units=sink_units,
+                opp_units=opp_units,
+                market_inv=inv_for_quote,
+                wheat_feed_units=wheat_feed_units,
             )
-            continue
+            if res is None:
+                zone_outcomes[worker] = "infeasible"
+                print(
+                    f"[milos/wsp] twoland skip zone={worker} INFEASIBLE keep cascade",
+                    flush=True,
+                )
+                opening = _locked_conservative_handoff(
+                    opening,
+                    locked,
+                    horizon,
+                    worker,
+                    charge_hire_daily=charge_hire_daily,
+                )
+                continue
 
-        picked = res["picked"]
-        zone_objectives[worker] = int(res["objective"])
-        if not picked:
-            zone_outcomes[worker] = "picks0"
-        else:
-            zone_outcomes[worker] = "ok"
-        assigned.update(
-            mip.decode_wsp_assignment(
-                empty_set,
-                picked,
-                tile_order=tuple(WORKER_TILES[worker]),
+            picked = res["picked"]
+            zone_objectives[worker] = int(res["objective"])
+            if not picked:
+                zone_outcomes[worker] = "picks0"
+            else:
+                zone_outcomes[worker] = "ok"
+            assigned.update(
+                mip.decode_wsp_assignment(
+                    empty_set,
+                    picked,
+                    tile_order=tuple(WORKER_TILES[worker]),
+                )
             )
-        )
-        for pick in picked:
-            for prod, units in pick["pattern"]["harvest_units"].items():
-                locked_harvest[prod] = locked_harvest.get(prod, 0) + units
-        opening = res["conservative"]
-        solved_workers.append(worker)
+            for pick in picked:
+                for prod, units in pick["pattern"]["harvest_units"].items():
+                    locked_harvest[prod] = locked_harvest.get(prod, 0) + units
+            opening = res["conservative"]
+            solved_workers.append(worker)
+
+    finally:
+        mip.set_quote_market_inv(None)
 
     return SolveResult(
         assigned,

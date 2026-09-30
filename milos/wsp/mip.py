@@ -13,6 +13,7 @@ from milos.wsp.common import decode_sort_key, parse_profile_key
 from milos.wsp.config import (
     ANIMAL_NAMES,
     ANIMAL_PROFILES,
+    CONCAVE_PRODUCTS,
     CROP_PROFILES,
     FARMER,
     FARMER_NET_TILE_OPS,
@@ -24,6 +25,7 @@ from milos.wsp.config import (
     OBJ_EARLY_STOP,
     WHEAT_PRICE,
 )
+from milos import pricing
 from milos.zoning import HAND_DAILY_COST, HAND_WORKERS
 
 
@@ -75,6 +77,134 @@ def _empty_daily_place(horizon: int) -> dict[str, list[int]]:
     return {name: [0] * horizon for name in ANIMAL_NAMES}
 
 
+CONCAVE_BLOCK = 5
+_CONTESTED_SINK = frozenset({"STRAWBERRY", "WOOL", "MILK"})
+PRICE_FLOOR_RATIO = 0.5
+_quote_market_inv: dict[str, int] | None = None
+
+
+def set_quote_market_inv(market_inv: dict[str, int] | None) -> None:
+    global _quote_market_inv
+    _quote_market_inv = (
+        {k: int(v) for k, v in market_inv.items()} if market_inv else None
+    )
+
+
+def quote_at(product: str, market_inv: dict[str, int], extra_units: int = 0) -> int:
+    inv = int(market_inv.get(product, pricing.I0_DEFAULT)) + int(extra_units)
+    return pricing.quoted(product, inv)
+
+
+def harvest_price_for_cash(
+    product: str, rel_day: int, price_of: Callable[..., int]
+) -> int:
+    if product in CONCAVE_PRODUCTS and _quote_market_inv is not None:
+        return quote_at(product, _quote_market_inv, 0)
+    return price_of(product, rel_day)
+
+
+def _mean_harvest_rel_day(patterns: list, product: str, horizon: int) -> int:
+    days: list[int] = []
+    for pat in patterns:
+        for prod, hday, yld in pat.get("harvest_lines", ()):
+            if prod == product and int(yld) > 0:
+                days.append(int(hday))
+    if not days:
+        return min(max(0, horizon - 1), max(0, horizon // 2))
+    return min(max(0, horizon - 1), int(sum(days) / len(days)))
+
+
+def _max_zone_product_units(patterns: list, zone_size: int, product: str) -> int:
+    per_tile = max(
+        (int(pat.get("harvest_units", {}).get(product, 0)) for pat in patterns),
+        default=0,
+    )
+    return per_tile * zone_size
+
+
+def build_revenue_curves(
+    product: str,
+    *,
+    patterns: list,
+    horizon: int,
+    zone_size: int,
+    market_inv: dict[str, int],
+    locked_counts: dict[str, int] | None,
+    sink_units: dict[str, int] | None,
+    opp_units: dict[str, int] | None,
+    carried: dict[str, int] | None,
+    wheat_feed_units: int = 0,
+) -> tuple[list[tuple[int, int]], dict[str, int]]:
+    locked = int((locked_counts or {}).get(product, 0))
+    carried_p = int((carried or {}).get(product, 0))
+    d_total = int((sink_units or {}).get(product, 0))
+    opp_p = int((opp_units or {}).get(product, 0))
+    if opp_p <= 0 and product in _CONTESTED_SINK and d_total > 0:
+        opp_p = max(opp_p, int(0.5 * d_total))
+    d_remaining = max(0, d_total - carried_p - opp_p)
+
+    rel_ref = _mean_harvest_rel_day(patterns, product, horizon)
+    floor = pricing.price_floor(product, PRICE_FLOOR_RATIO)
+    max_u = min(_max_zone_product_units(patterns, zone_size, product), 400)
+    feed_reserve = 0
+    if product == "WHEAT" and wheat_feed_units > 0:
+        feed_reserve = min(int(wheat_feed_units), max_u)
+    if max_u <= 0:
+        return [], {
+            "D": d_total,
+            "carried": carried_p,
+            "opp": opp_p,
+            "D_remaining": d_remaining,
+            "m0": 0,
+            "mlast": 0,
+        }
+
+    segments: list[tuple[int, int]] = []
+    prev_m = 10**9
+    sold_virtual = 0
+    quote0 = quote_at(product, market_inv, 0)
+
+    if feed_reserve > 0:
+        m_feed = max(floor, quote0)
+        segments.append((feed_reserve, m_feed))
+        prev_m = m_feed
+        sold_virtual = feed_reserve
+
+    if d_remaining > 0:
+        flat_cap = min(d_remaining, max_u - sold_virtual)
+        if flat_cap > 0:
+            m0 = max(floor, min(quote0, prev_m))
+            segments.append((flat_cap, m0))
+            prev_m = m0
+            sold_virtual += flat_cap
+
+    while sold_virtual < max_u:
+        block = min(CONCAVE_BLOCK, max_u - sold_virtual)
+        extra = sold_virtual
+        m = quote_at(product, market_inv, extra + block - 1)
+        m = max(floor, min(m, prev_m))
+        if m <= floor and sold_virtual > d_remaining + feed_reserve:
+            break
+        segments.append((block, m))
+        prev_m = m
+        sold_virtual += block
+        if m <= floor:
+            break
+
+    if not segments:
+        m = max(floor, quote0)
+        segments.append((max_u, m))
+
+    return segments, {
+        "D": d_total,
+        "carried": carried_p,
+        "opp": opp_p,
+        "D_remaining": d_remaining,
+        "m0": segments[0][1],
+        "mlast": segments[-1][1],
+    }
+
+
 def _pattern_weight(
     pat,
     locked_counts: dict[str, int],
@@ -85,7 +215,8 @@ def _pattern_weight(
     for product, hday, yld in pat["harvest_lines"]:
         n = counts.get(product, 0)
         for _ in range(int(yld)):
-            rev += price_of(product, hday, n)
+            if product not in CONCAVE_PRODUCTS:
+                rev += price_of(product, hday, n)
             n += 1
         counts[product] = n
     bonus = _animal_valuation_bonus(pat, price_of)
@@ -191,7 +322,7 @@ def _stamp_placement(
         spend_by_day[start_day] -= setup_cost
     for product, hday, yld in harvest_lines:
         if hday < horizon:
-            cash_by_day[hday] += yld * price_of(product, hday)
+            cash_by_day[hday] += yld * harvest_price_for_cash(product, hday, price_of)
 
     return {
         "profile_key": profile_key,
@@ -221,6 +352,8 @@ def build_patterns(horizon: int, price_of: Callable[..., int]) -> list:
     for crop_name, crop_spec in crops_data["crops"].items():
         for profile_name in CROP_PROFILES:
             if profile_name not in crop_spec:
+                continue
+            if profile_name == "with_fert" and crop_name not in ("STRAWBERRY", "WHEAT"):
                 continue
             profile_key = f"{crop_name}_{profile_name}"
             for start_day in range(horizon):
@@ -312,11 +445,21 @@ def solve_zone(
     net_tile_ops: int = FARMER_NET_TILE_OPS,
     charge_hire_daily: bool = False,
     product_caps: dict[str, int] | None = None,
+    sink_units: dict[str, int] | None = None,
+    opp_units: dict[str, int] | None = None,
+    market_inv: dict[str, int] | None = None,
+    wheat_feed_units: int = 0,
 ):
     zone_empty = list(empty_tiles)
     zsize = len(zone_empty)
     if zsize == 0:
         return None
+
+    if price_of is None:
+        base = rollouts.i0_base_prices()
+        price_of = lambda product, rel_day=0, extra_units=0, _base=base: _base[
+            product
+        ]
 
     model = cp_model.CpModel()
     x: dict[tuple[int, int], cp_model.IntVar] = {}
@@ -496,6 +639,66 @@ def solve_zone(
         for pi, _pat in enumerate(patterns)
         for tile in zone_empty
     ]
+    concave_log_parts: list[str] = []
+    concave_seg_vars: list[tuple[int, cp_model.IntVar]] = []
+
+    if sink_units is not None and market_inv is not None:
+        inv_map = {p: int(market_inv.get(p, pricing.I0_DEFAULT)) for p in CONCAVE_PRODUCTS}
+        inv_map["WHEAT"] = int(market_inv.get("WHEAT", pricing.I0_DEFAULT))
+        carried = locked_counts
+        for product in CONCAVE_PRODUCTS:
+            if not any(
+                int(pat.get("harvest_units", {}).get(product, 0)) > 0
+                for pat in patterns
+            ):
+                continue
+            max_u = _max_zone_product_units(patterns, zsize, product)
+            if max_u <= 0:
+                continue
+            segments, meta = build_revenue_curves(
+                product,
+                patterns=patterns,
+                horizon=horizon,
+                zone_size=zsize,
+                market_inv=inv_map,
+                locked_counts=locked_counts,
+                sink_units=sink_units,
+                opp_units=opp_units,
+                carried=carried,
+                wheat_feed_units=wheat_feed_units if product == "WHEAT" else 0,
+            )
+            if not segments:
+                continue
+            concave_log_parts.append(
+                f"{product} D={meta['D']} carried={meta['carried']} "
+                f"opp={meta['opp']} D_rem={meta['D_remaining']} "
+                f"m0={meta['m0']} mlast={meta['mlast']}"
+            )
+            unit_terms = [
+                x[pi, tile] * int(pat["harvest_units"][product])
+                for pi, pat in enumerate(patterns)
+                if int(pat["harvest_units"].get(product, 0)) > 0
+                for tile in zone_empty
+            ]
+            if not unit_terms:
+                continue
+            u_total = model.NewIntVar(0, max_u, f"U_{worker}_{product}")
+            model.Add(u_total == sum(unit_terms))
+            seg_vars: list[cp_model.IntVar] = []
+            for ki, (cap, marginal) in enumerate(segments):
+                u_k = model.NewIntVar(0, cap, f"u_{worker}_{product}_{ki}")
+                model.Add(u_k <= cap)
+                obj_terms.append(marginal * u_k)
+                concave_seg_vars.append((marginal, u_k))
+                seg_vars.append(u_k)
+            model.Add(sum(seg_vars) == u_total)
+
+        if concave_log_parts:
+            print(
+                f"[concave] zone={worker} " + " | ".join(concave_log_parts),
+                flush=True,
+            )
+
     if track_shed:
         obj_terms.extend(-c for c in buy_w_cost)
         obj_terms.extend(-c for c in buy_f_cost)
@@ -523,6 +726,18 @@ def solve_zone(
         for tile in zone_empty:
             if solver.Value(x[pi, tile]) == 1:
                 picked.append({"tile": tile, "pattern": pat})
+
+    pattern_obj = sum(
+        zone_weights[pi] * solver.Value(x[pi, tile])
+        for pi, _pat in enumerate(patterns)
+        for tile in zone_empty
+    )
+    concave_obj = sum(m * solver.Value(u) for m, u in concave_seg_vars)
+    print(
+        f"[concave_obj] zone={worker} pattern={pattern_obj:.0f} "
+        f"concave={concave_obj:.0f} total={solver.ObjectiveValue():.0f}",
+        flush=True,
+    )
 
     print(
         f"[milos/wsp] zone={worker} {solver.StatusName(status)} "
